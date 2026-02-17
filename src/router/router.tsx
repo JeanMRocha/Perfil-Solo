@@ -29,6 +29,10 @@ const DashboardAnaliseSolo = lazy(
 const CadastroAnaliseSolo = lazy(
   () => import('@views/AnaliseSolo/CadastroAnaliseSolo'),
 );
+const RelatorioAnalise = lazy(
+  () => import('@views/Relatorios/RelatorioAnalise'),
+);
+const Marketplace = lazy(() => import('@views/Marketplace/Marketplace'));
 
 export const router = createBrowserRouter([
   {
@@ -80,6 +84,16 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'marketplace',
+        element: (
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando ecossistema..." />}
+          >
+            <Marketplace />
+          </Suspense>
+        ),
+      },
+      {
         path: 'analise-solo',
         children: [
           {
@@ -99,6 +113,16 @@ export const router = createBrowserRouter([
                 fallback={<LoaderGlobal message="Carregando cadastro..." />}
               >
                 <CadastroAnaliseSolo />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'relatorio',
+            element: (
+              <Suspense
+                fallback={<LoaderGlobal message="Gerando laudo..." />}
+              >
+                <RelatorioAnalise />
               </Suspense>
             ),
           },

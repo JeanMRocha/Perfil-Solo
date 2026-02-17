@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 // vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -36,5 +37,9 @@ export default defineConfig({
     'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(
       process.env.VITE_SUPABASE_ANON_KEY,
     ),
+  },
+  test: {
+    globals: true,
+    environment: 'node',
   },
 });

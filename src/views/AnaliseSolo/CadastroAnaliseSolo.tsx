@@ -20,6 +20,93 @@ import {
   summarizeRanges,
 } from '../../services/soilParamsService';
 import type { RangeMap } from '../../types/soil';
+// --- fetch helper: obter faixa ideal de pH da DB (prioriza variedade -> cultura genérica -> soil_params)
+async function fetchPhIdealFromDB({
+  cultura,
+  variedade,
+  extrator = 'mehlich-1',
+  supabaseClient,
+  fallback = [5.5, 6.5],
+}: {
+  cultura?: string | null;
+  variedade?: string | null;
+  extrator?: string;
+  supabaseClient: any;
+  fallback?: [number, number];
+}): Promise<[number, number]> {
+  if (!cultura) return fallback;
+
+  // Normalize empty variedade
+  const varNormalized =
+    variedade && variedade.trim().length ? variedade.trim() : null;
+
+  try {
+    // 1) tenta variedade específica (se fornecida)
+    if (varNormalized) {
+      const { data: varRows, error: varErr } = await supabaseClient
+        .from('nutriente_referencias')
+        .select('faixa_ideal_min,faixa_ideal_max,extrator,variedade')
+        .eq('nutriente', 'pH')
+        .eq('cultura', cultura)
+        .eq('variedade', varNormalized)
+        .or(`extrator.eq.${extrator},extrator.is.null`)
+        .limit(1);
+
+      if (varErr) console.warn('fetchPhIdealFromDB (variedade) erro', varErr);
+      if (varRows && varRows.length) {
+        const r = varRows[0];
+        const min = Number(r.faixa_ideal_min);
+        const max = Number(r.faixa_ideal_max);
+        if (!Number.isNaN(min) && !Number.isNaN(max)) return [min, max];
+      }
+    }
+
+    // 2) tenta referência genérica para a cultura (variedade IS NULL)
+    const { data: genRows, error: genErr } = await supabaseClient
+      .from('nutriente_referencias')
+      .select('faixa_ideal_min,faixa_ideal_max,extrator,variedade')
+      .eq('nutriente', 'pH')
+      .eq('cultura', cultura)
+      .is('variedade', null)
+      .or(`extrator.eq.${extrator},extrator.is.null`)
+      .limit(1);
+
+    if (genErr) console.warn('fetchPhIdealFromDB (generica) erro', genErr);
+    if (genRows && genRows.length) {
+      const r = genRows[0];
+      const min = Number(r.faixa_ideal_min);
+      const max = Number(r.faixa_ideal_max);
+      if (!Number.isNaN(min) && !Number.isNaN(max)) return [min, max];
+    }
+
+    // 3) tenta buscar em soil_params.jsonb (campo ideal -> "pH": [min,max])
+    const { data: spRows, error: spErr } = await supabaseClient
+      .from('soil_params')
+      .select('ideal,variedade,extrator')
+      .eq('cultura', cultura)
+      .or(
+        varNormalized
+          ? `variedade.eq.${varNormalized},variedade.is.null`
+          : 'variedade.is.null',
+      )
+      .or(`extrator.eq.${extrator},extrator.is.null`)
+      .limit(1);
+
+    if (spErr) console.warn('fetchPhIdealFromDB (soil_params) erro', spErr);
+    if (spRows && spRows.length) {
+      const idealObj = spRows[0].ideal; // jsonb
+      if (idealObj && Array.isArray(idealObj.pH) && idealObj.pH.length >= 2) {
+        const [min, max] = idealObj.pH.map((v: any) => Number(v));
+        if (!Number.isNaN(min) && !Number.isNaN(max)) return [min, max];
+      }
+    }
+  } catch (e) {
+    console.error('fetchPhIdealFromDB exceção', e);
+  }
+
+  // fallback final
+  return fallback;
+}
 
 // Unidades de medida para cada nutriente, baseadas no laudo.
 const DEFAULT_UNITS: Record<string, string> = {
@@ -104,7 +191,7 @@ export default function CadastroAnaliseSolo() {
           });
         }
       } catch {
-        /* segue mock */
+        // segue mock
       }
     })();
   }, []);
@@ -180,7 +267,8 @@ export default function CadastroAnaliseSolo() {
               <b>Amostra:</b> {analise.codigo_amostra} ({analise.profundidade})
             </Text>
             <Text size="sm">
-              <b>Cultura:</b> {analise.cultura} ({analise.variedade || 'Padrão'})
+              <b>Cultura:</b> {analise.cultura} ({analise.variedade || 'Padrão'}
+              )
             </Text>
           </Stack>
           <Select
@@ -242,7 +330,7 @@ export default function CadastroAnaliseSolo() {
               max={max}
             />
           );
-        })
+        })}
       </SimpleGrid>
     </Stack>
   );
