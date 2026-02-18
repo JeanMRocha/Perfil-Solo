@@ -15,6 +15,7 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { useStore } from '@nanostores/react';
 import { IconCircleKey } from '@tabler/icons-react';
+import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { $currUser, signInLocal } from '@global/user';
 import { isLocalDataMode } from '@services/dataProvider';
@@ -22,6 +23,7 @@ import { supabaseClient } from '@sb/supabaseClient';
 
 export default function Authentication() {
   const user = useStore($currUser);
+  const [submitting, setSubmitting] = useState(false);
 
   const form = useForm({
     initialValues: {
@@ -38,6 +40,8 @@ export default function Authentication() {
   }
 
   const handleSubmit = form.onSubmit(async (values) => {
+    setSubmitting(true);
+
     if (isLocalDataMode) {
       signInLocal(values.email);
       notifications.show({
@@ -45,6 +49,7 @@ export default function Authentication() {
         message: 'Acesso local liberado com sucesso.',
         color: 'green',
       });
+      setSubmitting(false);
       return;
     }
 
@@ -66,13 +71,15 @@ export default function Authentication() {
           : message,
         color: 'red',
       });
+    } finally {
+      setSubmitting(false);
     }
   });
 
   return (
     <Box h="100vh" w="100vw">
       <Center h="100vh" w="100%">
-        <Container size={620} miw={440}>
+        <Container size={620} w="100%" px="md">
           <Group align="baseline">
             <Text c="dimmed">
               <IconCircleKey />
@@ -86,6 +93,8 @@ export default function Authentication() {
                 label="Email"
                 placeholder="voce@empresa.com"
                 required
+                autoComplete="email"
+                disabled={submitting}
                 {...form.getInputProps('email')}
               />
 
@@ -96,11 +105,12 @@ export default function Authentication() {
                 }
                 required={!isLocalDataMode}
                 mt="md"
-                disabled={isLocalDataMode}
+                autoComplete="current-password"
+                disabled={isLocalDataMode || submitting}
                 {...form.getInputProps('password')}
               />
 
-              <Button fullWidth mt="xl" type="submit">
+              <Button fullWidth mt="xl" type="submit" loading={submitting}>
                 {isLocalDataMode ? 'Entrar no modo local' : 'Sign in'}
               </Button>
 

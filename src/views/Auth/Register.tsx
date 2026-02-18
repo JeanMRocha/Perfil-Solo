@@ -9,7 +9,7 @@ import {
   Title,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { LoaderInline } from '@components/loaders';
 import { setLoading } from '@global/loadingStore';
 import { signInLocal } from '@global/user';
@@ -29,15 +29,35 @@ export default function Register() {
   const navigate = useNavigate();
 
   async function handleRegister() {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+      notifications.show({
+        title: 'Email invalido',
+        message: 'Informe um email valido para continuar.',
+        color: 'red',
+      });
+      return;
+    }
+
+    if (!isLocalDataMode && password.length < 6) {
+      notifications.show({
+        title: 'Senha curta',
+        message: 'A senha deve ter pelo menos 6 caracteres.',
+        color: 'red',
+      });
+      return;
+    }
+
     try {
       setSubmitting(true);
       setLoading(true);
 
       if (isLocalDataMode) {
-        signInLocal(email);
+        signInLocal(normalizedEmail);
         await updateProfile({
           name: name || 'Usuario Local',
-          email,
+          email: normalizedEmail,
           contact,
         });
         notifications.show({
@@ -50,7 +70,7 @@ export default function Register() {
       }
 
       const { data, error } = await supabaseClient.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
         options: {
           data: {
@@ -120,6 +140,7 @@ export default function Register() {
           placeholder="Seu nome completo"
           value={name}
           onChange={(e) => setName(e.currentTarget.value)}
+          disabled={submitting}
         />
 
         <TextInput
@@ -127,6 +148,8 @@ export default function Register() {
           placeholder="usuario@email.com"
           value={email}
           onChange={(e) => setEmail(e.currentTarget.value)}
+          autoComplete="email"
+          disabled={submitting}
           required
         />
 
@@ -135,11 +158,17 @@ export default function Register() {
           placeholder={isLocalDataMode ? 'Nao utilizada no modo local' : 'Minimo 6 caracteres'}
           value={password}
           onChange={(e) => setPassword(e.currentTarget.value)}
+          autoComplete="new-password"
           required={!isLocalDataMode}
-          disabled={isLocalDataMode}
+          disabled={isLocalDataMode || submitting}
         />
 
-        <Button variant="light" color="blue" onClick={() => setContactModalOpened(true)}>
+        <Button
+          variant="light"
+          color="blue"
+          onClick={() => setContactModalOpened(true)}
+          disabled={submitting}
+        >
           Definir contato e compartilhamento
         </Button>
 
@@ -156,7 +185,7 @@ export default function Register() {
         {submitting && <LoaderInline message="Criando conta..." />}
 
         <Text fz="sm" ta="center" mt="sm">
-          <a href="/auth">Ja tenho uma conta</a>
+          <Link to="/auth">Ja tenho uma conta</Link>
         </Text>
       </Stack>
     </Card>
