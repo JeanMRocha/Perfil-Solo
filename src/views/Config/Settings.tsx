@@ -5,6 +5,8 @@ import PageHeader from '../../components/PageHeader';
 import { isLocalDataMode } from '../../services/dataProvider';
 import { clearLocalDb } from '../../services/localDb';
 import BillingSettings from './BillingSettings';
+import CulturasSettings from './CulturasSettings';
+import LaboratoriosSettings from './LaboratoriosSettings';
 
 export default function Settings() {
   const [isResetting, setIsResetting] = useState(false);
@@ -13,7 +15,7 @@ export default function Settings() {
     if (!isLocalDataMode) return;
 
     const confirmed = window.confirm(
-      'Isso vai apagar todos os dados locais (propriedades, talhoes e analises). Deseja continuar?',
+      'Isso vai apagar todos os dados locais (propriedades, talhoes, analises, regras de cultura e laboratorios). Deseja continuar?',
     );
 
     if (!confirmed) return;
@@ -23,7 +25,7 @@ export default function Settings() {
       await clearLocalDb();
       notifications.show({
         title: 'Banco local resetado',
-        message: 'Os dados locais foram removidos com sucesso.',
+        message: 'Os dados locais, culturas e laboratorios foram removidos com sucesso.',
         color: 'green',
       });
       window.location.reload();
@@ -45,11 +47,21 @@ export default function Settings() {
       <Tabs defaultValue="billing" variant="outline" mt="md">
         <Tabs.List>
           <Tabs.Tab value="billing">Faturamento</Tabs.Tab>
+          <Tabs.Tab value="culturas">Culturas</Tabs.Tab>
+          <Tabs.Tab value="laboratorios">Laboratorios</Tabs.Tab>
           <Tabs.Tab value="general">Geral</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="billing" pt="md">
           <BillingSettings />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="culturas" pt="md">
+          <CulturasSettings />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="laboratorios" pt="md">
+          <LaboratoriosSettings />
         </Tabs.Panel>
 
         <Tabs.Panel value="general" pt="md">

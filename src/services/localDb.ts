@@ -1,5 +1,6 @@
 import localforage from 'localforage';
 import type { Property, Talhao } from '../types/property';
+import type { ContactInfo } from '../types/contact';
 
 type LocalForage = ReturnType<typeof localforage.createInstance>;
 
@@ -37,12 +38,21 @@ const analysesStore = localforage.createInstance({
   storeName: 'analises_solo',
 });
 
+const LOCAL_CULTURE_PROFILES_KEY = 'perfilsolo_culture_profiles_v1';
+const LOCAL_LABORATORIES_KEY = 'perfilsolo_laboratories_v1';
+
 export async function clearLocalDb(): Promise<void> {
   await Promise.all([
     propertiesStore.clear(),
     talhoesStore.clear(),
     analysesStore.clear(),
   ]);
+  try {
+    localStorage.removeItem(LOCAL_CULTURE_PROFILES_KEY);
+    localStorage.removeItem(LOCAL_LABORATORIES_KEY);
+  } catch {
+    // noop
+  }
 }
 
 function nowIso() {
@@ -80,25 +90,179 @@ function sortByCreatedDesc<T extends { created_at?: string }>(rows: T[]) {
   });
 }
 
+function sanitizePropertyPatch(patch?: Partial<Property>): Partial<Property> {
+  if (!patch) return {};
+  const {
+    id,
+    user_id,
+    created_at,
+    updated_at,
+    nome,
+    contato,
+    ...safePatch
+  } = patch;
+  void id;
+  void user_id;
+  void created_at;
+  void updated_at;
+  void nome;
+  void contato;
+  return safePatch;
+}
+
+function mergePropertyPatch(
+  current: Property,
+  patch?: Partial<Property>,
+): Property {
+  const safePatch = sanitizePropertyPatch(patch);
+  if (Object.keys(safePatch).length === 0) return current;
+
+  return {
+    ...current,
+    ...safePatch,
+    contato_detalhes:
+      safePatch.contato_detalhes !== undefined
+        ? {
+            ...(current.contato_detalhes ?? {}),
+            ...(safePatch.contato_detalhes ?? {}),
+          }
+        : current.contato_detalhes,
+    documentos:
+      safePatch.documentos !== undefined
+        ? {
+            ...(current.documentos ?? {}),
+            ...(safePatch.documentos ?? {}),
+          }
+        : current.documentos,
+    fiscal:
+      safePatch.fiscal !== undefined
+        ? {
+            ...(current.fiscal ?? {}),
+            ...(safePatch.fiscal ?? {}),
+            cartao_cnpj:
+              safePatch.fiscal?.cartao_cnpj !== undefined
+                ? {
+                    ...(current.fiscal?.cartao_cnpj ?? {}),
+                    ...(safePatch.fiscal?.cartao_cnpj ?? {}),
+                  }
+                : current.fiscal?.cartao_cnpj,
+            nfe:
+              safePatch.fiscal?.nfe !== undefined
+                ? {
+                    ...(current.fiscal?.nfe ?? {}),
+                    ...(safePatch.fiscal?.nfe ?? {}),
+                  }
+                : current.fiscal?.nfe,
+            cnaes:
+              safePatch.fiscal?.cnaes !== undefined
+                ? safePatch.fiscal.cnaes
+                : current.fiscal?.cnaes,
+          }
+        : current.fiscal,
+    proprietario_principal:
+      safePatch.proprietario_principal !== undefined
+        ? safePatch.proprietario_principal
+        : current.proprietario_principal,
+    maquinas:
+      safePatch.maquinas !== undefined ? safePatch.maquinas : current.maquinas,
+    galpoes:
+      safePatch.galpoes !== undefined ? safePatch.galpoes : current.galpoes,
+  };
+}
+
 export async function getPropertiesByUser(userId: string): Promise<Property[]> {
   const all = await listAll<Property>(propertiesStore);
   return sortByCreatedAsc(all.filter((row) => row.user_id === userId));
 }
 
+export async function getPropertyByIdLocal(
+  propertyId: string,
+): Promise<Property | null> {
+  const row = (await propertiesStore.getItem(propertyId)) as Property | null;
+  return row ?? null;
+}
+
 export async function createPropertyLocal(input: {
   userId: string;
   nome: string;
+  contact?: ContactInfo;
+  patch?: Partial<Property>;
 }): Promise<Property> {
   const createdAt = nowIso();
-  const property: Property = {
+  const baseProperty: Property = {
     id: createId(),
     user_id: input.userId,
     nome: input.nome,
+    contato: input.contact?.email ?? input.contact?.phone ?? '',
+    contato_detalhes: input.contact ?? {},
     created_at: createdAt,
     updated_at: createdAt,
   };
+  const merged = mergePropertyPatch(baseProperty, input.patch);
+  const contactDetails = input.contact ?? merged.contato_detalhes ?? {};
+  const property: Property = {
+    ...merged,
+    contato_detalhes: contactDetails,
+    contato:
+      contactDetails.email ??
+      contactDetails.phone ??
+      merged.contato ??
+      '',
+  };
   await propertiesStore.setItem(property.id, property);
   return property;
+}
+
+export async function updatePropertyLocal(input: {
+  propertyId: string;
+  nome?: string;
+  contact?: ContactInfo;
+  patch?: Partial<Property>;
+}): Promise<Property> {
+  const current = (await propertiesStore.getItem(input.propertyId)) as
+    | Property
+    | null;
+
+  if (!current) {
+    throw new Error('Propriedade nao encontrada para atualizacao.');
+  }
+
+  const merged = mergePropertyPatch(current, input.patch);
+  const mergedContactDetails =
+    input.contact != null ? input.contact : merged.contato_detalhes;
+
+  const updated: Property = {
+    ...merged,
+    nome: input.nome ?? merged.nome,
+    contato:
+      input.contact != null
+        ? input.contact.email ?? input.contact.phone ?? ''
+        : merged.contato ??
+          mergedContactDetails?.email ??
+          mergedContactDetails?.phone ??
+          '',
+    contato_detalhes: mergedContactDetails,
+    updated_at: nowIso(),
+  };
+
+  await propertiesStore.setItem(updated.id, updated);
+  return updated;
+}
+
+export async function deletePropertyLocal(propertyId: string): Promise<void> {
+  const [allTalhoes, allAnalyses] = await Promise.all([
+    listAll<Talhao>(talhoesStore),
+    listAll<AnalysisRow>(analysesStore),
+  ]);
+
+  const talhoesToDelete = allTalhoes.filter((t) => t.property_id === propertyId);
+  const analysesToDelete = allAnalyses.filter((a) => a.property_id === propertyId);
+
+  await Promise.all([
+    propertiesStore.removeItem(propertyId),
+    ...talhoesToDelete.map((row) => talhoesStore.removeItem(row.id)),
+    ...analysesToDelete.map((row) => analysesStore.removeItem(row.id)),
+  ]);
 }
 
 export async function getTalhoesByProperty(
@@ -108,19 +272,38 @@ export async function getTalhoesByProperty(
   return sortByCreatedAsc(all.filter((row) => row.property_id === propertyId));
 }
 
+export async function getTalhaoByIdLocal(
+  talhaoId: string,
+): Promise<Talhao | null> {
+  const row = (await talhoesStore.getItem(talhaoId)) as Talhao | null;
+  return row ?? null;
+}
+
 export async function createTalhaoLocal(input: {
   propertyId: string;
   nome: string;
   coordenadas_svg: string;
   cor_identificacao: string;
+  area_ha?: number;
+  tipo_solo?: string;
+  historico_culturas?: {
+    cultura: string;
+    cultivar?: string;
+    data_inicio: string;
+    data_fim: string;
+    safra?: string;
+  }[];
 }): Promise<Talhao> {
   const createdAt = nowIso();
   const talhao: Talhao = {
     id: createId(),
     property_id: input.propertyId,
     nome: input.nome,
+    area_ha: input.area_ha,
+    tipo_solo: input.tipo_solo,
     coordenadas_svg: input.coordenadas_svg,
     cor_identificacao: input.cor_identificacao,
+    historico_culturas: input.historico_culturas,
     created_at: createdAt,
     updated_at: createdAt,
   };
@@ -128,21 +311,136 @@ export async function createTalhaoLocal(input: {
   return talhao;
 }
 
+export async function updateTalhaoLocal(input: {
+  talhaoId: string;
+  nome?: string;
+  area_ha?: number;
+  tipo_solo?: string;
+  coordenadas_svg?: string;
+  cor_identificacao?: string;
+  historico_culturas?: {
+    cultura: string;
+    cultivar?: string;
+    data_inicio: string;
+    data_fim: string;
+    safra?: string;
+  }[];
+}): Promise<Talhao> {
+  const current = (await talhoesStore.getItem(input.talhaoId)) as Talhao | null;
+  if (!current) {
+    throw new Error('Talhao nao encontrado para atualizacao.');
+  }
+
+  const updated: Talhao = {
+    ...current,
+    nome: input.nome ?? current.nome,
+    area_ha: input.area_ha ?? current.area_ha,
+    tipo_solo: input.tipo_solo ?? current.tipo_solo,
+    coordenadas_svg: input.coordenadas_svg ?? current.coordenadas_svg,
+    cor_identificacao: input.cor_identificacao ?? current.cor_identificacao,
+    historico_culturas:
+      input.historico_culturas ?? current.historico_culturas,
+    updated_at: nowIso(),
+  };
+
+  await talhoesStore.setItem(updated.id, updated);
+  return updated;
+}
+
+export async function deleteTalhaoLocal(talhaoId: string): Promise<void> {
+  const allAnalyses = await listAll<AnalysisRow>(analysesStore);
+  const analysesToDelete = allAnalyses.filter((row) => row.talhao_id === talhaoId);
+
+  await Promise.all([
+    talhoesStore.removeItem(talhaoId),
+    ...analysesToDelete.map((row) => analysesStore.removeItem(row.id)),
+  ]);
+}
+
 export async function getAnalysesByProperty(
   propertyId: string,
 ): Promise<AnalysisRow[]> {
-  const all = await listAll<AnalysisRow>(analysesStore);
-  return sortByCreatedDesc(all.filter((row) => row.property_id === propertyId));
+  const [allAnalyses, property, allTalhoes] = await Promise.all([
+    listAll<AnalysisRow>(analysesStore),
+    getPropertyByIdLocal(propertyId),
+    listAll<Talhao>(talhoesStore),
+  ]);
+  if (!property) return [];
+  const talhaoById = new Map(allTalhoes.map((row) => [row.id, row]));
+  return sortByCreatedDesc(
+    allAnalyses.filter((row) => {
+      if (row.property_id !== propertyId) return false;
+      const talhao = talhaoById.get(row.talhao_id);
+      if (!talhao) return false;
+      if (talhao.property_id !== propertyId) return false;
+      if (row.user_id !== property.user_id) return false;
+      return true;
+    }),
+  );
+}
+
+export async function getAnalysesByTalhao(
+  talhaoId: string,
+): Promise<AnalysisRow[]> {
+  const [allAnalyses, talhao] = await Promise.all([
+    listAll<AnalysisRow>(analysesStore),
+    getTalhaoByIdLocal(talhaoId),
+  ]);
+  if (!talhao) return [];
+  const property = await getPropertyByIdLocal(talhao.property_id);
+  if (!property) return [];
+  return sortByCreatedDesc(
+    allAnalyses.filter((row) => {
+      if (row.talhao_id !== talhaoId) return false;
+      if (row.property_id !== talhao.property_id) return false;
+      if (row.user_id !== property.user_id) return false;
+      return true;
+    }),
+  );
 }
 
 export async function getAllAnalysesLocal(): Promise<AnalysisRow[]> {
-  const all = await listAll<AnalysisRow>(analysesStore);
-  return sortByCreatedDesc(all);
+  const [allAnalyses, allProperties, allTalhoes] = await Promise.all([
+    listAll<AnalysisRow>(analysesStore),
+    listAll<Property>(propertiesStore),
+    listAll<Talhao>(talhoesStore),
+  ]);
+  const propertyById = new Map(allProperties.map((row) => [row.id, row]));
+  const talhaoById = new Map(allTalhoes.map((row) => [row.id, row]));
+  return sortByCreatedDesc(
+    allAnalyses.filter((row) => {
+      const property = propertyById.get(row.property_id);
+      if (!property) return false;
+      const talhao = talhaoById.get(row.talhao_id);
+      if (!talhao) return false;
+      if (talhao.property_id !== row.property_id) return false;
+      if (property.user_id !== row.user_id) return false;
+      return true;
+    }),
+  );
 }
 
 export async function createAnalysisLocal(
   input: Omit<AnalysisRow, 'id' | 'created_at' | 'updated_at'>,
 ): Promise<AnalysisRow> {
+  const [property, talhao] = await Promise.all([
+    getPropertyByIdLocal(input.property_id),
+    getTalhaoByIdLocal(input.talhao_id),
+  ]);
+
+  if (!property) {
+    throw new Error('Propriedade vinculada a analise nao encontrada.');
+  }
+  if (!talhao) {
+    throw new Error('Talhao vinculado a analise nao encontrado.');
+  }
+  if (talhao.property_id !== input.property_id) {
+    throw new Error('Integridade invalida: talhao nao pertence a propriedade informada.');
+  }
+  if (property.user_id !== input.user_id) {
+    throw new Error('Integridade invalida: usuario nao corresponde ao dono da propriedade.');
+  }
+
   const createdAt = nowIso();
   const analysis: AnalysisRow = {
     ...input,

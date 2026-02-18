@@ -1,20 +1,14 @@
-import { Group, Button, Text, Divider, ActionIcon } from '@mantine/core';
-import { IconArrowLeft, IconMoon, IconSun } from '@tabler/icons-react';
+import { Group, Button, Text, Divider } from '@mantine/core';
+import { IconArrowLeft } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '@nanostores/react';
-import { $tema, alternarTema } from '../global-state/themeStore';
 
 interface PageHeaderProps {
   title: string;
   color?: string;
 }
 
-export default function PageHeader({
-  title,
-  color = 'green',
-}: PageHeaderProps) {
+export default function PageHeader({ title, color = 'green' }: PageHeaderProps) {
   const navigate = useNavigate();
-  const tema = useStore($tema);
 
   return (
     <>
@@ -32,18 +26,6 @@ export default function PageHeader({
             {title}
           </Text>
         </Group>
-
-        {/* 🌙 Alternância de tema */}
-        <ActionIcon
-          variant="light"
-          color="green"
-          size="lg"
-          radius="md"
-          onClick={alternarTema}
-          title="Alternar tema"
-        >
-          {tema === 'light' ? <IconMoon size={18} /> : <IconSun size={18} />}
-        </ActionIcon>
       </Group>
       <Divider my="sm" />
     </>

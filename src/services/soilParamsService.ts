@@ -3,6 +3,7 @@ import { rangeToString } from './utils/rangeToString';
 import { soilParamsMock } from '../data/soilParamsMock';
 import type { SoilParams, RangeMap } from '../types/soil';
 import { isLocalDataMode } from './dataProvider';
+import { findLocalSoilParams } from './cultureProfilesService';
 
 type Query = {
   cultura?: string;
@@ -14,8 +15,15 @@ type Query = {
   idade_meses?: number | null;
 };
 
-const norm = (v?: string | null) =>
-  (v ?? '').toString().trim().toLowerCase() || null;
+function stripAccents(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+const norm = (v?: string | null) => {
+  const raw = (v ?? '').toString().trim().toLowerCase();
+  if (!raw) return null;
+  return stripAccents(raw);
+};
 
 export function normalizeQuery(q: Query): Query {
   return {
@@ -31,6 +39,10 @@ export function normalizeQuery(q: Query): Query {
 
 export async function getSoilParams(query: Query): Promise<SoilParams> {
   const q = normalizeQuery(query);
+
+  const localCustom = findLocalSoilParams(q);
+  if (localCustom) return localCustom;
+
   const ladders: Query[] = [
     q,
     { cultura: q.cultura, variedade: q.variedade, extrator: q.extrator },
@@ -83,12 +95,12 @@ export async function getSoilParams(query: Query): Promise<SoilParams> {
   const match =
     soilParamsMock.find(
       (m) =>
-        (m.cultura ?? '') === (q.cultura ?? '') &&
-        (m.variedade ?? null) === (q.variedade ?? null) &&
-        (m.estado ?? null) === (q.estado ?? null) &&
-        (m.extrator ?? null) === (q.extrator ?? null),
+        (norm(m.cultura) ?? '') === (q.cultura ?? '') &&
+        (norm(m.variedade) ?? null) === (q.variedade ?? null) &&
+        (norm(m.estado) ?? null) === (q.estado ?? null) &&
+        (norm(m.extrator) ?? null) === (q.extrator ?? null),
     ) ||
-    soilParamsMock.find((m) => (m.cultura ?? '') === (q.cultura ?? '')) ||
+    soilParamsMock.find((m) => (norm(m.cultura) ?? '') === (q.cultura ?? '')) ||
     soilParamsMock[0];
 
   return match;

@@ -187,6 +187,7 @@ export default function GameMap() {
 
   const handleStageClick = (e: any) => {
     if (mode !== 'draw') return;
+    if (e?.evt?.button === 2) return;
     const stage = e.target.getStage();
     const point = stage?.getPointerPosition();
     if (!point) return;
@@ -294,6 +295,12 @@ export default function GameMap() {
     setMode('view');
   };
 
+  const handleCloseWithRightClick = (e: any) => {
+    e?.evt?.preventDefault?.();
+    if (mode !== 'draw') return;
+    void finishDrawing();
+  };
+
   return (
     <Card shadow="sm" radius="md" withBorder p="0" style={{ overflow: 'hidden' }}>
       <Group p="md" justify="space-between" bg="gray.1" align="flex-end">
@@ -370,6 +377,7 @@ export default function GameMap() {
           height={STAGE_HEIGHT}
           onMouseDown={handleStageClick}
           onMouseMove={handleMouseMove}
+          onContextMenu={handleCloseWithRightClick}
         >
           <Layer>
             {talhoes.map((talhao) => {

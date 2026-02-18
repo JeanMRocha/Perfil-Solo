@@ -1,212 +1,336 @@
-// src/views/Relatorios/RelatorioAnalise.tsx
-import { useState } from 'react';
-import { Card, Group, Text, Title, Table, Grid, Divider, Box, Button, Switch, Badge } from '@mantine/core';
-import { IconPrinter, IconLeaf, IconUser, IconBriefcase } from '@tabler/icons-react';
-import { AnalysisContainer } from '../../types/soil';
-
-// Mock data integration (futuro: props)
+import { useEffect, useState } from 'react';
+import {
+  Avatar,
+  Badge,
+  Box,
+  Button,
+  Card,
+  Divider,
+  Grid,
+  Group,
+  Switch,
+  Table,
+  Text,
+  Title,
+} from '@mantine/core';
+import {
+  IconBrandWhatsapp,
+  IconBriefcase,
+  IconBuildingStore,
+  IconLeaf,
+  IconMail,
+  IconPrinter,
+  IconUser,
+} from '@tabler/icons-react';
+import type { AnalysisContainer } from '../../types/soil';
 import { analisesMock } from '../../data/analisesMock';
+import { getProfile, type UserProfile } from '../../services/profileService';
 
 interface ReportProps {
-    analysis?: AnalysisContainer; // Futuro: usar tipo real
+  analysis?: AnalysisContainer;
 }
 
-/**
- * Componente Visual de Barra de Status (Baixo/Médio/Alto)
- */
-const StatusBar = ({ value, min, max, label }: { value: number, min: number, max: number, label: string }) => {
-    let color = 'green';
-    let status = 'Adequado';
-    let width = '50%';
+function StatusBar({
+  value,
+  min,
+  max,
+  label,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  label: string;
+}) {
+  let color = '#66bb6a';
+  let status = 'Adequado';
+  let width = '50%';
 
-    if (value < min) {
-        color = 'red';
-        status = 'Baixo';
-        width = '20%';
-    } else if (value > max) {
-        color = 'orange';
-        status = 'Alto';
-        width = '80%';
-    }
+  if (value < min) {
+    color = '#ef5350';
+    status = 'Baixo';
+    width = '20%';
+  } else if (value > max) {
+    color = '#ff9800';
+    status = 'Alto';
+    width = '80%';
+  }
 
-    return (
-        <Box mb="xs">
-            <Group justify="space-between" mb={2}>
-                <Text size="sm" fw={500}>{label}</Text>
-                <Text size="sm" fw={700} c={color}>{value} ({status})</Text>
-            </Group>
-            <div style={{ width: '100%', height: 8, background: '#e0e0e0', borderRadius: 4 }}>
-                <div style={{ width, height: '100%', background: color === 'red' ? '#ef5350' : color === 'orange' ? '#ff9800' : '#66bb6a', borderRadius: 4 }} />
-            </div>
-        </Box>
-    );
-};
+  return (
+    <Box mb="xs">
+      <Group justify="space-between" mb={2}>
+        <Text size="sm" fw={500}>
+          {label}
+        </Text>
+        <Text size="sm" fw={700} c={color}>
+          {value} ({status})
+        </Text>
+      </Group>
+      <div
+        style={{
+          width: '100%',
+          height: 8,
+          background: '#e0e0e0',
+          borderRadius: 4,
+        }}
+      >
+        <div
+          style={{
+            width,
+            height: '100%',
+            background: color,
+            borderRadius: 4,
+          }}
+        />
+      </div>
+    </Box>
+  );
+}
 
-export default function RelatorioAnalise({ }: ReportProps) {
-    const [mode, setMode] = useState<'farmer' | 'consultant'>('consultant');
+export default function RelatorioAnalise({}: ReportProps) {
+  const [mode, setMode] = useState<'farmer' | 'consultant'>('consultant');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
-    // Dados simulados
-    const mockData = {
-        client: 'Fazenda Vale Verde',
-        date: '17/02/2026',
-        talhao: 'Talhão 01 - Café',
-        analise: analisesMock[0]
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const data = await getProfile();
+      if (!alive) return;
+      setProfile(data);
+    })();
+    return () => {
+      alive = false;
     };
+  }, []);
 
-    return (
-        <Box p="md" style={{ maxWidth: '210mm', margin: '0 auto', background: 'white' }}>
+  const mockData = {
+    client: profile?.company_name || 'Fazenda Vale Verde',
+    date: '17/02/2026',
+    talhao: 'Talhao 01 - Cafe',
+    analise: analisesMock[0],
+  };
 
-            {/* Controles de Tela (Não imprime) */}
-            <Card mb="xl" className="no-print" withBorder p="sm" bg="gray.1">
-                <Group justify="space-between">
-                    <Group>
-                        <Title order={4}>Configuração do Laudo</Title>
-                        <Switch
-                            size="lg"
-                            onLabel={<IconBriefcase size={16} />}
-                            offLabel={<IconUser size={16} />}
-                            checked={mode === 'consultant'}
-                            onChange={(event) => setMode(event.currentTarget.checked ? 'consultant' : 'farmer')}
-                            label={mode === 'consultant' ? "Modo Técnico (Consultor)" : "Modo Simplificado (Produtor)"}
-                        />
-                    </Group>
-                    <Button leftSection={<IconPrinter />} onClick={() => window.print()}>
-                        Imprimir / Salvar PDF
-                    </Button>
-                </Group>
-            </Card>
+  const shareEmail = profile?.contact?.email || profile?.email || '';
+  const sharePhoneRaw = profile?.contact?.phone || '';
+  const sharePhone = sharePhoneRaw.replace(/\D/g, '');
+  const shareSubject = encodeURIComponent(
+    `Relatorio de Analise - ${mockData.talhao}`,
+  );
+  const shareBody = encodeURIComponent(
+    `Segue relatorio da area ${mockData.talhao} (${mockData.date}).`,
+  );
+  const shareMessage = encodeURIComponent(
+    `Segue relatorio da area ${mockData.talhao} (${mockData.date}).`,
+  );
 
-            {/* CABEÇALHO DO LAUDO */}
-            <Card withBorder padding="lg" radius="md" mb="md" style={{ borderTop: '4px solid #4CAF50' }}>
-                <Group justify="space-between" align="center">
-                    <div>
-                        <Group>
-                            <IconLeaf size={32} color="#4CAF50" />
-                            <Title order={2} c="green.9">PerfilSolo Pro</Title>
-                            {mode === 'consultant' && <Badge color="blue" variant="light">RELATÓRIO TÉCNICO</Badge>}
-                        </Group>
-                        <Text c="dimmed" size="sm">Tecnologia em Nutrição de Plantas</Text>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                        <Text fw={700} size="lg">{mockData.client}</Text>
-                        <Text>Relatório: {mockData.talhao}</Text>
-                        <Text size="sm" c="dimmed">Data: {mockData.date}</Text>
-                    </div>
-                </Group>
-            </Card>
+  return (
+    <Box p="md" style={{ maxWidth: '210mm', margin: '0 auto', background: 'white' }}>
+      <Card mb="xl" className="no-print" withBorder p="sm" bg="gray.1">
+        <Group justify="space-between">
+          <Group>
+            <Title order={4}>Configuracao do Laudo</Title>
+            <Switch
+              size="lg"
+              onLabel={<IconBriefcase size={16} />}
+              offLabel={<IconUser size={16} />}
+              checked={mode === 'consultant'}
+              onChange={(event) =>
+                setMode(event.currentTarget.checked ? 'consultant' : 'farmer')
+              }
+              label={
+                mode === 'consultant'
+                  ? 'Modo Tecnico (Consultor)'
+                  : 'Modo Simplificado (Produtor)'
+              }
+            />
+          </Group>
+          <Group>
+            <Button leftSection={<IconPrinter />} onClick={() => window.print()}>
+              Imprimir / Salvar PDF
+            </Button>
+            <Button
+              variant="light"
+              leftSection={<IconMail size={16} />}
+              disabled={!shareEmail}
+              onClick={() =>
+                window.open(
+                  `mailto:${shareEmail}?subject=${shareSubject}&body=${shareBody}`,
+                  '_blank',
+                )
+              }
+            >
+              Compartilhar email
+            </Button>
+            <Button
+              variant="light"
+              color="green"
+              leftSection={<IconBrandWhatsapp size={16} />}
+              disabled={!sharePhone}
+              onClick={() =>
+                window.open(
+                  `https://wa.me/${sharePhone}?text=${shareMessage}`,
+                  '_blank',
+                )
+              }
+            >
+              Compartilhar WhatsApp
+            </Button>
+          </Group>
+        </Group>
+      </Card>
 
-            {/* RESULTADOS DA ANÁLISE */}
-            <Grid gutter="md">
-                {/* Tabela só aparece completa no modo Consultor ou se for desktop */}
-                {(mode === 'consultant') && (
-                    <Grid.Col span={6}>
-                        <Card withBorder p="md" radius="md" h="100%">
-                            <Title order={4} mb="md" c="blue.8">Resultados Laboratoriais</Title>
-                            <Table striped highlightOnHover>
-                                <Table.Thead>
-                                    <Table.Tr>
-                                        <Table.Th>Nutriente</Table.Th>
-                                        <Table.Th>Valor</Table.Th>
-                                        <Table.Th>Unid.</Table.Th>
-                                    </Table.Tr>
-                                </Table.Thead>
-                                <Table.Tbody>
-                                    {Object.entries(mockData.analise.nutrientes).map(([key, val]) => (
-                                        <Table.Tr key={key}>
-                                            <Table.Td fw={500}>{key}</Table.Td>
-                                            <Table.Td>{val}</Table.Td>
-                                            <Table.Td>cmolc/dm³</Table.Td> {/* Mock unit */}
-                                        </Table.Tr>
-                                    ))}
-                                </Table.Tbody>
-                            </Table>
-                        </Card>
-                    </Grid.Col>
-                )}
-
-                {/* INTERPRETAÇÃO GRÁFICA (Visual para ambos, mas expandido no Farmer) */}
-                <Grid.Col span={mode === 'consultant' ? 6 : 12}>
-                    <Card withBorder p="md" radius="md" h="100%">
-                        <Title order={4} mb="md" c="orange.8">
-                            {mode === 'farmer' ? 'Como está seu solo?' : 'Interpretação Agronômica'}
-                        </Title>
-                        <StatusBar value={5.2} min={5.5} max={6.5} label="pH (Acidez)" />
-                        <StatusBar value={12} min={15} max={30} label="Fósforo (P)" />
-                        <StatusBar value={45} min={50} max={70} label="Saturação por Bases (V%)" />
-                        <StatusBar value={0.2} min={0} max={0.5} label="Alumínio (Tóxico)" />
-
-                        {mode === 'farmer' && (
-                            <Text mt="md" size="sm" c="dimmed">
-                                *Barras vermelhas indicam níveis crônicos que precisam de atenção imediata.
-                            </Text>
-                        )}
-                    </Card>
-                </Grid.Col>
-            </Grid>
-
-            {/* RECOMENDAÇÕES */}
-            <Title order={3} mt="xl" mb="md" c="green.9">
-                {mode === 'farmer' ? 'O que precisa ser feito?' : 'Recomendações Técnicas'}
-            </Title>
-
-            <Grid gutter="lg">
-                {/* CALAGEM */}
-                <Grid.Col span={4}>
-                    <Card withBorder p="lg" radius="md" style={{ borderLeft: '4px solid #FFC107' }}>
-                        <Title order={5} mb="xs">Calagem (Calcário)</Title>
-                        <Text size="xl" fw={800}>2.5 t/ha</Text>
-                        <Text size="sm" c="dimmed">PRNT 80%</Text>
-
-                        {mode === 'consultant' && (
-                            <Box mt="md" bg="gray.0" p="xs" style={{ borderRadius: 4 }}>
-                                <Text size="xs" fw={700}>MEMÓRIA DE CÁLCULO:</Text>
-                                <Text size="xs">NC = (V2 - V1) * CTC / 10</Text>
-                                <Text size="xs">NC = (70 - 45) * 12.5 / 10 = 3.12</Text>
-                                <Text size="xs" c="red">Ajuste técnico aplicado.</Text>
-                            </Box>
-                        )}
-                    </Card>
-                </Grid.Col>
-
-                {/* GESSAGEM */}
-                <Grid.Col span={4}>
-                    <Card withBorder p="lg" radius="md" style={{ borderLeft: '4px solid #2196F3' }}>
-                        <Title order={5} mb="xs">Gessagem</Title>
-                        <Text size="xl" fw={800}>1.2 t/ha</Text>
-                        <Text size="sm" c="dimmed">Aplicar em área total</Text>
-                    </Card>
-                </Grid.Col>
-
-                {/* ADUBAÇÃO */}
-                <Grid.Col span={4}>
-                    <Card withBorder p="lg" radius="md" style={{ borderLeft: '4px solid #4CAF50' }}>
-                        <Title order={5} mb="xs">Adubação (Plantio)</Title>
-                        <Text size="xl" fw={800}>400 kg/ha</Text>
-                        <Text size="sm" c="dimmed">Fórmula 04-14-08</Text>
-                    </Card>
-                </Grid.Col>
-            </Grid>
-
-            {/* RODAPÉ */}
-            <Divider my="xl" />
-            <Group justify="space-between" align="end">
-                <Text size="xs" c="dimmed">
-                    Gerado por PerfilSolo Pro © 2026. <br />
-                    Responsável Técnico: Eng. Agrônomo Demo (CREA 12345)
-                </Text>
-                <Box style={{ textAlign: 'center' }}>
-                    <div style={{ borderBottom: '1px solid black', width: 200, marginBottom: 4 }}></div>
-                    <Text size="sm">Assinatura do Consultor</Text>
-                </Box>
+      <Card withBorder padding="lg" radius="md" mb="md" style={{ borderTop: '4px solid #4CAF50' }}>
+        <Group justify="space-between" align="center">
+          <div>
+            <Group>
+              <IconLeaf size={32} color="#4CAF50" />
+              <Title order={2} c="green.9">
+                PerfilSolo Pro
+              </Title>
+              {mode === 'consultant' && (
+                <Badge color="blue" variant="light">
+                  RELATORIO TECNICO
+                </Badge>
+              )}
             </Group>
+            <Text c="dimmed" size="sm">
+              Tecnologia em Nutricao de Plantas
+            </Text>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <Group justify="flex-end" mb={6}>
+              <Avatar radius="md" size="md" src={profile?.logo_url || undefined}>
+                <IconBuildingStore size={16} />
+              </Avatar>
+              <Avatar radius="xl" size="md" src={profile?.avatar_url || undefined}>
+                <IconUser size={16} />
+              </Avatar>
+            </Group>
+            <Text fw={700} size="lg">
+              {mockData.client}
+            </Text>
+            <Text>Relatorio: {mockData.talhao}</Text>
+            <Text size="sm" c="dimmed">
+              Data: {mockData.date}
+            </Text>
+          </div>
+        </Group>
+      </Card>
 
-            <style>{`
+      <Grid gutter="md">
+        {mode === 'consultant' && (
+          <Grid.Col span={6}>
+            <Card withBorder p="md" radius="md" h="100%">
+              <Title order={4} mb="md" c="blue.8">
+                Resultados Laboratoriais
+              </Title>
+              <Table striped highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Nutriente</Table.Th>
+                    <Table.Th>Valor</Table.Th>
+                    <Table.Th>Unid.</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {Object.entries(mockData.analise.nutrientes).map(([key, val]) => (
+                    <Table.Tr key={key}>
+                      <Table.Td fw={500}>{key}</Table.Td>
+                      <Table.Td>{val}</Table.Td>
+                      <Table.Td>cmolc/dm3</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Card>
+          </Grid.Col>
+        )}
+
+        <Grid.Col span={mode === 'consultant' ? 6 : 12}>
+          <Card withBorder p="md" radius="md" h="100%">
+            <Title order={4} mb="md" c="orange.8">
+              {mode === 'farmer' ? 'Como esta seu solo?' : 'Interpretacao Agronomica'}
+            </Title>
+            <StatusBar value={5.2} min={5.5} max={6.5} label="pH (Acidez)" />
+            <StatusBar value={12} min={15} max={30} label="Fosforo (P)" />
+            <StatusBar value={45} min={50} max={70} label="Saturacao por Bases (V%)" />
+            <StatusBar value={0.2} min={0} max={0.5} label="Aluminio (Toxico)" />
+
+            {mode === 'farmer' && (
+              <Text mt="md" size="sm" c="dimmed">
+                Barras vermelhas indicam niveis criticos para acao imediata.
+              </Text>
+            )}
+          </Card>
+        </Grid.Col>
+      </Grid>
+
+      <Title order={3} mt="xl" mb="md" c="green.9">
+        {mode === 'farmer' ? 'O que precisa ser feito?' : 'Recomendacoes Tecnicas'}
+      </Title>
+
+      <Grid gutter="lg">
+        <Grid.Col span={4}>
+          <Card withBorder p="lg" radius="md" style={{ borderLeft: '4px solid #FFC107' }}>
+            <Title order={5} mb="xs">
+              Calagem (Calcario)
+            </Title>
+            <Text size="xl" fw={800}>
+              2.5 t/ha
+            </Text>
+            <Text size="sm" c="dimmed">
+              PRNT 80%
+            </Text>
+          </Card>
+        </Grid.Col>
+
+        <Grid.Col span={4}>
+          <Card withBorder p="lg" radius="md" style={{ borderLeft: '4px solid #2196F3' }}>
+            <Title order={5} mb="xs">
+              Gessagem
+            </Title>
+            <Text size="xl" fw={800}>
+              1.2 t/ha
+            </Text>
+            <Text size="sm" c="dimmed">
+              Aplicar em area total
+            </Text>
+          </Card>
+        </Grid.Col>
+
+        <Grid.Col span={4}>
+          <Card withBorder p="lg" radius="md" style={{ borderLeft: '4px solid #4CAF50' }}>
+            <Title order={5} mb="xs">
+              Adubacao (Plantio)
+            </Title>
+            <Text size="xl" fw={800}>
+              400 kg/ha
+            </Text>
+            <Text size="sm" c="dimmed">
+              Formula 04-14-08
+            </Text>
+          </Card>
+        </Grid.Col>
+      </Grid>
+
+      <Divider my="xl" />
+      <Group justify="space-between" align="end">
+        <Text size="xs" c="dimmed">
+          Gerado por PerfilSolo Pro © 2026. <br />
+          Responsavel Tecnico: {profile?.name || 'Consultor'} (CREA 12345)
+        </Text>
+        <Box style={{ textAlign: 'center' }}>
+          <div style={{ borderBottom: '1px solid black', width: 200, marginBottom: 4 }} />
+          <Text size="sm">Assinatura - {profile?.name || 'Consultor'}</Text>
+        </Box>
+      </Group>
+
+      <style>{`
         @media print {
-            .no-print { display: none !important; }
-            body { background: white; -webkit-print-color-adjust: exact; }
-            @page { margin: 1cm; size: A4; }
+          .no-print { display: none !important; }
+          body { background: white; -webkit-print-color-adjust: exact; }
+          @page { margin: 1cm; size: A4; }
         }
       `}</style>
-        </Box>
-    );
+    </Box>
+  );
 }

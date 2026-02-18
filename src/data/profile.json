@@ -1,5 +1,12 @@
 {
   "name": "Jean Moraes",
   "email": "app.jmr@gmail.com",
-  "avatar_url": ""
+  "avatar_url": "",
+  "logo_url": "",
+  "company_name": "Familia Agro",
+  "contact": {
+    "email": "app.jmr@gmail.com",
+    "phone": "",
+    "address": ""
+  }
 }

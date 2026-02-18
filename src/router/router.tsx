@@ -16,6 +16,18 @@ const UserProfile = lazy(() => import('@views/User/Profile'));
 const Settings = lazy(() => import('@views/Config/Settings'));
 const Propriedades = lazy(() => import('@views/Propriedades/Propriedades'));
 const Clientes = lazy(() => import('@views/Clientes/Clientes'));
+const CulturasBusca = lazy(() => import('@views/Cadastros/CulturasBusca'));
+const CulturasCadastro = lazy(() => import('@views/Cadastros/CulturasCadastro'));
+const LaboratoriosBusca = lazy(() => import('@views/Cadastros/LaboratoriosBusca'));
+const LaboratoriosCadastro = lazy(
+  () => import('@views/Cadastros/LaboratoriosCadastro'),
+);
+const PessoasBusca = lazy(() => import('@views/Cadastros/PessoasBusca'));
+const PessoasCadastro = lazy(() => import('@views/Cadastros/PessoasCadastro'));
+const ProdutosBusca = lazy(() => import('@views/Cadastros/ProdutosBusca'));
+const ProdutosCadastro = lazy(() => import('@views/Cadastros/ProdutosCadastro'));
+const ServicosBusca = lazy(() => import('@views/Cadastros/ServicosBusca'));
+const ServicosCadastro = lazy(() => import('@views/Cadastros/ServicosCadastro'));
 
 const DashboardAnaliseSolo = lazy(
   () => import('@views/AnaliseSolo/DashboardAnaliseSolo'),
@@ -85,6 +97,93 @@ export const router = createBrowserRouter([
             <Propriedades />
           </Suspense>
         ),
+      },
+      {
+        path: 'cadastros',
+        children: [
+          {
+            path: 'culturas/busca',
+            element: (
+              <Suspense fallback={<LoaderGlobal message="Carregando culturas..." />}>
+                <CulturasBusca />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'culturas/cadastro',
+            element: (
+              <Suspense fallback={<LoaderGlobal message="Carregando cultura..." />}>
+                <CulturasCadastro />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'laboratorios/busca',
+            element: (
+              <Suspense fallback={<LoaderGlobal message="Carregando laboratorios..." />}>
+                <LaboratoriosBusca />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'laboratorios/cadastro',
+            element: (
+              <Suspense
+                fallback={<LoaderGlobal message="Carregando cadastro de laboratorio..." />}
+              >
+                <LaboratoriosCadastro />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'pessoas/busca',
+            element: (
+              <Suspense fallback={<LoaderGlobal message="Carregando pessoas..." />}>
+                <PessoasBusca />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'pessoas/cadastro',
+            element: (
+              <Suspense fallback={<LoaderGlobal message="Carregando cadastro de pessoa..." />}>
+                <PessoasCadastro />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'produtos/busca',
+            element: (
+              <Suspense fallback={<LoaderGlobal message="Carregando produtos..." />}>
+                <ProdutosBusca />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'produtos/cadastro',
+            element: (
+              <Suspense fallback={<LoaderGlobal message="Carregando cadastro de produto..." />}>
+                <ProdutosCadastro />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'servicos/busca',
+            element: (
+              <Suspense fallback={<LoaderGlobal message="Carregando servicos..." />}>
+                <ServicosBusca />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'servicos/cadastro',
+            element: (
+              <Suspense fallback={<LoaderGlobal message="Carregando cadastro de servico..." />}>
+                <ServicosCadastro />
+              </Suspense>
+            ),
+          },
+        ],
       },
       {
         path: 'relatorios',

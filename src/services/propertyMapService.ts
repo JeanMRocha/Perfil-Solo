@@ -1,19 +1,32 @@
 import { supabaseClient } from '../supabase/supabaseClient';
 import type { Property, Talhao } from '../types/property';
+import type { ContactInfo } from '../types/contact';
 import { isLocalDataMode } from './dataProvider';
 import {
   type AnalysisRow,
   createAnalysisLocal,
+  deletePropertyLocal,
+  deleteTalhaoLocal,
   createPropertyLocal,
   createTalhaoLocal,
   getAnalysesByProperty,
+  getAnalysesByTalhao,
+  getPropertyByIdLocal,
   getPropertiesByUser,
+  getTalhaoByIdLocal,
   getTalhoesByProperty,
+  updateTalhaoLocal,
+  updatePropertyLocal,
 } from './localDb';
 
 export type MapPoint = {
   x: number;
   y: number;
+};
+
+export type TalhaoGeometry = {
+  points: MapPoint[];
+  exclusionZones: MapPoint[][];
 };
 
 export type TalhaoTechnicalStatus =
@@ -99,24 +112,61 @@ export function statusToLabel(status: TalhaoTechnicalStatus): string {
   return 'Sem analise';
 }
 
-export function parseTalhaoPoints(coordenadas?: string | null): MapPoint[] {
-  if (!coordenadas) return [];
+function parsePointArray(value: unknown): MapPoint[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const point = item as Partial<MapPoint>;
+      if (typeof point.x !== 'number' || typeof point.y !== 'number') {
+        return null;
+      }
+      return { x: point.x, y: point.y };
+    })
+    .filter((point): point is MapPoint => point !== null);
+}
+
+export function parseTalhaoGeometry(coordenadas?: string | null): TalhaoGeometry {
+  if (!coordenadas) {
+    return { points: [], exclusionZones: [] };
+  }
 
   try {
     const parsed = JSON.parse(coordenadas) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((item) => {
-        const point = item as Partial<MapPoint>;
-        if (typeof point.x !== 'number' || typeof point.y !== 'number') {
-          return null;
-        }
-        return { x: point.x, y: point.y };
-      })
-      .filter((point): point is MapPoint => point !== null);
+    if (Array.isArray(parsed)) {
+      return {
+        points: parsePointArray(parsed),
+        exclusionZones: [],
+      };
+    }
+
+    if (parsed && typeof parsed === 'object') {
+      const bag = parsed as {
+        points?: unknown;
+        exclusionZones?: unknown;
+      };
+      return {
+        points: parsePointArray(bag.points),
+        exclusionZones: Array.isArray(bag.exclusionZones)
+          ? bag.exclusionZones.map((zone) => parsePointArray(zone)).filter((zone) => zone.length >= 3)
+          : [],
+      };
+    }
   } catch {
-    return [];
+    // fallback below
   }
+
+  return { points: [], exclusionZones: [] };
+}
+
+export function serializeTalhaoGeometry(geometry: TalhaoGeometry): string {
+  return JSON.stringify({
+    points: geometry.points,
+    exclusionZones: geometry.exclusionZones,
+  });
+}
+
+export function parseTalhaoPoints(coordenadas?: string | null): MapPoint[] {
+  return parseTalhaoGeometry(coordenadas).points;
 }
 
 export function mapTalhaoToDraw(talhao: Talhao) {
@@ -166,9 +216,11 @@ export async function fetchOrCreateUserProperties(
 export async function createPropertyForUser(
   userId: string,
   nome: string,
+  contact?: ContactInfo,
+  patch?: Partial<Property>,
 ): Promise<Property> {
   if (isLocalDataMode) {
-    return createPropertyLocal({ userId, nome });
+    return createPropertyLocal({ userId, nome, contact, patch });
   }
 
   const { data, error } = await (supabaseClient as any)
@@ -176,12 +228,59 @@ export async function createPropertyForUser(
     .insert({
       user_id: userId,
       nome,
+      contato: contact?.email ?? contact?.phone ?? null,
     })
     .select('*')
     .single();
 
   if (error) throw error;
   return data as Property;
+}
+
+export async function updatePropertyForUser(
+  propertyId: string,
+  nome: string,
+  contact?: ContactInfo,
+  patch?: Partial<Property>,
+): Promise<Property> {
+  if (isLocalDataMode) {
+    return updatePropertyLocal({ propertyId, nome, contact, patch });
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    nome,
+    updated_at: new Date().toISOString(),
+  };
+  if (contact != null) {
+    updatePayload.contato = contact.email ?? contact.phone ?? null;
+  }
+  if (patch?.cidade !== undefined) updatePayload.cidade = patch.cidade;
+  if (patch?.estado !== undefined) updatePayload.estado = patch.estado;
+  if (patch?.total_area !== undefined) updatePayload.total_area = patch.total_area;
+
+  const { data, error } = await (supabaseClient as any)
+    .from('properties')
+    .update(updatePayload)
+    .eq('id', propertyId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as Property;
+}
+
+export async function deletePropertyForUser(propertyId: string): Promise<void> {
+  if (isLocalDataMode) {
+    await deletePropertyLocal(propertyId);
+    return;
+  }
+
+  const { error } = await (supabaseClient as any)
+    .from('properties')
+    .delete()
+    .eq('id', propertyId);
+
+  if (error) throw error;
 }
 
 export async function fetchTalhoesByProperty(
@@ -235,18 +334,72 @@ export async function fetchLatestAnalysisByTalhao(
   return result;
 }
 
+export async function fetchAnalysesByTalhao(
+  talhaoId: string,
+): Promise<AnalysisRow[]> {
+  if (isLocalDataMode) {
+    return getAnalysesByTalhao(talhaoId);
+  }
+
+  const { data, error } = await (supabaseClient as any)
+    .from('analises_solo')
+    .select('*')
+    .eq('talhao_id', talhaoId)
+    .order('data_amostragem', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as AnalysisRow[];
+}
+
+export async function fetchAnalysesByProperty(
+  propertyId: string,
+): Promise<AnalysisRow[]> {
+  if (isLocalDataMode) {
+    return getAnalysesByProperty(propertyId);
+  }
+
+  const { data, error } = await (supabaseClient as any)
+    .from('analises_solo')
+    .select('*')
+    .eq('property_id', propertyId)
+    .order('data_amostragem', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as AnalysisRow[];
+}
+
 export async function createTalhaoForProperty(input: {
   propertyId: string;
   nome: string;
-  points: MapPoint[];
+  points?: MapPoint[];
+  exclusionZones?: MapPoint[][];
   color?: string;
+  area_ha?: number;
+  tipo_solo?: string;
+  historico_culturas?: {
+    cultura: string;
+    cultivar?: string;
+    data_inicio: string;
+    data_fim: string;
+    safra?: string;
+  }[];
 }): Promise<Talhao> {
+  const coordenadasSvg = serializeTalhaoGeometry({
+    points: input.points ?? [],
+    exclusionZones: input.exclusionZones ?? [],
+  });
+
   if (isLocalDataMode) {
     return createTalhaoLocal({
       propertyId: input.propertyId,
       nome: input.nome,
-      coordenadas_svg: JSON.stringify(input.points),
+      area_ha: input.area_ha,
+      tipo_solo: input.tipo_solo,
+      coordenadas_svg: coordenadasSvg,
       cor_identificacao: input.color ?? DEFAULT_TALHAO_COLOR,
+      historico_culturas: input.historico_culturas,
     });
   }
 
@@ -255,8 +408,11 @@ export async function createTalhaoForProperty(input: {
     .insert({
       property_id: input.propertyId,
       nome: input.nome,
-      coordenadas_svg: JSON.stringify(input.points),
+      area_ha: input.area_ha,
+      tipo_solo: input.tipo_solo,
+      coordenadas_svg: coordenadasSvg,
       cor_identificacao: input.color ?? DEFAULT_TALHAO_COLOR,
+      historico_culturas: input.historico_culturas,
     })
     .select('*')
     .single();
@@ -265,9 +421,81 @@ export async function createTalhaoForProperty(input: {
   return data as Talhao;
 }
 
+export async function updateTalhaoForProperty(input: {
+  talhaoId: string;
+  nome: string;
+  area_ha?: number;
+  tipo_solo?: string;
+  color?: string;
+  points?: MapPoint[];
+  exclusionZones?: MapPoint[][];
+  historico_culturas?: {
+    cultura: string;
+    cultivar?: string;
+    data_inicio: string;
+    data_fim: string;
+    safra?: string;
+  }[];
+}): Promise<Talhao> {
+  const hasGeometryUpdate =
+    input.points !== undefined || input.exclusionZones !== undefined;
+  const coordenadasSvg = hasGeometryUpdate
+    ? serializeTalhaoGeometry({
+        points: input.points ?? [],
+        exclusionZones: input.exclusionZones ?? [],
+      })
+    : undefined;
+
+  if (isLocalDataMode) {
+    return updateTalhaoLocal({
+      talhaoId: input.talhaoId,
+      nome: input.nome,
+      area_ha: input.area_ha,
+      tipo_solo: input.tipo_solo,
+      cor_identificacao: input.color,
+      coordenadas_svg: coordenadasSvg,
+      historico_culturas: input.historico_culturas,
+    });
+  }
+
+  const { data, error } = await (supabaseClient as any)
+    .from('talhoes')
+    .update({
+      nome: input.nome,
+      area_ha: input.area_ha,
+      tipo_solo: input.tipo_solo,
+      cor_identificacao: input.color,
+      coordenadas_svg: coordenadasSvg,
+      historico_culturas: input.historico_culturas,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.talhaoId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as Talhao;
+}
+
+export async function deleteTalhaoForProperty(talhaoId: string): Promise<void> {
+  if (isLocalDataMode) {
+    await deleteTalhaoLocal(talhaoId);
+    return;
+  }
+
+  const { error } = await (supabaseClient as any)
+    .from('talhoes')
+    .delete()
+    .eq('id', talhaoId);
+
+  if (error) throw error;
+}
+
 export async function saveLinkedAnalysis(
   input: PersistedAnalysisInput,
 ): Promise<void> {
+  await assertAnalysisLinkIntegrity(input);
+
   if (isLocalDataMode) {
     await createAnalysisLocal(input);
     return;
@@ -277,4 +505,65 @@ export async function saveLinkedAnalysis(
     .from('analises_solo')
     .insert(input);
   if (error) throw error;
+}
+
+export type { AnalysisRow };
+
+async function assertAnalysisLinkIntegrity(
+  input: PersistedAnalysisInput,
+): Promise<void> {
+  if (isLocalDataMode) {
+    const [property, talhao] = await Promise.all([
+      getPropertyByIdLocal(input.property_id),
+      getTalhaoByIdLocal(input.talhao_id),
+    ]);
+    if (!property) {
+      throw new Error('Propriedade vinculada a analise nao encontrada.');
+    }
+    if (!talhao) {
+      throw new Error('Talhao vinculado a analise nao encontrado.');
+    }
+    if (property.user_id !== input.user_id) {
+      throw new Error(
+        'Integridade invalida: usuario nao corresponde ao dono da propriedade.',
+      );
+    }
+    if (talhao.property_id !== input.property_id) {
+      throw new Error(
+        'Integridade invalida: talhao nao pertence a propriedade informada.',
+      );
+    }
+    return;
+  }
+
+  const [propertyResult, talhaoResult] = await Promise.all([
+    (supabaseClient as any)
+      .from('properties')
+      .select('id,user_id')
+      .eq('id', input.property_id)
+      .single(),
+    (supabaseClient as any)
+      .from('talhoes')
+      .select('id,property_id')
+      .eq('id', input.talhao_id)
+      .single(),
+  ]);
+
+  if (propertyResult.error || !propertyResult.data) {
+    throw propertyResult.error ?? new Error('Propriedade vinculada nao encontrada.');
+  }
+  if (talhaoResult.error || !talhaoResult.data) {
+    throw talhaoResult.error ?? new Error('Talhao vinculado nao encontrado.');
+  }
+
+  if (propertyResult.data.user_id !== input.user_id) {
+    throw new Error(
+      'Integridade invalida: usuario nao corresponde ao dono da propriedade.',
+    );
+  }
+  if (talhaoResult.data.property_id !== input.property_id) {
+    throw new Error(
+      'Integridade invalida: talhao nao pertence a propriedade informada.',
+    );
+  }
 }

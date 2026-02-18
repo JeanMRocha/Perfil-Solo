@@ -15,11 +15,16 @@ import { setLoading } from '@global/loadingStore';
 import { signInLocal } from '@global/user';
 import { isLocalDataMode } from '@services/dataProvider';
 import { supabaseClient } from '@sb/supabaseClient';
+import ContactInfoModal from '../../components/modals/ContactInfoModal';
+import { updateProfile } from '../../services/profileService';
+import type { ContactInfo } from '../../types/contact';
 
 export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [contactModalOpened, setContactModalOpened] = useState(false);
+  const [contact, setContact] = useState<ContactInfo>({});
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
@@ -30,6 +35,11 @@ export default function Register() {
 
       if (isLocalDataMode) {
         signInLocal(email);
+        await updateProfile({
+          name: name || 'Usuario Local',
+          email,
+          contact,
+        });
         notifications.show({
           title: 'Conta local criada',
           message: 'Cadastro local concluido com sucesso.',
@@ -45,6 +55,9 @@ export default function Register() {
         options: {
           data: {
             name,
+            contact_email: contact.email ?? '',
+            contact_phone: contact.phone ?? '',
+            contact_address: contact.address ?? '',
           },
         },
       });
@@ -86,6 +99,18 @@ export default function Register() {
   return (
     <Card shadow="sm" radius="md" p="xl" maw={400} mx="auto" mt="10%">
       <Stack>
+        <ContactInfoModal
+          opened={contactModalOpened}
+          onClose={() => setContactModalOpened(false)}
+          onSave={async (draft) => {
+            setContact(draft);
+            setContactModalOpened(false);
+          }}
+          value={contact}
+          title="Contato para compartilhamento"
+          subtitle="Esses dados serao usados nos relatorios e modulos."
+        />
+
         <Title order={3} c="green.8" ta="center">
           Criar Conta
         </Title>
@@ -113,6 +138,16 @@ export default function Register() {
           required={!isLocalDataMode}
           disabled={isLocalDataMode}
         />
+
+        <Button variant="light" color="blue" onClick={() => setContactModalOpened(true)}>
+          Definir contato e compartilhamento
+        </Button>
+
+        {(contact.email || contact.phone || contact.address) && (
+          <Text size="sm" c="dimmed">
+            Contato: {contact.email || '-'} | {contact.phone || '-'}
+          </Text>
+        )}
 
         <Button color="green" radius="md" onClick={handleRegister} disabled={submitting}>
           {isLocalDataMode ? 'Criar conta local' : 'Registrar'}
