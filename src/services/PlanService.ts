@@ -45,7 +45,8 @@ export class PlanService {
     }
 
     static canImportPdf(profile: UserProfile): boolean {
-        const limits = this.getLimits(profile.plan_id as any || profile.subscription?.plan_id);
+        const plan = profile.plan_id ?? profile.subscription?.plan_id ?? 'free';
+        const limits = this.getLimits(plan);
         return (profile.plan_usage?.pdf_imports_count || 0) < limits.pdfImportLimit;
     }
 

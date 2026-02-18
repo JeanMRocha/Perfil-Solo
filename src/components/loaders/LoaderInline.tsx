@@ -1,14 +1,14 @@
-import { Group, Loader, Text, useMantineTheme } from '@mantine/core';
+import { Group, Loader, Text, useMantineColorScheme } from '@mantine/core';
 
 type Props = { message?: string };
 
 export default function LoaderInline({ message = 'Carregando...' }: Props) {
-  const theme = useMantineTheme();
+  const { colorScheme } = useMantineColorScheme();
 
   return (
     <Group gap="xs" align="center" aria-busy="true">
       <Loader size="sm" />
-      <Text size="sm" c={theme.colorScheme === 'dark' ? 'gray.4' : 'dimmed'}>
+      <Text size="sm" c={colorScheme === 'dark' ? 'gray.4' : 'dimmed'}>
         {message}
       </Text>
     </Group>

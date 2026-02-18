@@ -1,9 +1,7 @@
-// src/views/Auth/Logout.tsx
 import { useEffect } from 'react';
-import { supabaseClient } from '@sb/supabaseClient';
-import { useNavigate } from 'react-router-dom';
 import { notifications } from '@mantine/notifications';
-import { $currUser } from '@global/user';
+import { signOut } from '@global/user';
+import { useNavigate } from 'react-router-dom';
 
 export default function Logout() {
   const navigate = useNavigate();
@@ -11,11 +9,10 @@ export default function Logout() {
   useEffect(() => {
     (async () => {
       try {
-        await supabaseClient.auth.signOut();
-        $currUser.set(null);
+        await signOut();
         notifications.show({
-          title: 'Sessão encerrada',
-          message: 'Faça login novamente.',
+          title: 'Sessao encerrada',
+          message: 'Acesso finalizado com sucesso.',
           color: 'green',
         });
       } catch (e: any) {

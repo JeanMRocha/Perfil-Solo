@@ -16,7 +16,7 @@ export async function protectedPathLoader() {
   }
 
   if (!user.data.user) {
-    redirect("/auth");
+    return redirect("/auth");
   }
   return null;
 }
@@ -27,14 +27,14 @@ export const useUser = () => {
 
   useEffect(() => {
     setLoading(true);
-    supabaseClient.auth.getUser().then((user) => {
+    supabaseClient.auth.getUser().then((user: any) => {
       setUser(user.data?.user || undefined);
       setLoading(false);
     });
   }, []);
 
   useEffect(() => {
-    supabaseClient.auth.onAuthStateChange((event, session) => {
+    supabaseClient.auth.onAuthStateChange((event: string, session: any) => {
       if (event === "SIGNED_IN") {
         setUser(session?.user);
       }

@@ -1,28 +1,22 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { ProtectedPath } from '@components/ProtectedPath';
-const Logout = lazy(() => import('@views/Auth/Logout'));
 import { LoaderGlobal } from '@components/loaders';
 
-// 🌿 Lazy loading dos módulos
+const Logout = lazy(() => import('@views/Auth/Logout'));
 const AppLayout = lazy(() => import('@views/Main/AppLayout'));
-const App = lazy(() => import('@views/Main/App'));
 const Dashboard = lazy(() => import('@views/Main/Dashboard'));
+const Landing = lazy(() => import('@views/Landing/Landing'));
 
-// 🔐 Auth
 const Authentication = lazy(() => import('@views/Auth/Auth'));
 const Register = lazy(() => import('@views/Auth/Register'));
 const ForgotPassword = lazy(() => import('@views/Auth/ForgotPassword'));
 
-// 👤 User / ⚙️ Settings
-// Se Profile.tsx exporta *default*, use a linha abaixo:
 const UserProfile = lazy(() => import('@views/User/Profile'));
-// Se ele NÃO exporta default (ex.: `export function UserProfile()`), troque pela debaixo:
-// const UserProfile = lazy(() => import('@views/User/Profile').then(m => ({ default: m.UserProfile })));
-
 const Settings = lazy(() => import('@views/Config/Settings'));
+const Propriedades = lazy(() => import('@views/Propriedades/Propriedades'));
+const Clientes = lazy(() => import('@views/Clientes/Clientes'));
 
-// 🌾 Análise de Solo
 const DashboardAnaliseSolo = lazy(
   () => import('@views/AnaliseSolo/DashboardAnaliseSolo'),
 );
@@ -38,6 +32,13 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: (
+      <Suspense fallback={<LoaderGlobal message="Carregando home..." />}>
+        <Landing />
+      </Suspense>
+    ),
+  },
+  {
+    element: (
       <Suspense fallback={<LoaderGlobal message="Carregando layout..." />}>
         <ProtectedPath redirectUrl="/auth">
           <AppLayout />
@@ -46,21 +47,9 @@ export const router = createBrowserRouter([
     ),
     children: [
       {
-        index: true,
-        element: (
-          <Suspense
-            fallback={<LoaderGlobal message="Carregando aplicação..." />}
-          >
-            <App />
-          </Suspense>
-        ),
-      },
-      {
         path: 'dashboard',
         element: (
-          <Suspense
-            fallback={<LoaderGlobal message="Carregando dashboard..." />}
-          >
+          <Suspense fallback={<LoaderGlobal message="Carregando dashboard..." />}>
             <Dashboard />
           </Suspense>
         ),
@@ -76,9 +65,7 @@ export const router = createBrowserRouter([
       {
         path: 'config',
         element: (
-          <Suspense
-            fallback={<LoaderGlobal message="Carregando configurações..." />}
-          >
+          <Suspense fallback={<LoaderGlobal message="Carregando configuracoes..." />}>
             <Settings />
           </Suspense>
         ),
@@ -86,10 +73,32 @@ export const router = createBrowserRouter([
       {
         path: 'marketplace',
         element: (
-          <Suspense
-            fallback={<LoaderGlobal message="Carregando ecossistema..." />}
-          >
+          <Suspense fallback={<LoaderGlobal message="Carregando ecossistema..." />}>
             <Marketplace />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'propriedades',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando propriedades..." />}>
+            <Propriedades />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'relatorios',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando relatorios..." />}>
+            <RelatorioAnalise />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'clientes',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando clientes..." />}>
+            <Clientes />
           </Suspense>
         ),
       },
@@ -99,9 +108,7 @@ export const router = createBrowserRouter([
           {
             index: true,
             element: (
-              <Suspense
-                fallback={<LoaderGlobal message="Carregando análises..." />}
-              >
+              <Suspense fallback={<LoaderGlobal message="Carregando analises..." />}>
                 <DashboardAnaliseSolo />
               </Suspense>
             ),
@@ -109,9 +116,7 @@ export const router = createBrowserRouter([
           {
             path: 'cadastro',
             element: (
-              <Suspense
-                fallback={<LoaderGlobal message="Carregando cadastro..." />}
-              >
+              <Suspense fallback={<LoaderGlobal message="Carregando cadastro..." />}>
                 <CadastroAnaliseSolo />
               </Suspense>
             ),
@@ -119,9 +124,7 @@ export const router = createBrowserRouter([
           {
             path: 'relatorio',
             element: (
-              <Suspense
-                fallback={<LoaderGlobal message="Gerando laudo..." />}
-              >
+              <Suspense fallback={<LoaderGlobal message="Gerando laudo..." />}>
                 <RelatorioAnalise />
               </Suspense>
             ),
@@ -152,9 +155,7 @@ export const router = createBrowserRouter([
       {
         path: 'register',
         element: (
-          <Suspense
-            fallback={<LoaderGlobal message="Carregando registro..." />}
-          >
+          <Suspense fallback={<LoaderGlobal message="Carregando registro..." />}>
             <Register />
           </Suspense>
         ),
@@ -162,9 +163,7 @@ export const router = createBrowserRouter([
       {
         path: 'forgot-password',
         element: (
-          <Suspense
-            fallback={<LoaderGlobal message="Carregando recuperação..." />}
-          >
+          <Suspense fallback={<LoaderGlobal message="Carregando recuperacao..." />}>
             <ForgotPassword />
           </Suspense>
         ),

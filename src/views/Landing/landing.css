@@ -1,0 +1,174 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Sora:wght@500;700;800&display=swap');
+
+.landing-root {
+  --ps-bg: #f4f8f1;
+  --ps-bg-soft: #e6f0df;
+  --ps-line: #cad9c0;
+  --ps-primary: #1f7a45;
+  --ps-primary-strong: #0f5f35;
+  --ps-text: #13281b;
+  --ps-text-soft: #3d5a49;
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 10% 5%, #d8f2d0 0%, rgba(216, 242, 208, 0) 40%),
+    radial-gradient(circle at 90% 15%, #d0ecff 0%, rgba(208, 236, 255, 0) 38%),
+    linear-gradient(170deg, var(--ps-bg) 0%, var(--ps-bg-soft) 100%);
+  color: var(--ps-text);
+  font-family: 'Manrope', sans-serif;
+}
+
+.landing-shell {
+  position: relative;
+  z-index: 2;
+  padding-top: 26px;
+  padding-bottom: 52px;
+}
+
+.landing-nav {
+  margin-bottom: 28px;
+}
+
+.brand-title {
+  color: var(--ps-primary-strong);
+  font-family: 'Sora', sans-serif;
+  letter-spacing: 0.2px;
+}
+
+.hero-grid {
+  margin-bottom: 22px;
+  animation: rise-in 520ms ease-out both;
+}
+
+.hero-copy {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--ps-line);
+  border-radius: 18px;
+  padding: 26px;
+  backdrop-filter: blur(6px);
+}
+
+.hero-title {
+  font-family: 'Sora', sans-serif;
+  color: var(--ps-text);
+  font-size: clamp(1.85rem, 4vw, 2.65rem);
+  line-height: 1.14;
+}
+
+.hero-text {
+  color: var(--ps-text-soft);
+  max-width: 56ch;
+}
+
+.hero-demo {
+  border: 1px solid var(--ps-line);
+  background: linear-gradient(160deg, #ffffff 0%, #ecf7e8 100%);
+  box-shadow: 0 20px 30px rgba(18, 44, 30, 0.11);
+  animation: rise-in 680ms ease-out both;
+}
+
+.features-grid {
+  margin-top: 20px;
+  margin-bottom: 30px;
+}
+
+.feature-card {
+  border: 1px solid var(--ps-line);
+  background: rgba(255, 255, 255, 0.8);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 20px rgba(18, 44, 30, 0.1);
+}
+
+.plans-block {
+  border: 1px solid var(--ps-line);
+  border-radius: 18px;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.78);
+  animation: rise-in 820ms ease-out both;
+}
+
+.plan-card {
+  border: 1px solid var(--ps-line);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.plan-card-highlight {
+  border: 1px solid #b2d8be;
+  background: linear-gradient(170deg, #f0ffef 0%, #dff7e7 100%);
+}
+
+.landing-glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(70px);
+  opacity: 0.55;
+}
+
+.landing-glow-top {
+  width: 280px;
+  height: 280px;
+  top: -90px;
+  right: -60px;
+  background: #cff3d4;
+}
+
+.landing-glow-bottom {
+  width: 340px;
+  height: 340px;
+  bottom: -140px;
+  left: -100px;
+  background: #cde6ff;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-mantine-color-scheme='dark'] .landing-root {
+  --ps-bg: #09130f;
+  --ps-bg-soft: #0d1b16;
+  --ps-line: #21372d;
+  --ps-primary: #3cad6d;
+  --ps-primary-strong: #6ad08f;
+  --ps-text: #e5f4ec;
+  --ps-text-soft: #9fc6b0;
+  background:
+    radial-gradient(circle at 10% 5%, rgba(32, 88, 57, 0.42) 0%, rgba(32, 88, 57, 0) 45%),
+    radial-gradient(circle at 90% 15%, rgba(17, 62, 88, 0.4) 0%, rgba(17, 62, 88, 0) 42%),
+    linear-gradient(170deg, var(--ps-bg) 0%, var(--ps-bg-soft) 100%);
+}
+
+[data-mantine-color-scheme='dark'] .hero-copy {
+  background: rgba(11, 24, 19, 0.72);
+  border-color: var(--ps-line);
+}
+
+[data-mantine-color-scheme='dark'] .hero-demo {
+  background: linear-gradient(160deg, rgba(12, 25, 20, 0.95) 0%, rgba(15, 35, 28, 0.95) 100%);
+  border-color: var(--ps-line);
+  box-shadow: 0 20px 30px rgba(0, 0, 0, 0.35);
+}
+
+[data-mantine-color-scheme='dark'] .feature-card,
+[data-mantine-color-scheme='dark'] .plan-card,
+[data-mantine-color-scheme='dark'] .plans-block {
+  background: rgba(10, 22, 18, 0.78);
+  border-color: var(--ps-line);
+}
+
+[data-mantine-color-scheme='dark'] .plan-card-highlight {
+  border-color: #2d5e44;
+  background: linear-gradient(170deg, rgba(17, 43, 31, 0.95) 0%, rgba(22, 57, 39, 0.95) 100%);
+}

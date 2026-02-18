@@ -3,24 +3,21 @@ import {
   Stack,
   Loader,
   Text,
-  useMantineTheme,
+  useMantineColorScheme,
   Card,
 } from '@mantine/core';
 
 type Props = { message?: string };
 
 export default function LoaderGlobal({ message = 'Carregando...' }: Props) {
-  const theme = useMantineTheme();
+  const { colorScheme } = useMantineColorScheme();
 
   return (
     <Center
       h="100vh"
       w="100vw"
       style={{
-        background:
-          theme.colorScheme === 'dark'
-            ? theme.colors.dark[7]
-            : theme.colors.gray[0],
+        background: colorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa',
       }}
     >
       <Card withBorder radius="md" p="lg" shadow="sm">

@@ -1,90 +1,78 @@
 import { createClient } from '@supabase/supabase-js';
-import { Database } from './supabase';
+import { isLocalDataMode } from '@services/dataProvider';
+import type { Database } from './supabase';
 
-const debug = (msg: string, data?: any) => {
-  console.log(`[SupabaseClient] ${msg}`, data ?? '');
-};
+function createQueryStub(defaultData: any = []): any {
+  const builder: any = {
+    select: () => builder,
+    insert: () => builder,
+    update: () => builder,
+    delete: () => builder,
+    eq: () => builder,
+    lte: () => builder,
+    gte: () => builder,
+    order: () => builder,
+    limit: () => builder,
+    maybeSingle: async () => ({ data: null, error: null }),
+    single: async () => ({ data: null, error: null }),
+    then: (resolve: any) =>
+      Promise.resolve({ data: defaultData, error: null }).then(resolve),
+    catch: (reject: any) => Promise.resolve({ data: defaultData, error: null }).catch(reject),
+  };
 
-// Debug do ambiente (visível no console do navegador)
-debug('📦 Verificando variáveis (import.meta.env)');
-debug('  VITE_SUPABASE_URL =', import.meta.env.VITE_SUPABASE_URL);
-debug(
-  '  VITE_SUPABASE_ANON_KEY =',
-  import.meta.env.VITE_SUPABASE_ANON_KEY ? 'OK' : 'NÃO LIDA',
-);
+  return builder;
+}
 
-let supabaseClient: ReturnType<typeof createClient> | null = null;
+function createSupabaseStub() {
+  const offlineError = {
+    message:
+      'Supabase desabilitado no modo local (VITE_DATA_PROVIDER=local).',
+  };
 
-try {
+  return {
+    auth: {
+      signInWithPassword: async () => ({ data: null, error: offlineError }),
+      signUp: async () => ({ data: { session: null, user: null }, error: offlineError }),
+      signOut: async () => ({ error: null }),
+      getSession: async () => ({ data: { session: null }, error: null }),
+      getUser: async () => ({ data: { user: null }, error: null }),
+      onAuthStateChange: () => ({
+        data: { subscription: { unsubscribe: () => {} } },
+      }),
+    },
+    functions: {
+      invoke: async () => ({ data: null, error: offlineError }),
+    },
+    from: () => createQueryStub([]),
+  };
+}
+
+function debug(message: string, data?: unknown) {
+  console.log(`[SupabaseClient] ${message}`, data ?? '');
+}
+
+let supabaseClient: any;
+
+if (isLocalDataMode) {
+  debug('Modo local ativo. Supabase em stub offline.');
+  supabaseClient = createSupabaseStub();
+} else {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    const msg = '❌ Supabase URL ou KEY não configuradas no .env';
-    debug(msg);
-
-    import('@services/loggerLocal').then(({ registrarLogLocal }) => {
-      registrarLogLocal({
-        tipo: 'error',
-        mensagem: msg,
-        origem: 'supabaseClient.ts',
-        stack: 'Variáveis .env não detectadas em import.meta.env',
-        detalhes: {
-          arquivo: 'supabaseClient.ts',
-          envDetectado: {
-            VITE_SUPABASE_URL: !!supabaseUrl,
-            VITE_SUPABASE_ANON_KEY: !!supabaseKey,
-          },
-        },
-      });
+    debug('Supabase URL/KEY ausentes. Aplicando stub de seguranca.');
+    supabaseClient = createSupabaseStub();
+  } else {
+    supabaseClient = createClient<Database>(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
     });
-
-    throw new Error(msg);
+    debug('SupabaseClient criado com sucesso', { url: supabaseUrl });
   }
-
-  supabaseClient = createClient<Database>(supabaseUrl, supabaseKey, {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-    },
-  });
-
-  debug('✅ SupabaseClient criado com sucesso', { url: supabaseUrl });
-} catch (err: any) {
-  debug('🔥 Erro ao inicializar SupabaseClient', err);
-
-  import('@services/loggerLocal').then(({ registrarLogLocal }) => {
-    registrarLogLocal({
-      tipo: 'critical',
-      mensagem: err.message,
-      origem: 'supabaseClient.ts',
-      stack: err.stack,
-      detalhes: {
-        arquivo: 'supabaseClient.ts',
-        contexto: 'Falha na inicialização do SupabaseClient',
-        envDetectado: {
-          VITE_SUPABASE_URL: !!import.meta.env.VITE_SUPABASE_URL,
-          VITE_SUPABASE_ANON_KEY: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-      },
-    });
-  });
-
-  // Modo mock para não quebrar o app
-  supabaseClient = {
-    auth: {
-      signInWithPassword: async () => {
-        throw new Error('Supabase indisponível (modo mock).');
-      },
-    },
-    from: () => ({
-      select: async () => ({
-        data: [],
-        error: new Error('Supabase indisponível (modo mock).'),
-      }),
-    }),
-  } as any;
 }
 
 export { supabaseClient };

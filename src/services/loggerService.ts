@@ -1,10 +1,7 @@
+import { isLocalDataMode } from '@services/dataProvider';
 import { supabaseClient } from '@sb/supabaseClient';
 
-/**
- * 🌿 loggerService
- * Serviço central de logs do PerfilSolo.
- * Registra erros, avisos e eventos importantes da aplicação.
- */
+const LOCAL_LOG_KEY = 'perfilsolo_local_logs';
 
 export interface LogEvento {
   tipo: 'error' | 'warning' | 'info';
@@ -12,6 +9,17 @@ export interface LogEvento {
   origem?: string;
   usuario_id?: string | null;
   detalhes?: Record<string, any>;
+}
+
+function appendLocalLog(entry: Record<string, any>) {
+  try {
+    const current = localStorage.getItem(LOCAL_LOG_KEY);
+    const parsed = current ? (JSON.parse(current) as Record<string, any>[]) : [];
+    parsed.push(entry);
+    localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(parsed.slice(-500)));
+  } catch {
+    // Mantem fluxo principal sem quebrar em caso de localStorage indisponivel.
+  }
 }
 
 export async function registrarLog(evento: LogEvento) {
@@ -24,19 +32,21 @@ export async function registrarLog(evento: LogEvento) {
     timestamp: new Date().toISOString(),
   };
 
+  console.groupCollapsed(`[LOG ${evento.tipo.toUpperCase()}]`);
+  console.table(data);
+  console.groupEnd();
+
+  if (isLocalDataMode) {
+    appendLocalLog(data);
+    return;
+  }
+
   try {
-    // Log local para debug
-    console.groupCollapsed(`📜 [LOG ${evento.tipo.toUpperCase()}]`);
-    console.table(data);
-    console.groupEnd();
-
-    // Envio ao Supabase (tabela logs_sistema)
     const { error } = await supabaseClient.from('logs_sistema').insert([data]);
-
     if (error) {
-      console.warn('⚠️ Falha ao enviar log para o Supabase:', error.message);
+      console.warn('Falha ao enviar log para o Supabase:', error.message);
     }
   } catch (err) {
-    console.error('❌ Erro interno no loggerService:', err);
+    console.error('Erro interno no loggerService:', err);
   }
 }

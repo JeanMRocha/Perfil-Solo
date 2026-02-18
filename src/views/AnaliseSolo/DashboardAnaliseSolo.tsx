@@ -61,16 +61,16 @@ export default function DashboardAnaliseSolo() {
         <ScrollArea h="100%">
           <NavLink
             label="Início"
-            icon={<IconHome size={18} />}
+            leftSection={<IconHome size={18} />}
             onClick={() => navigate('/dashboard')}
           />
           <NavLink
             label="Análises de Solo"
-            icon={<IconFlask size={18} />}
+            leftSection={<IconFlask size={18} />}
             active
           />
-          <NavLink label="Banco de Dados" icon={<IconDatabase size={18} />} />
-          <NavLink label="Configurações" icon={<IconSettings size={18} />} />
+          <NavLink label="Banco de Dados" leftSection={<IconDatabase size={18} />} />
+          <NavLink label="Configurações" leftSection={<IconSettings size={18} />} />
         </ScrollArea>
       </AppShell.Navbar>
 

@@ -87,9 +87,14 @@ export interface SoilParams {
   genero?: string;
   especie?: string;
   cultivar?: string;
+  variedade?: string | null;
+  estado?: string | null;
+  cidade?: string | null;
+  extrator?: string | null;
+  estagio?: string | null;
   idade_meses?: number | null;
   ideal: RangeMap;
-  ruleset_version: string;
+  ruleset_version?: string;
   fonte?: string | null;
   observacoes?: string | null;
   updated_at?: string | null;

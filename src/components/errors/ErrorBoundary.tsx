@@ -118,19 +118,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
     // 🔊 Console estruturado (sem interpolar objeto em string)
     // Evita "Cannot convert object to primitive value"
-    // eslint-disable-next-line no-console
     console.groupCollapsed('🚨 [ErrorBoundary]');
-    // eslint-disable-next-line no-console
     console.error('🧩 Mensagem:', err.message);
-    // eslint-disable-next-line no-console
     console.error('📍 Caminho:', logDetalhado.caminho);
-    // eslint-disable-next-line no-console
     console.error('🕒 Data:', logDetalhado.data);
-    // eslint-disable-next-line no-console
     console.error('🪴 Stack:', info?.componentStack);
-    // eslint-disable-next-line no-console
     console.error('🔹 Raw:', logDetalhado.raw);
-    // eslint-disable-next-line no-console
     console.groupEnd();
 
     // 🔹 Tenta logger remoto; se falhar, logger local
@@ -142,7 +135,6 @@ export class ErrorBoundary extends Component<Props, State> {
         detalhes: logDetalhado,
       });
     } catch (erroFallback) {
-      // eslint-disable-next-line no-console
       console.warn(
         '⚠️ Falha ao registrar log remoto, usando fallback local.',
         erroFallback,
@@ -159,7 +151,6 @@ export class ErrorBoundary extends Component<Props, State> {
           detalhes: logDetalhado,
         });
       } catch (erroLocal) {
-        // eslint-disable-next-line no-console
         console.error('❌ Falha também no logger local:', erroLocal);
       }
     }

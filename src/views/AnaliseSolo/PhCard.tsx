@@ -5,9 +5,8 @@ import {
   NumberInput,
   Badge,
   Stack,
-  Box,
 } from '@mantine/core';
-import { useMemo } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 
 type PhCardProps = {
   value: number;
@@ -18,10 +17,8 @@ type PhCardProps = {
 
 const MIN_PH = 0;
 const MAX_PH = 14;
-// 15 barras (0..14)
 const BAR_COUNT = 15;
 
-// cores para cada barra inteira (0..14) — ajuste se quiser outra paleta
 const PH_COLORS = [
   '#7a0b00',
   '#a31a00',
@@ -41,32 +38,31 @@ const PH_COLORS = [
 ];
 
 function pct(val: number, min = MIN_PH, max = MAX_PH) {
-  const cl = Math.max(min, Math.min(max, val));
-  return ((cl - min) / (max - min)) * 100;
+  const clamped = Math.max(min, Math.min(max, val));
+  return ((clamped - min) / (max - min)) * 100;
 }
 
-/** Classificação agronômica baseada no quadro que você mandou */
 function agronomicClass(ph: number) {
   if (ph < 4.5) return { slug: 'muito_baixo', label: 'Muito baixo' };
-  if (ph >= 4.5 && ph <= 5.4) return { slug: 'baixo', label: 'Baixo' };
-  if (ph >= 5.5 && ph <= 6.0) return { slug: 'bom', label: 'Bom' };
-  if (ph >= 6.1 && ph <= 7.0) return { slug: 'alto', label: 'Alto' };
-  return { slug: 'muito_alto', label: 'Muito alto' }; // > 7.0
+  if (ph <= 5.4) return { slug: 'baixo', label: 'Baixo' };
+  if (ph <= 6.0) return { slug: 'bom', label: 'Bom' };
+  if (ph <= 7.0) return { slug: 'alto', label: 'Alto' };
+  return { slug: 'muito_alto', label: 'Muito alto' };
 }
 
 function consequencesText(ph: number) {
-  const cl = agronomicClass(ph).slug;
-  switch (cl) {
+  const cls = agronomicClass(ph).slug;
+  switch (cls) {
     case 'muito_baixo':
-      return 'Muito ácido — forte limitação de nutrientes (Ca, Mg). Calagem urgente e manejo de MO.';
+      return 'Muito acido. Calagem urgente e manejo de materia organica.';
     case 'baixo':
-      return 'Ácido — redução de disponibilidade de nutrientes e potencial de produtividade. Considere calagem.';
+      return 'Solo acido. Considerar calagem de correcao.';
     case 'bom':
-      return 'Faixa adequada para muitas culturas — manter manejo e monitoramento.';
+      return 'Faixa adequada para a maioria das culturas.';
     case 'alto':
-      return 'Levemente alcalino — possíveis limitações de micronutrientes. Avaliar necessidade de correções localizadas.';
+      return 'Levemente alcalino. Monitorar micronutrientes.';
     case 'muito_alto':
-      return 'Alcalino — risco de deficiência de Fe/Mn/Zn. Intervenções específicas podem ser necessárias.';
+      return 'Alcalino. Possivel deficiencia de Fe, Mn e Zn.';
     default:
       return '';
   }
@@ -89,9 +85,7 @@ export default function PhCard({
   const statusColor =
     status === 'ideal' ? 'green' : status === 'baixo' ? 'red' : 'blue';
   const statusLabel =
-    status === 'ideal' ? 'IDEAL' : status === 'baixo' ? 'ÁCIDO' : 'ALCALINO';
-
-  // labels inteiros 0..14
+    status === 'ideal' ? 'IDEAL' : status === 'baixo' ? 'ACIDO' : 'ALCALINO';
   const integerLabels = useMemo(
     () => Array.from({ length: BAR_COUNT }, (_, i) => MIN_PH + i),
     [],
@@ -102,7 +96,7 @@ export default function PhCard({
 
   return (
     <Card withBorder radius="md" p="md">
-      <Group position="apart" mb="xs">
+      <Group justify="space-between" mb="xs">
         <Group>
           <Text fw={700}>pH</Text>
           <Badge variant="light">UNID.</Badge>
@@ -113,23 +107,21 @@ export default function PhCard({
           value={value}
           onChange={(v) => onChange(Number(v || 0))}
           step={0.1}
-          precision={1}
+          decimalScale={1}
           min={MIN_PH}
           max={MAX_PH}
           maw={120}
         />
       </Group>
 
-      {/* escala / barras */}
       <div
         style={{
           position: 'relative',
           height: barsHeight,
           marginTop: 6,
-          marginBottom: 8, // espaço menor aqui — labels estarão fora em fluxo normal
+          marginBottom: 8,
         }}
       >
-        {/* grade de barras — gap 0 para ficarem coladas */}
         <div
           style={{
             display: 'grid',
@@ -141,8 +133,7 @@ export default function PhCard({
           }}
         >
           {PH_COLORS.slice(0, BAR_COUNT).map((c, i) => {
-            // borda arredondada só nas extremidades para suavizar
-            const style: React.CSSProperties = {
+            const style: CSSProperties = {
               background: c,
               height: '100%',
               display: 'block',
@@ -153,7 +144,6 @@ export default function PhCard({
           })}
         </div>
 
-        {/* overlay faixa ideal */}
         <div
           style={{
             position: 'absolute',
@@ -168,7 +158,6 @@ export default function PhCard({
           }}
         />
 
-        {/* marcas inteiras (linha leve) - alinhadas ao centro de cada barra */}
         <div
           style={{
             position: 'absolute',
@@ -176,9 +165,8 @@ export default function PhCard({
             pointerEvents: 'none',
           }}
         >
-          {integerLabels.map((n, i) => {
-            // centro da barra i: (i + 0.5) / BAR_COUNT
-            const leftPct = (i / BAR_COUNT) * 108;
+          {integerLabels.map((_n, i) => {
+            const leftPct = ((i + 0.5) / BAR_COUNT) * 100;
             return (
               <div
                 key={`mark-${i}`}
@@ -196,11 +184,10 @@ export default function PhCard({
           })}
         </div>
 
-        {/* plantinha — central verticalmente, horizontal conforme valor */}
         <div
           style={{
             position: 'absolute',
-            left: `calc(${pct(value)}%)`,
+            left: `${pct(value)}%`,
             top: '50%',
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none',
@@ -208,7 +195,6 @@ export default function PhCard({
             zIndex: 6,
           }}
         >
-          {/* Plant SVG */}
           <svg
             width="36"
             height="36"
@@ -247,7 +233,6 @@ export default function PhCard({
             </g>
           </svg>
 
-          {/* etiqueta pequena com o valor — abaixo da plantinha */}
           <div
             style={{
               marginTop: 2,
@@ -256,7 +241,6 @@ export default function PhCard({
               fontSize: 16,
               padding: '3px 6px',
               borderRadius: 10,
-              transform: 'translateY(0)',
             }}
           >
             {value.toFixed(1)}
@@ -264,13 +248,11 @@ export default function PhCard({
         </div>
       </div>
 
-      {/* Labels inteiros em grid alinhado às barras (sem overlap) */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${BAR_COUNT}, 1fr)`,
           gap: 0,
-          padding: '0 0px',
           marginBottom: 8,
           pointerEvents: 'none',
         }}
@@ -289,20 +271,14 @@ export default function PhCard({
         ))}
       </div>
 
-      {/* Três linhas informativas abaixo da escala */}
-      <Stack spacing={2}>
-        {/* 1) Faixa ideal */}
+      <Stack gap={2}>
         <Text size="sm" style={{ color: '#059669', fontWeight: 600 }}>
-          Faixa ideal: {idealMin} – {idealMax}
+          Faixa ideal: {idealMin} - {idealMax}
         </Text>
-
-        {/* 2) Classificação agronômica */}
         <Text size="sm" style={{ fontWeight: 600 }}>
-          Classificação agronômica: {agrClass.label}
+          Classificacao agronomica: {agrClass.label}
         </Text>
-
-        {/* 3) Consequências / recomendações curtas */}
-        <Text size="sm" color="dimmed">
+        <Text size="sm" c="dimmed">
           {consequence}
         </Text>
       </Stack>

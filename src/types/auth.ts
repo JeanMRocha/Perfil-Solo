@@ -18,6 +18,8 @@ export interface UserProfile {
     email: string;
     full_name?: string;
     role: UserRole;
+    plan_id?: PlanType;
+    subscription_status?: string;
     subscription?: UserSubscription;
     plan_usage?: {
         pdf_imports_count: number;

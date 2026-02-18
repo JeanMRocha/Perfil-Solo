@@ -17,7 +17,8 @@
       "@components/*": ["components/*"],
       "@views/*": ["views/*"],
       "@services/*": ["services/*"],
-      "@supabase/*": ["supabase/*"]
+      "@supabase/*": ["supabase/*"],
+      "@sb/*": ["supabase/*"]
     },
     "strict": true,
     "noUnusedLocals": true,

@@ -6,7 +6,7 @@ import { Notifications } from '@mantine/notifications';
 import { RouterProvider } from 'react-router-dom';
 
 import { useStore } from '@nanostores/react';
-import { $tema, alternarTema } from '@global/themeStore';
+import { $tema } from '@global/themeStore';
 import { initGlobalErrorCatcher } from '@global/errorCatcher';
 import { mantineModals } from './mantine/modals/modals';
 import { mantineTheme } from './mantine/theme';
@@ -33,8 +33,6 @@ function AppRoot() {
       <MantineProvider
         theme={mantineTheme}
         forceColorScheme={tema}
-        withGlobalStyles
-        withNormalizeCSS
       >
         <Notifications position="top-right" />
         <CustomSpotlight />

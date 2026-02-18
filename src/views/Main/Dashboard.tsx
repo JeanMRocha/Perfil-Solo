@@ -4,11 +4,8 @@ import {
   Text,
   Group,
   AppShell,
-  Navbar,
-  Header,
   NavLink,
   Card,
-  Grid,
   Button,
   SimpleGrid,
   Divider,
@@ -87,28 +84,28 @@ export default function Dashboard() {
       <AppShell.Navbar p="md">
         <NavLink
           label="Dashboard"
-          icon={<IconHome size={18} />}
+          leftSection={<IconHome size={18} />}
           active
           onClick={() => navigate('/dashboard')}
         />
         <NavLink
           label="Propriedades"
-          icon={<IconMap size={18} />}
+          leftSection={<IconMap size={18} />}
           onClick={() => navigate('/propriedades')}
         />
         <NavLink
           label="Análises de Solo"
-          icon={<IconFlask size={18} />}
+          leftSection={<IconFlask size={18} />}
           onClick={() => navigate('/analise-solo')}
         />
         <NavLink
           label="Relatórios"
-          icon={<IconGraph size={18} />}
+          leftSection={<IconGraph size={18} />}
           onClick={() => navigate('/relatorios')}
         />
         <NavLink
           label="Clientes"
-          icon={<IconUser size={18} />}
+          leftSection={<IconUser size={18} />}
           onClick={() => navigate('/clientes')}
         />
       </AppShell.Navbar>

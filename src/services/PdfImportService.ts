@@ -1,6 +1,6 @@
 // src/services/PdfImportService.ts
 import * as pdfjsLib from 'pdfjs-dist';
-import { NutrientKey, SoilNutrient, UnitType } from '../types/soil';
+import { SoilNutrient } from '../types/soil';
 import { labTemplates, LabTemplate } from '../data/labTemplates';
 
 // Configuração do worker para pdfjs-dist (Vite/Browser context)
