@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { ProtectedPath } from '@components/ProtectedPath';
+import SuperModeGuard from '@components/SuperModeGuard';
 import { LoaderGlobal } from '@components/loaders';
 
 const Logout = lazy(() => import('@views/Auth/Logout'));
@@ -39,6 +40,18 @@ const RelatorioAnalise = lazy(
   () => import('@views/Relatorios/RelatorioAnalise'),
 );
 const Marketplace = lazy(() => import('@views/Marketplace/Marketplace'));
+const NotificationsCenter = lazy(
+  () => import('@views/Notifications/NotificationsCenter'),
+);
+const PrivacyPolicy = lazy(() => import('@views/Legal/PrivacyPolicy'));
+const CookiesNotice = lazy(() => import('@views/Legal/CookiesNotice'));
+const LgpdNotice = lazy(() => import('@views/Legal/LgpdNotice'));
+const SystemIdentity = lazy(() => import('@views/Super/SystemIdentity'));
+const UserManagement = lazy(() => import('@views/Super/UserManagement'));
+const ApiMode = lazy(() => import('@views/Integracoes/ApiMode'));
+const AulasHub = lazy(() => import('@views/Aulas/AulasHub'));
+const KnowledgeHub = lazy(() => import('@views/Knowledge/KnowledgeHub'));
+const CreditsCenter = lazy(() => import('@views/Credits/CreditsCenter'));
 
 export const router = createBrowserRouter([
   {
@@ -87,6 +100,14 @@ export const router = createBrowserRouter([
         element: (
           <Suspense fallback={<LoaderGlobal message="Carregando ecossistema..." />}>
             <Marketplace />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'notificacoes',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando notificacoes..." />}>
+            <NotificationsCenter />
           </Suspense>
         ),
       },
@@ -198,6 +219,100 @@ export const router = createBrowserRouter([
         element: (
           <Suspense fallback={<LoaderGlobal message="Carregando clientes..." />}>
             <Clientes />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'legal/privacidade',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando politica..." />}>
+            <PrivacyPolicy />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'legal/cookies',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando aviso..." />}>
+            <CookiesNotice />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'legal/lgpd',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando LGPD..." />}>
+            <LgpdNotice />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'super/sistema',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando modulo super..." />}>
+            <SuperModeGuard>
+              <SystemIdentity />
+            </SuperModeGuard>
+          </Suspense>
+        ),
+      },
+      {
+        path: 'super/logo',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando modulo super..." />}>
+            <SuperModeGuard>
+              <SystemIdentity />
+            </SuperModeGuard>
+          </Suspense>
+        ),
+      },
+      {
+        path: 'super/usuarios',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando gestao de usuarios..." />}>
+            <SuperModeGuard>
+              <UserManagement />
+            </SuperModeGuard>
+          </Suspense>
+        ),
+      },
+      {
+        path: 'integracoes/api',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando modo API..." />}>
+            <ApiMode />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'creditos',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando creditos..." />}>
+            <CreditsCenter />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'cupons',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando cupons..." />}>
+            <CreditsCenter />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'aulas',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando aulas..." />}>
+            <AulasHub />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'conhecimento',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando conhecimento..." />}>
+            <KnowledgeHub />
           </Suspense>
         ),
       },

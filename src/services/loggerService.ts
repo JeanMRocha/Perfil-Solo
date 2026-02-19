@@ -1,5 +1,6 @@
 import { isLocalDataMode } from '@services/dataProvider';
 import { supabaseClient } from '@sb/supabaseClient';
+import { storageReadJson, storageWriteJson } from './safeLocalStorage';
 
 const LOCAL_LOG_KEY = 'perfilsolo_local_logs';
 
@@ -13,10 +14,9 @@ export interface LogEvento {
 
 function appendLocalLog(entry: Record<string, any>) {
   try {
-    const current = localStorage.getItem(LOCAL_LOG_KEY);
-    const parsed = current ? (JSON.parse(current) as Record<string, any>[]) : [];
+    const parsed = storageReadJson<Record<string, any>[]>(LOCAL_LOG_KEY, []);
     parsed.push(entry);
-    localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(parsed.slice(-500)));
+    storageWriteJson(LOCAL_LOG_KEY, parsed.slice(-500));
   } catch {
     // Mantem fluxo principal sem quebrar em caso de localStorage indisponivel.
   }

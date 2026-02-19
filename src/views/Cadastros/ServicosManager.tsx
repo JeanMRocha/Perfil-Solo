@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import {
   Badge,
   Button,
@@ -19,6 +20,8 @@ import {
   type LaboratoryService,
   upsertLaboratory,
 } from '../../services/laboratoriesService';
+import { $currUser } from '../../global-state/user';
+import { isLocalDataMode } from '../../services/dataProvider';
 
 interface ServicosManagerProps {
   startInCreateMode?: boolean;
@@ -59,11 +62,16 @@ function toLabLabel(lab: LaboratoryRecord): string {
 }
 
 async function persistLabServices(
+  userId: string | null,
   lab: LaboratoryRecord,
   services: LaboratoryService[],
 ) {
+  if (!userId) {
+    throw new Error('Usuario nao identificado para persistir servicos.');
+  }
   await upsertLaboratory({
     id: lab.id,
+    userId,
     nome: lab.nome,
     cnpj: lab.cnpj,
     email: lab.email,
@@ -76,6 +84,8 @@ async function persistLabServices(
 export default function ServicosManager({
   startInCreateMode = false,
 }: ServicosManagerProps) {
+  const user = useStore($currUser);
+  const currentUserId = user?.id ?? (isLocalDataMode ? 'local-user' : null);
   const [labs, setLabs] = useState<LaboratoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchValue, setSearchValue] = useState('');
@@ -87,15 +97,26 @@ export default function ServicosManager({
   const [createOpenedOnce, setCreateOpenedOnce] = useState(false);
 
   const reloadLabs = async () => {
-    setLabs(await listLaboratories());
+    if (!currentUserId) {
+      setLabs([]);
+      return;
+    }
+    setLabs(await listLaboratories(currentUserId));
   };
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
+      if (!currentUserId) {
+        if (alive) {
+          setLabs([]);
+          setLoading(false);
+        }
+        return;
+      }
       setLoading(true);
       try {
-        const rows = await listLaboratories();
+        const rows = await listLaboratories(currentUserId);
         if (!alive) return;
         setLabs(rows);
       } finally {
@@ -106,7 +127,7 @@ export default function ServicosManager({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!startInCreateMode || createOpenedOnce) return;
@@ -185,6 +206,15 @@ export default function ServicosManager({
   };
 
   const handleDelete = async (row: FlatServiceRow) => {
+    if (!currentUserId) {
+      notifications.show({
+        title: 'Usuario nao identificado',
+        message: 'Nao foi possivel identificar o usuario para excluir servico.',
+        color: 'red',
+      });
+      return;
+    }
+
     const confirmed = window.confirm('Excluir este servico do laboratorio?');
     if (!confirmed) return;
 
@@ -194,7 +224,7 @@ export default function ServicosManager({
     const nextServices = (lab.servicos ?? []).filter(
       (item) => item.id !== row.service.id,
     );
-    await persistLabServices(lab, nextServices);
+    await persistLabServices(currentUserId, lab, nextServices);
     await reloadLabs();
     notifications.show({
       title: 'Servico removido',
@@ -204,6 +234,15 @@ export default function ServicosManager({
   };
 
   const handleSave = async () => {
+    if (!currentUserId) {
+      notifications.show({
+        title: 'Usuario nao identificado',
+        message: 'Nao foi possivel identificar o usuario para salvar servico.',
+        color: 'red',
+      });
+      return;
+    }
+
     const selectedLab = labs.find((item) => item.id === draft.lab_id);
     if (!selectedLab) {
       notifications.show({
@@ -251,7 +290,7 @@ export default function ServicosManager({
           (item) => item.id !== draft.id,
         );
         if (sourceLab.id !== selectedLab.id) {
-          await persistLabServices(sourceLab, sourceWithout);
+          await persistLabServices(currentUserId, sourceLab, sourceWithout);
         }
       }
 
@@ -260,7 +299,7 @@ export default function ServicosManager({
           ? (selectedLab.servicos ?? []).filter((item) => item.id !== draft.id)
           : [...(selectedLab.servicos ?? [])];
       const targetServices = [...targetBase, normalizedService];
-      await persistLabServices(selectedLab, targetServices);
+      await persistLabServices(currentUserId, selectedLab, targetServices);
 
       await reloadLabs();
       setModalOpened(false);

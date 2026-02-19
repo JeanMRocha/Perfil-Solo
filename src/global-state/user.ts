@@ -1,22 +1,39 @@
 import type { User } from '@supabase/supabase-js';
 import { atom, onMount } from 'nanostores';
 import { isLocalDataMode } from '@services/dataProvider';
+import { registerAndEnsureUserCredits } from '@services/creditsService';
+import { clearTwoFactorVerificationSession } from '@services/identityVerificationService';
 import { supabaseClient } from '@sb/supabaseClient';
 
 const LOCAL_AUTH_EMAIL_KEY = 'perfilsolo_local_auth_email';
 const LOCAL_AUTH_SESSION_KEY = 'perfilsolo_local_auth_session';
 const DEFAULT_LOCAL_EMAIL = 'local@perfilsolo.app';
 
+function makeLocalUserId(email: string): string {
+  const normalized = normalizeEmail(email);
+  const slug = normalized.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
+  return `local-${slug || 'user'}`;
+}
+
+function makeLocalDisplayName(email: string): string {
+  const normalized = normalizeEmail(email);
+  const left = normalized.split('@')[0] ?? 'Usuario';
+  return left || 'Usuario';
+}
+
 function buildLocalUser(email: string): User {
   const now = new Date().toISOString();
+  const normalized = normalizeEmail(email);
+  const userId = makeLocalUserId(normalized);
+  const displayName = makeLocalDisplayName(normalized);
   return {
-    id: 'local-user',
+    id: userId,
     aud: 'authenticated',
     created_at: now,
-    email,
+    email: normalized,
     app_metadata: { provider: 'local' },
     user_metadata: {
-      name: 'Usuario Local',
+      name: displayName,
       mode: 'local',
     },
   } as User;
@@ -41,9 +58,15 @@ export const $currUser = atom<User | null | undefined>(undefined);
 
 export function signInLocal(email?: string): User {
   const normalized = normalizeEmail(email);
+  clearTwoFactorVerificationSession(normalized);
   localStorage.setItem(LOCAL_AUTH_SESSION_KEY, '1');
   localStorage.setItem(LOCAL_AUTH_EMAIL_KEY, normalized);
   const localUser = buildLocalUser(normalized);
+  registerAndEnsureUserCredits({
+    id: localUser.id,
+    email: localUser.email ?? normalized,
+    name: String(localUser.user_metadata?.name ?? 'Usuario Local'),
+  });
   $currUser.set(localUser);
   return localUser;
 }
@@ -83,6 +106,7 @@ onMount($currUser, () => {
 });
 
 export async function signOut() {
+  clearTwoFactorVerificationSession();
   if (isLocalDataMode) {
     localStorage.removeItem(LOCAL_AUTH_SESSION_KEY);
     localStorage.removeItem(LOCAL_AUTH_EMAIL_KEY);

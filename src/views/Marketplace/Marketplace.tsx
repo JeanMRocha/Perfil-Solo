@@ -1,11 +1,15 @@
 // src/views/Marketplace/Marketplace.tsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Card, Group, Text, Title, Avatar, Badge, Button,
     TextInput, Select, Tabs, Rating, SimpleGrid
 } from '@mantine/core';
 import { IconSearch, IconFilter, IconMapPin, IconBuildingStore } from '@tabler/icons-react';
 import { Partner, RegionalBenchmark } from '../../types/marketplace';
+import {
+    getSystemBrand,
+    subscribeSystemConfig,
+} from '../../services/systemConfigService';
 
 // Mock Data
 const MOCK_PARTNERS: Partner[] = [
@@ -53,6 +57,15 @@ const MOCK_BENCHMARK: RegionalBenchmark = {
 export default function Marketplace() {
     const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState<string | null>('all');
+    const [systemName, setSystemName] = useState(() => getSystemBrand().name);
+
+    useEffect(() => {
+        const unsubscribe = subscribeSystemConfig((config) => {
+            setSystemName(config.brand.name);
+        });
+
+        return unsubscribe;
+    }, []);
 
     const filteredPartners = MOCK_PARTNERS.filter(p => {
         const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -66,7 +79,7 @@ export default function Marketplace() {
             {/* Header Ecosystem */}
             <Group justify="space-between" mb="xl">
                 <div>
-                    <Title order={2}>Ecossistema PerfilSolo</Title>
+                    <Title order={2}>Ecossistema {systemName}</Title>
                     <Text c="dimmed">Conecte-se com os melhores parceiros e compare sua produtividade.</Text>
                 </div>
                 <Button variant="light" leftSection={<IconBuildingStore size={18} />}>

@@ -6,6 +6,9 @@ import {
   IconSearch,
 } from '@tabler/icons-react';
 import { Spotlight, SpotlightActionData } from '@mantine/spotlight';
+import { getSystemBrand } from '@services/systemConfigService';
+
+const systemName = getSystemBrand().name;
 
 const Spotlightactions: SpotlightActionData[] = [
   {
@@ -20,7 +23,7 @@ const Spotlightactions: SpotlightActionData[] = [
   {
     id: 'dashboard',
     label: 'Dashboard',
-    description: 'Abrir painel PerfilSolo',
+    description: `Abrir painel ${systemName}`,
     onClick: () => (window.location.href = '/dashboard'),
     leftSection: (
       <IconDashboard style={{ width: rem(24), height: rem(24) }} stroke={1.5} />

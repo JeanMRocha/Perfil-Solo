@@ -1,5 +1,6 @@
 import profileData from '../data/profile.json';
 import type { ContactInfo } from '../types/contact';
+import { storageReadJson, storageWriteJson } from './safeLocalStorage';
 
 const LOCAL_PROFILE_KEY = 'perfilsolo_profile_v1';
 export const PROFILE_UPDATED_EVENT = 'perfilsolo-profile-updated';
@@ -111,18 +112,12 @@ function baseProfile(): UserProfile {
 }
 
 function readLocalProfile(): Partial<UserProfile> {
-  try {
-    const raw = localStorage.getItem(LOCAL_PROFILE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Partial<UserProfile>;
-    return parsed ?? {};
-  } catch {
-    return {};
-  }
+  return storageReadJson<Partial<UserProfile>>(LOCAL_PROFILE_KEY, {});
 }
 
 function writeLocalProfile(profile: UserProfile) {
-  localStorage.setItem(LOCAL_PROFILE_KEY, JSON.stringify(profile));
+  const saved = storageWriteJson(LOCAL_PROFILE_KEY, profile);
+  if (!saved) return;
   window.dispatchEvent(
     new CustomEvent(PROFILE_UPDATED_EVENT, { detail: profile }),
   );

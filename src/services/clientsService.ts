@@ -1,4 +1,5 @@
 import type { ContactInfo } from '../types/contact';
+import { storageReadJson, storageWriteJson } from './safeLocalStorage';
 
 const CLIENTS_KEY = 'perfilsolo_clients_v1';
 
@@ -23,19 +24,13 @@ function createId() {
 }
 
 function readAll(): ClientRecord[] {
-  try {
-    const raw = localStorage.getItem(CLIENTS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as ClientRecord[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch {
-    return [];
-  }
+  const parsed = storageReadJson<ClientRecord[]>(CLIENTS_KEY, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed;
 }
 
 function writeAll(rows: ClientRecord[]) {
-  localStorage.setItem(CLIENTS_KEY, JSON.stringify(rows));
+  storageWriteJson(CLIENTS_KEY, rows);
 }
 
 export async function listClientsByUser(userId: string): Promise<ClientRecord[]> {

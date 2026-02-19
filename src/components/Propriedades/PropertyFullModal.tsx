@@ -8,6 +8,7 @@ import {
   Modal,
   NumberInput,
   ScrollArea,
+  Select,
   Stack,
   Tabs,
   Text,
@@ -15,9 +16,21 @@ import {
   TextInput,
 } from '@mantine/core';
 import { IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
+import { formatCep, lookupAddressByCep, normalizeCep } from '../../services/cepService';
 import { listClientsByUser, type ClientRecord } from '../../services/clientsService';
-import type { ContactInfo } from '../../types/contact';
+import {
+  listPropertyAreaCategories,
+  subscribePropertyAreaCategories,
+  type PropertyAreaCategory,
+} from '../../services/propertyAreaCategoriesService';
 import type {
+  ContactAddress,
+  ContactChannel,
+  ContactInfo,
+  ContactSocialLink,
+} from '../../types/contact';
+import type {
+  PropertyAreaAllocation,
   Property,
   PropertyDocuments,
   PropertyFiscalData,
@@ -42,6 +55,7 @@ type PropertyFullModalProps = {
   saving?: boolean;
   userId?: string | null;
   property?: Property | null;
+  talhoesAreaHa?: number;
 };
 
 type PropertyMachineDraft = {
@@ -58,6 +72,38 @@ type PropertyGalpaoDraft = {
   valor: string;
 };
 
+type PropertyAreaAllocationDraft = {
+  id: string;
+  category_id: string;
+  category_name: string;
+  area_ha: string;
+};
+
+type ContactChannelDraft = {
+  id: string;
+  label: string;
+  value: string;
+};
+
+type ContactSocialDraft = {
+  id: string;
+  network: string;
+  url: string;
+};
+
+type ContactAddressDraft = {
+  id: string;
+  label: string;
+  cep: string;
+  state: string;
+  city: string;
+  neighborhood: string;
+  address: string;
+  address_number: string;
+  address_complement: string;
+  ibge_code: string;
+};
+
 type PropertyFormDraft = {
   nome: string;
   cidade: string;
@@ -69,6 +115,7 @@ type PropertyFormDraft = {
   fiscal: PropertyFiscalDraft;
   maquinas: PropertyMachineDraft[];
   galpoes: PropertyGalpaoDraft[];
+  area_allocations: PropertyAreaAllocationDraft[];
 };
 
 type PropertyFiscalDraft = {
@@ -114,13 +161,163 @@ function parseOptionalNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+const SOCIAL_NETWORK_OPTIONS = [
+  { value: 'Instagram', label: 'Instagram' },
+  { value: 'Facebook', label: 'Facebook' },
+  { value: 'WhatsApp', label: 'WhatsApp' },
+  { value: 'YouTube', label: 'YouTube' },
+  { value: 'LinkedIn', label: 'LinkedIn' },
+  { value: 'X', label: 'X' },
+  { value: 'Site', label: 'Site' },
+  { value: 'Outro', label: 'Outro' },
+];
+
+function normalizeContactChannels(
+  channels: ContactChannel[] | undefined,
+): ContactChannelDraft[] {
+  if (!Array.isArray(channels) || channels.length === 0) return [];
+  return channels
+    .map((row) => ({
+      id: toText(row?.id) || createLocalId('contact-item'),
+      label: toText(row?.label),
+      value: toText(row?.value),
+    }))
+    .filter((row) => row.value.length > 0);
+}
+
+function normalizeSocialLinks(
+  links: ContactSocialLink[] | undefined,
+): ContactSocialDraft[] {
+  if (!Array.isArray(links) || links.length === 0) return [];
+  return links
+    .map((row) => ({
+      id: toText(row?.id) || createLocalId('social-item'),
+      network: toText(row?.network),
+      url: toText(row?.url),
+    }))
+    .filter((row) => row.url.length > 0);
+}
+
+function mapContactChannelsDraft(
+  channels: ContactChannel[] | undefined,
+  fallbackValue: string | undefined,
+): ContactChannelDraft[] {
+  const normalized = normalizeContactChannels(channels);
+  if (normalized.length > 0) return normalized;
+  const fallback = toText(fallbackValue);
+  if (!fallback) return [];
+  return [{ id: createLocalId('contact-item'), label: 'Principal', value: fallback }];
+}
+
+function normalizeContactAddresses(
+  addresses: ContactAddress[] | undefined,
+): ContactAddressDraft[] {
+  if (!Array.isArray(addresses) || addresses.length === 0) return [];
+  return addresses
+    .map((row) => ({
+      id: toText(row?.id) || createLocalId('address-item'),
+      label: toText(row?.label),
+      cep: formatCep(row?.cep),
+      state: toText(row?.state),
+      city: toText(row?.city),
+      neighborhood: toText(row?.neighborhood),
+      address: toText(row?.address),
+      address_number: toText(row?.address_number),
+      address_complement: toText(row?.address_complement),
+      ibge_code: toText(row?.ibge_code),
+    }))
+    .filter(
+      (row) =>
+        Boolean(
+          row.label ||
+            row.cep ||
+            row.state ||
+            row.city ||
+            row.neighborhood ||
+            row.address ||
+            row.address_number ||
+            row.address_complement ||
+            row.ibge_code,
+        ),
+    );
+}
+
+function mapContactAddressesDraft(
+  addresses: ContactAddress[] | undefined,
+  fallback: {
+    cep?: string;
+    neighborhood?: string;
+    address?: string;
+    address_number?: string;
+    address_complement?: string;
+    city?: string;
+    state?: string;
+  },
+): ContactAddressDraft[] {
+  const normalized = normalizeContactAddresses(addresses);
+  if (normalized.length > 0) return normalized;
+  const hasFallback = Boolean(
+    toText(fallback.cep) ||
+      toText(fallback.neighborhood) ||
+      toText(fallback.address) ||
+      toText(fallback.address_number) ||
+      toText(fallback.address_complement) ||
+      toText(fallback.city) ||
+      toText(fallback.state),
+  );
+  if (!hasFallback) return [];
+  return [
+    {
+      id: createLocalId('address-item'),
+      label: 'Principal',
+      cep: formatCep(fallback.cep),
+      state: toText(fallback.state),
+      city: toText(fallback.city),
+      neighborhood: toText(fallback.neighborhood),
+      address: toText(fallback.address),
+      address_number: toText(fallback.address_number),
+      address_complement: toText(fallback.address_complement),
+      ibge_code: '',
+    },
+  ];
+}
+
 function normalizeContact(contact: ContactInfo): ContactInfo | undefined {
+  const emails = normalizeContactChannels(contact.emails);
+  const phones = normalizeContactChannels(contact.phones);
+  const socialLinks = normalizeSocialLinks(contact.social_links);
+  const addresses = normalizeContactAddresses(contact.addresses);
+  const primaryAddress = addresses[0];
+  const primaryEmail = emails[0]?.value ?? toText(contact.email);
+  const primaryPhone = phones[0]?.value ?? toText(contact.phone);
+
   const normalized: ContactInfo = {
-    email: toText(contact.email),
-    phone: toText(contact.phone),
-    address: toText(contact.address),
+    email: primaryEmail || undefined,
+    phone: primaryPhone || undefined,
+    emails: emails.length > 0 ? emails : undefined,
+    phones: phones.length > 0 ? phones : undefined,
+    social_links: socialLinks.length > 0 ? socialLinks : undefined,
+    addresses: addresses.length > 0 ? addresses : undefined,
+    cep: primaryAddress?.cep || formatCep(contact.cep),
+    neighborhood: primaryAddress?.neighborhood || toText(contact.neighborhood),
+    address: primaryAddress?.address || toText(contact.address),
+    address_number: primaryAddress?.address_number || toText(contact.address_number),
+    address_complement:
+      primaryAddress?.address_complement || toText(contact.address_complement),
   };
-  if (!normalized.email && !normalized.phone && !normalized.address) {
+  if (
+    !primaryEmail &&
+    !primaryPhone &&
+    emails.length === 0 &&
+    phones.length === 0 &&
+    socialLinks.length === 0 &&
+    addresses.length === 0 &&
+    !normalized.cep &&
+    !normalized.neighborhood &&
+    !normalized.address &&
+    !normalized.address_number &&
+    !normalized.address_complement
+  ) {
     return undefined;
   }
   return normalized;
@@ -230,17 +427,46 @@ function mapGalpoesDraft(input: PropertyGalpao[] | undefined): PropertyGalpaoDra
   }));
 }
 
+function mapAreaAllocationsDraft(
+  input: PropertyAreaAllocation[] | undefined,
+): PropertyAreaAllocationDraft[] {
+  if (!input || input.length === 0) return [];
+  return input
+    .map((item) => ({
+      id: item.id || createLocalId('area-item'),
+      category_id: item.category_id?.trim() ?? '',
+      category_name: item.category_name?.trim() ?? '',
+      area_ha: numberToText(item.area_ha),
+    }))
+    .filter((item) => item.category_name.length > 0);
+}
+
 function buildInitialDraft(property?: Property | null): PropertyFormDraft {
   const fiscal = property?.fiscal;
   const fiscalCard = fiscal?.cartao_cnpj;
   const fiscalNfe = fiscal?.nfe;
+  const contact = property?.contato_detalhes ?? {};
 
   return {
     nome: property?.nome ?? '',
     cidade: property?.cidade ?? '',
     estado: property?.estado ?? '',
     total_area: numberToText(property?.total_area),
-    contato: property?.contato_detalhes ?? {},
+    contato: {
+      ...contact,
+      emails: mapContactChannelsDraft(contact.emails, contact.email),
+      phones: mapContactChannelsDraft(contact.phones, contact.phone),
+      social_links: normalizeSocialLinks(contact.social_links),
+      addresses: mapContactAddressesDraft(contact.addresses, {
+        cep: contact.cep,
+        neighborhood: contact.neighborhood,
+        address: contact.address,
+        address_number: contact.address_number,
+        address_complement: contact.address_complement,
+        city: property?.cidade,
+        state: property?.estado,
+      }),
+    },
     proprietario: property?.proprietario_principal ?? null,
     documentos: property?.documentos ?? {},
     fiscal: {
@@ -264,6 +490,7 @@ function buildInitialDraft(property?: Property | null): PropertyFormDraft {
     },
     maquinas: mapMachinesDraft(property?.maquinas),
     galpoes: mapGalpoesDraft(property?.galpoes),
+    area_allocations: mapAreaAllocationsDraft(property?.area_allocations),
   };
 }
 
@@ -282,16 +509,30 @@ export default function PropertyFullModal({
   saving = false,
   userId,
   property,
+  talhoesAreaHa = 0,
 }: PropertyFullModalProps) {
   const [draft, setDraft] = useState<PropertyFormDraft>(buildInitialDraft(property));
   const [ownerQuery, setOwnerQuery] = useState('');
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [loadingClients, setLoadingClients] = useState(false);
+  const [loadingCepAddressId, setLoadingCepAddressId] = useState<string | null>(null);
+  const [cepErrorsByAddress, setCepErrorsByAddress] = useState<Record<string, string>>(
+    {},
+  );
+  const [areaCategories, setAreaCategories] = useState<PropertyAreaCategory[]>(
+    () => listPropertyAreaCategories(true),
+  );
+  const [areaDraftCategoryId, setAreaDraftCategoryId] = useState<string | null>(null);
+  const [areaDraftValue, setAreaDraftValue] = useState<number | ''>('');
 
   useEffect(() => {
     if (!opened) return;
     setDraft(buildInitialDraft(property));
     setOwnerQuery('');
+    setCepErrorsByAddress({});
+    setLoadingCepAddressId(null);
+    setAreaDraftCategoryId(null);
+    setAreaDraftValue('');
   }, [opened, property]);
 
   useEffect(() => {
@@ -315,6 +556,106 @@ export default function PropertyFullModal({
       alive = false;
     };
   }, [opened, userId]);
+
+  useEffect(() => {
+    if (!opened) return;
+    setAreaCategories(listPropertyAreaCategories(true));
+    const unsubscribe = subscribePropertyAreaCategories((rows) => {
+      setAreaCategories(
+        [...rows].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+      );
+    });
+    return unsubscribe;
+  }, [opened]);
+
+  const areaCategoryOptions = useMemo(
+    () =>
+      areaCategories
+        .filter((row) => row.active && row.id !== 'talhoes')
+        .map((row) => ({
+          value: row.id,
+          label: row.name,
+        })),
+    [areaCategories],
+  );
+
+  const normalizedTalhoesArea = useMemo(() => {
+    const parsed = Number(talhoesAreaHa);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    return parsed;
+  }, [talhoesAreaHa]);
+
+  const talhoesCategoryName = useMemo(
+    () =>
+      areaCategories.find((row) => row.id === 'talhoes')?.name ?? 'Talhoes',
+    [areaCategories],
+  );
+
+  const selectedAreaCategory = useMemo(
+    () =>
+      areaCategories.find(
+        (row) => row.id === areaDraftCategoryId && row.active,
+      ) ?? null,
+    [areaCategories, areaDraftCategoryId],
+  );
+
+  const parsedAreaDraftValue = useMemo(() => {
+    if (areaDraftValue === '' || areaDraftValue == null) return null;
+    const parsed = Number(areaDraftValue);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return parsed;
+  }, [areaDraftValue]);
+
+  const areaTotalByCategory = useMemo(() => {
+    const groups = new Map<
+      string,
+      { category_id: string; category_name: string; total: number }
+    >();
+
+    for (const item of draft.area_allocations) {
+      const areaValue = parseOptionalNumber(item.area_ha);
+      if (areaValue == null || areaValue <= 0) continue;
+      const categoryId = item.category_id || item.category_name;
+      const current = groups.get(categoryId);
+      if (current) {
+        current.total += areaValue;
+        continue;
+      }
+      groups.set(categoryId, {
+        category_id: categoryId,
+        category_name: item.category_name || 'Sem categoria',
+        total: areaValue,
+      });
+    }
+
+    if (normalizedTalhoesArea > 0) {
+      const current = groups.get('talhoes');
+      if (current) {
+        current.total += normalizedTalhoesArea;
+      } else {
+        groups.set('talhoes', {
+          category_id: 'talhoes',
+          category_name: talhoesCategoryName,
+          total: normalizedTalhoesArea,
+        });
+      }
+    }
+
+    return [...groups.values()].sort((a, b) =>
+      a.category_name.localeCompare(b.category_name, 'pt-BR'),
+    );
+  }, [draft.area_allocations, normalizedTalhoesArea, talhoesCategoryName]);
+
+  const hasAreaSummary = useMemo(
+    () => draft.area_allocations.length > 0 || normalizedTalhoesArea > 0,
+    [draft.area_allocations.length, normalizedTalhoesArea],
+  );
+
+  const areaTotalGeral = useMemo(
+    () =>
+      areaTotalByCategory.reduce((acc, row) => acc + row.total, 0),
+    [areaTotalByCategory],
+  );
 
   const filteredClients = useMemo(
     () => clients.filter((client) => matchesClient(client, ownerQuery)),
@@ -352,6 +693,292 @@ export default function PropertyFullModal({
     }));
   };
 
+  const addAreaAllocation = () => {
+    if (!selectedAreaCategory || parsedAreaDraftValue == null) return;
+    setDraft((prev) => ({
+      ...prev,
+      area_allocations: (() => {
+        const existingIndex = prev.area_allocations.findIndex(
+          (item) => item.category_id === selectedAreaCategory.id,
+        );
+        if (existingIndex < 0) {
+          return [
+            ...prev.area_allocations,
+            {
+              id: createLocalId('area-item'),
+              category_id: selectedAreaCategory.id,
+              category_name: selectedAreaCategory.name,
+              area_ha: String(parsedAreaDraftValue),
+            },
+          ];
+        }
+
+        const nextRows = [...prev.area_allocations];
+        const currentArea =
+          parseOptionalNumber(nextRows[existingIndex].area_ha) ?? 0;
+        nextRows[existingIndex] = {
+          ...nextRows[existingIndex],
+          category_name: selectedAreaCategory.name,
+          area_ha: String(currentArea + parsedAreaDraftValue),
+        };
+        return nextRows;
+      })(),
+    }));
+    setAreaDraftValue('');
+  };
+
+  const removeAreaAllocation = (allocationId: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      area_allocations: prev.area_allocations.filter(
+        (item) => item.id !== allocationId,
+      ),
+    }));
+  };
+
+  const addContactChannel = (field: 'emails' | 'phones') => {
+    setDraft((prev) => ({
+      ...prev,
+      contato: {
+        ...prev.contato,
+        [field]: [
+          ...(prev.contato[field] ?? []),
+          { id: createLocalId(field), label: '', value: '' },
+        ],
+      },
+    }));
+  };
+
+  const updateContactChannel = (
+    field: 'emails' | 'phones',
+    itemId: string,
+    key: 'label' | 'value',
+    value: string,
+  ) => {
+    setDraft((prev) => ({
+      ...prev,
+      contato: {
+        ...prev.contato,
+        [field]: (prev.contato[field] ?? []).map((item) =>
+          item.id === itemId ? { ...item, [key]: value } : item,
+        ),
+      },
+    }));
+  };
+
+  const removeContactChannel = (field: 'emails' | 'phones', itemId: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      contato: {
+        ...prev.contato,
+        [field]: (prev.contato[field] ?? []).filter((item) => item.id !== itemId),
+      },
+    }));
+  };
+
+  const addSocialLink = () => {
+    setDraft((prev) => ({
+      ...prev,
+      contato: {
+        ...prev.contato,
+        social_links: [
+          ...(prev.contato.social_links ?? []),
+          { id: createLocalId('social-link'), network: '', url: '' },
+        ],
+      },
+    }));
+  };
+
+  const updateSocialLink = (
+    itemId: string,
+    key: 'network' | 'url',
+    value: string,
+  ) => {
+    setDraft((prev) => ({
+      ...prev,
+      contato: {
+        ...prev.contato,
+        social_links: (prev.contato.social_links ?? []).map((item) =>
+          item.id === itemId ? { ...item, [key]: value } : item,
+        ),
+      },
+    }));
+  };
+
+  const removeSocialLink = (itemId: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      contato: {
+        ...prev.contato,
+        social_links: (prev.contato.social_links ?? []).filter(
+          (item) => item.id !== itemId,
+        ),
+      },
+    }));
+  };
+
+  const addAddressRow = () => {
+    setDraft((prev) => ({
+      ...prev,
+      contato: {
+        ...prev.contato,
+        addresses: [
+          ...(prev.contato.addresses ?? []),
+          {
+            id: createLocalId('address-item'),
+            label: '',
+            cep: '',
+            state: '',
+            city: '',
+            neighborhood: '',
+            address: '',
+            address_number: '',
+            address_complement: '',
+            ibge_code: '',
+          },
+        ],
+      },
+    }));
+  };
+
+  const updateAddressRow = (
+    itemId: string,
+    key: keyof ContactAddressDraft,
+    value: string,
+  ) => {
+    setDraft((prev) => {
+      const nextAddresses = (prev.contato.addresses ?? []).map((item) =>
+        item.id === itemId ? { ...item, [key]: value } : item,
+      );
+      const firstAddress = nextAddresses[0];
+      return {
+        ...prev,
+        estado: firstAddress?.state ?? prev.estado,
+        cidade: firstAddress?.city ?? prev.cidade,
+        fiscal: {
+          ...prev.fiscal,
+          codigo_municipio:
+            firstAddress?.ibge_code || prev.fiscal.codigo_municipio,
+        },
+        contato: {
+          ...prev.contato,
+          addresses: nextAddresses,
+        },
+      };
+    });
+  };
+
+  const removeAddressRow = (itemId: string) => {
+    setCepErrorsByAddress((prev) => {
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+    if (loadingCepAddressId === itemId) {
+      setLoadingCepAddressId(null);
+    }
+    setDraft((prev) => {
+      const nextAddresses = (prev.contato.addresses ?? []).filter(
+        (item) => item.id !== itemId,
+      );
+      const firstAddress = nextAddresses[0];
+      return {
+        ...prev,
+        estado: firstAddress?.state ?? prev.estado,
+        cidade: firstAddress?.city ?? prev.cidade,
+        fiscal: {
+          ...prev.fiscal,
+          codigo_municipio:
+            firstAddress?.ibge_code || prev.fiscal.codigo_municipio,
+        },
+        contato: {
+          ...prev.contato,
+          addresses: nextAddresses,
+        },
+      };
+    });
+  };
+
+  const applyCepLookupToAddress = async (addressId: string, rawCep: string) => {
+    const cepDigits = normalizeCep(rawCep);
+    if (cepDigits.length === 0) {
+      setCepErrorsByAddress((prev) => {
+        const next = { ...prev };
+        delete next[addressId];
+        return next;
+      });
+      return;
+    }
+    if (cepDigits.length !== 8) {
+      setCepErrorsByAddress((prev) => ({
+        ...prev,
+        [addressId]: 'CEP deve ter 8 digitos.',
+      }));
+      return;
+    }
+
+    setLoadingCepAddressId(addressId);
+    setCepErrorsByAddress((prev) => {
+      const next = { ...prev };
+      delete next[addressId];
+      return next;
+    });
+    try {
+      const result = await lookupAddressByCep(cepDigits);
+      if (!result) {
+        setCepErrorsByAddress((prev) => ({
+          ...prev,
+          [addressId]: 'CEP nao encontrado.',
+        }));
+        return;
+      }
+
+      setDraft((prev) => {
+        const firstAddressId = prev.contato.addresses?.[0]?.id;
+        const isPrimaryAddress = firstAddressId === addressId;
+        return {
+          ...prev,
+          estado: isPrimaryAddress ? result.uf || prev.estado : prev.estado,
+          cidade: isPrimaryAddress ? result.city || prev.cidade : prev.cidade,
+          contato: {
+            ...prev.contato,
+            addresses: (prev.contato.addresses ?? []).map((item) =>
+              item.id === addressId
+                ? {
+                    ...item,
+                    cep: result.cep || formatCep(cepDigits),
+                    state: result.uf || item.state,
+                    city: result.city || item.city,
+                    neighborhood: result.neighborhood || item.neighborhood,
+                    address: result.street || item.address,
+                    address_complement:
+                      item.address_complement?.trim().length
+                        ? item.address_complement
+                        : result.complement || item.address_complement,
+                    ibge_code: result.ibgeCode || item.ibge_code,
+                  }
+                : item,
+            ),
+          },
+          fiscal: {
+            ...prev.fiscal,
+            codigo_municipio:
+              isPrimaryAddress
+                ? result.ibgeCode || prev.fiscal.codigo_municipio
+                : prev.fiscal.codigo_municipio,
+          },
+        };
+      });
+    } catch (error: any) {
+      setCepErrorsByAddress((prev) => ({
+        ...prev,
+        [addressId]: error?.message ?? 'Falha ao consultar CEP.',
+      }));
+    } finally {
+      setLoadingCepAddressId(null);
+    }
+  };
+
   const handleSave = async () => {
     const nome = draft.nome.trim();
     if (nome.length < 3) return;
@@ -378,13 +1005,52 @@ export default function PropertyFullModal({
       }))
       .filter((item) => item.nome.length > 0);
 
+    const areaAllocationsGrouped = new Map<string, PropertyAreaAllocation>();
+    for (const item of draft.area_allocations) {
+      const categoryId = item.category_id.trim();
+      if (!categoryId || categoryId === 'talhoes') continue;
+
+      const areaValue = parseOptionalNumber(item.area_ha);
+      if (areaValue == null || areaValue <= 0) continue;
+
+      const categoryName =
+        areaCategories.find((row) => row.id === categoryId)?.name ??
+        item.category_name.trim();
+      if (!categoryName) continue;
+
+      const existing = areaAllocationsGrouped.get(categoryId);
+      if (existing) {
+        existing.area_ha += areaValue;
+      } else {
+        areaAllocationsGrouped.set(categoryId, {
+          id: item.id || createLocalId('area-item'),
+          category_id: categoryId,
+          category_name: categoryName,
+          area_ha: areaValue,
+          created_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    const areaAllocations = [...areaAllocationsGrouped.values()].sort((a, b) =>
+      a.category_name.localeCompare(b.category_name, 'pt-BR'),
+    );
+
+    const totalAreaFromInput = parseOptionalNumber(draft.total_area);
+    const totalAreaFromAllocations =
+      areaAllocations.length > 0 || normalizedTalhoesArea > 0
+        ? areaAllocations.reduce((sum, row) => sum + row.area_ha, 0) +
+          normalizedTalhoesArea
+        : undefined;
+
     await onSubmit({
       nome,
       contact,
       patch: {
         cidade: toText(draft.cidade) || undefined,
         estado: toText(draft.estado) || undefined,
-        total_area: parseOptionalNumber(draft.total_area),
+        total_area: totalAreaFromInput ?? totalAreaFromAllocations,
+        area_allocations: areaAllocations.length > 0 ? areaAllocations : undefined,
         contato_detalhes: contact,
         proprietario_principal: draft.proprietario ?? null,
         documentos: documents,
@@ -407,9 +1073,12 @@ export default function PropertyFullModal({
         <Tabs defaultValue="gerais">
           <Tabs.List>
             <Tabs.Tab value="gerais">Gerais</Tabs.Tab>
+            <Tabs.Tab value="enderecos">Enderecos</Tabs.Tab>
+            <Tabs.Tab value="contatos">Contatos</Tabs.Tab>
             <Tabs.Tab value="proprietario">Proprietario</Tabs.Tab>
             <Tabs.Tab value="documentos">Documentos</Tabs.Tab>
             <Tabs.Tab value="fiscal">Fiscal NFe</Tabs.Tab>
+            <Tabs.Tab value="areas">Resumo de Areas</Tabs.Tab>
             <Tabs.Tab value="maquinas">Maquinas</Tabs.Tab>
             <Tabs.Tab value="galpoes">Galpoes</Tabs.Tab>
           </Tabs.List>
@@ -419,76 +1088,388 @@ export default function PropertyFullModal({
               <TextInput
                 label="Nome da propriedade"
                 value={draft.nome}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, nome: event.currentTarget.value }))
-                }
+                onChange={(event) => {
+                  const nextValue = event.currentTarget?.value ?? '';
+                  setDraft((prev) => ({ ...prev, nome: nextValue }));
+                }}
                 error={draftNameError}
                 data-autofocus
               />
-              <Group grow>
-                <TextInput
-                  label="Cidade"
-                  value={draft.cidade}
-                  onChange={(event) =>
-                    setDraft((prev) => ({ ...prev, cidade: event.currentTarget.value }))
-                  }
-                />
-                <TextInput
-                  label="Estado"
-                  value={draft.estado}
-                  onChange={(event) =>
-                    setDraft((prev) => ({ ...prev, estado: event.currentTarget.value }))
-                  }
-                />
-                <NumberInput
-                  label="Area total (ha)"
-                  value={draft.total_area}
-                  min={0}
-                  decimalScale={2}
-                  onChange={(value) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      total_area: value == null ? '' : String(value),
-                    }))
-                  }
-                />
-              </Group>
-
-              <Text fw={600} size="sm">
-                Contato da propriedade
-              </Text>
-              <Group grow>
-                <TextInput
-                  label="Email"
-                  value={draft.contato.email ?? ''}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      contato: { ...prev.contato, email: event.currentTarget.value },
-                    }))
-                  }
-                />
-                <TextInput
-                  label="Telefone"
-                  value={draft.contato.phone ?? ''}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      contato: { ...prev.contato, phone: event.currentTarget.value },
-                    }))
-                  }
-                />
-              </Group>
-              <TextInput
-                label="Endereco"
-                value={draft.contato.address ?? ''}
-                onChange={(event) =>
+              <NumberInput
+                label="Area total (ha)"
+                value={draft.total_area}
+                min={0}
+                decimalScale={2}
+                onChange={(value) =>
                   setDraft((prev) => ({
                     ...prev,
-                    contato: { ...prev.contato, address: event.currentTarget.value },
+                    total_area: value == null ? '' : String(value),
                   }))
                 }
               />
+            </Stack>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="enderecos" pt="sm">
+            <Stack gap="sm">
+              <Group justify="space-between" align="center">
+                <Text fw={600} size="sm">
+                  Enderecos da propriedade
+                </Text>
+                <Button
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconPlus size={14} />}
+                  onClick={addAddressRow}
+                >
+                  Adicionar endereco
+                </Button>
+              </Group>
+
+              {(draft.contato.addresses ?? []).length === 0 ? (
+                <Text size="sm" c="dimmed">
+                  Nenhum endereco cadastrado.
+                </Text>
+              ) : (
+                <Stack gap="xs">
+                  {(draft.contato.addresses ?? []).map((item, index) => (
+                    <Card key={item.id} withBorder radius="md" p="sm">
+                      <Stack gap="xs">
+                        <Group justify="space-between" align="center">
+                          <Badge color={index === 0 ? 'green' : 'gray'} variant="light">
+                            {index === 0 ? 'Endereco principal' : `Endereco ${index + 1}`}
+                          </Badge>
+                          <ActionIcon
+                            color="red"
+                            variant="light"
+                            onClick={() => removeAddressRow(item.id ?? '')}
+                            aria-label="Remover endereco"
+                          >
+                            <IconTrash size={14} />
+                          </ActionIcon>
+                        </Group>
+
+                        <TextInput
+                          label="Categoria / local"
+                          placeholder="Unidade, correspondencia, escritorio..."
+                          value={item.label ?? ''}
+                          onChange={(event) =>
+                            updateAddressRow(
+                              item.id ?? '',
+                              'label',
+                              event.currentTarget?.value ?? '',
+                            )
+                          }
+                        />
+
+                        <Group align="end" grow>
+                          <TextInput
+                            label="CEP"
+                            placeholder="00000-000"
+                            value={formatCep(item.cep)}
+                            onChange={(event) =>
+                              updateAddressRow(
+                                item.id ?? '',
+                                'cep',
+                                formatCep(event.currentTarget?.value ?? ''),
+                              )
+                            }
+                            onBlur={() =>
+                              void applyCepLookupToAddress(item.id ?? '', item.cep ?? '')
+                            }
+                          />
+                          <Button
+                            variant="light"
+                            onClick={() =>
+                              void applyCepLookupToAddress(item.id ?? '', item.cep ?? '')
+                            }
+                            loading={loadingCepAddressId === item.id}
+                            disabled={normalizeCep(item.cep).length !== 8}
+                          >
+                            Buscar CEP
+                          </Button>
+                        </Group>
+                        {cepErrorsByAddress[item.id ?? ''] ? (
+                          <Text size="xs" c="red">
+                            {cepErrorsByAddress[item.id ?? '']}
+                          </Text>
+                        ) : null}
+
+                        <Group grow>
+                          <TextInput
+                            label="Estado (UF)"
+                            placeholder="UF"
+                            value={item.state ?? ''}
+                            onChange={(event) =>
+                              updateAddressRow(
+                                item.id ?? '',
+                                'state',
+                                event.currentTarget?.value ?? '',
+                              )
+                            }
+                          />
+                          <TextInput
+                            label="Cidade"
+                            placeholder="Cidade"
+                            value={item.city ?? ''}
+                            onChange={(event) =>
+                              updateAddressRow(
+                                item.id ?? '',
+                                'city',
+                                event.currentTarget?.value ?? '',
+                              )
+                            }
+                          />
+                          <TextInput
+                            label="Bairro"
+                            placeholder="Bairro"
+                            value={item.neighborhood ?? ''}
+                            onChange={(event) =>
+                              updateAddressRow(
+                                item.id ?? '',
+                                'neighborhood',
+                                event.currentTarget?.value ?? '',
+                              )
+                            }
+                          />
+                        </Group>
+
+                        <Group grow>
+                          <TextInput
+                            label="Endereco"
+                            placeholder="Rua, avenida, estrada..."
+                            value={item.address ?? ''}
+                            onChange={(event) =>
+                              updateAddressRow(
+                                item.id ?? '',
+                                'address',
+                                event.currentTarget?.value ?? '',
+                              )
+                            }
+                          />
+                          <TextInput
+                            label="Numero"
+                            placeholder="Sem numero"
+                            value={item.address_number ?? ''}
+                            onChange={(event) =>
+                              updateAddressRow(
+                                item.id ?? '',
+                                'address_number',
+                                event.currentTarget?.value ?? '',
+                              )
+                            }
+                          />
+                          <TextInput
+                            label="Complemento"
+                            placeholder="Apartamento, bloco, referencia..."
+                            value={item.address_complement ?? ''}
+                            onChange={(event) =>
+                              updateAddressRow(
+                                item.id ?? '',
+                                'address_complement',
+                                event.currentTarget?.value ?? '',
+                              )
+                            }
+                          />
+                        </Group>
+                      </Stack>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </Stack>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="contatos" pt="sm">
+            <Stack gap="md">
+              <Group justify="space-between" align="center">
+                <Text fw={600} size="sm">
+                  Emails da propriedade
+                </Text>
+                <Button
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconPlus size={14} />}
+                  onClick={() => addContactChannel('emails')}
+                >
+                  Adicionar email
+                </Button>
+              </Group>
+              {(draft.contato.emails ?? []).length === 0 ? (
+                <Text size="sm" c="dimmed">
+                  Nenhum email cadastrado.
+                </Text>
+              ) : (
+                <Stack gap="xs">
+                  {(draft.contato.emails ?? []).map((item) => (
+                    <Card key={item.id} withBorder radius="md" p="xs">
+                      <Group align="flex-end" wrap="nowrap">
+                        <TextInput
+                          label="Categoria / local"
+                          placeholder="Financeiro, matriz, filial..."
+                          value={item.label ?? ''}
+                          onChange={(event) =>
+                            updateContactChannel(
+                              'emails',
+                              item.id ?? '',
+                              'label',
+                              event.currentTarget?.value ?? '',
+                            )
+                          }
+                          style={{ flex: 1 }}
+                        />
+                        <TextInput
+                          type="email"
+                          label="Email"
+                          placeholder="contato@empresa.com"
+                          value={item.value ?? ''}
+                          onChange={(event) =>
+                            updateContactChannel(
+                              'emails',
+                              item.id ?? '',
+                              'value',
+                              event.currentTarget?.value ?? '',
+                            )
+                          }
+                          style={{ flex: 1 }}
+                        />
+                        <ActionIcon
+                          color="red"
+                          variant="light"
+                          onClick={() => removeContactChannel('emails', item.id ?? '')}
+                          aria-label="Remover email"
+                        >
+                          <IconTrash size={14} />
+                        </ActionIcon>
+                      </Group>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+
+              <Group justify="space-between" align="center" mt="xs">
+                <Text fw={600} size="sm">
+                  Telefones da propriedade
+                </Text>
+                <Button
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconPlus size={14} />}
+                  onClick={() => addContactChannel('phones')}
+                >
+                  Adicionar telefone
+                </Button>
+              </Group>
+              {(draft.contato.phones ?? []).length === 0 ? (
+                <Text size="sm" c="dimmed">
+                  Nenhum telefone cadastrado.
+                </Text>
+              ) : (
+                <Stack gap="xs">
+                  {(draft.contato.phones ?? []).map((item) => (
+                    <Card key={item.id} withBorder radius="md" p="xs">
+                      <Group align="flex-end" wrap="nowrap">
+                        <TextInput
+                          label="Categoria / local"
+                          placeholder="Recepcao, operacional..."
+                          value={item.label ?? ''}
+                          onChange={(event) =>
+                            updateContactChannel(
+                              'phones',
+                              item.id ?? '',
+                              'label',
+                              event.currentTarget?.value ?? '',
+                            )
+                          }
+                          style={{ flex: 1 }}
+                        />
+                        <TextInput
+                          label="Telefone"
+                          placeholder="(00) 00000-0000"
+                          value={item.value ?? ''}
+                          onChange={(event) =>
+                            updateContactChannel(
+                              'phones',
+                              item.id ?? '',
+                              'value',
+                              event.currentTarget?.value ?? '',
+                            )
+                          }
+                          style={{ flex: 1 }}
+                        />
+                        <ActionIcon
+                          color="red"
+                          variant="light"
+                          onClick={() => removeContactChannel('phones', item.id ?? '')}
+                          aria-label="Remover telefone"
+                        >
+                          <IconTrash size={14} />
+                        </ActionIcon>
+                      </Group>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+
+              <Group justify="space-between" align="center" mt="xs">
+                <Text fw={600} size="sm">
+                  Redes sociais
+                </Text>
+                <Button
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconPlus size={14} />}
+                  onClick={addSocialLink}
+                >
+                  Adicionar rede
+                </Button>
+              </Group>
+              {(draft.contato.social_links ?? []).length === 0 ? (
+                <Text size="sm" c="dimmed">
+                  Nenhuma rede social cadastrada.
+                </Text>
+              ) : (
+                <Stack gap="xs">
+                  {(draft.contato.social_links ?? []).map((item) => (
+                    <Card key={item.id} withBorder radius="md" p="xs">
+                      <Group align="flex-end" wrap="nowrap">
+                        <Select
+                          label="Rede"
+                          placeholder="Selecione a rede"
+                          data={SOCIAL_NETWORK_OPTIONS}
+                          searchable
+                          value={item.network ?? null}
+                          onChange={(value) =>
+                            updateSocialLink(item.id ?? '', 'network', value ?? '')
+                          }
+                          style={{ width: 220 }}
+                        />
+                        <TextInput
+                          label="Link ou @perfil"
+                          placeholder="https://... ou @usuario"
+                          value={item.url ?? ''}
+                          onChange={(event) =>
+                            updateSocialLink(
+                              item.id ?? '',
+                              'url',
+                              event.currentTarget?.value ?? '',
+                            )
+                          }
+                          style={{ flex: 1 }}
+                        />
+                        <ActionIcon
+                          color="red"
+                          variant="light"
+                          onClick={() => removeSocialLink(item.id ?? '')}
+                          aria-label="Remover rede social"
+                        >
+                          <IconTrash size={14} />
+                        </ActionIcon>
+                      </Group>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
             </Stack>
           </Tabs.Panel>
 
@@ -526,7 +1507,7 @@ export default function PropertyFullModal({
                 leftSection={<IconSearch size={14} />}
                 placeholder="Buscar pessoa por nome, email ou telefone"
                 value={ownerQuery}
-                onChange={(event) => setOwnerQuery(event.currentTarget.value)}
+                onChange={(event) => setOwnerQuery(event.currentTarget?.value ?? '')}
               />
 
               <ScrollArea h={220}>
@@ -585,42 +1566,46 @@ export default function PropertyFullModal({
               <TextInput
                 label="CAR"
                 value={draft.documentos.car ?? ''}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextValue = event.currentTarget?.value ?? '';
                   setDraft((prev) => ({
                     ...prev,
-                    documentos: { ...prev.documentos, car: event.currentTarget.value },
-                  }))
-                }
+                    documentos: { ...prev.documentos, car: nextValue },
+                  }));
+                }}
               />
               <TextInput
                 label="ITR"
                 value={draft.documentos.itr ?? ''}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextValue = event.currentTarget?.value ?? '';
                   setDraft((prev) => ({
                     ...prev,
-                    documentos: { ...prev.documentos, itr: event.currentTarget.value },
-                  }))
-                }
+                    documentos: { ...prev.documentos, itr: nextValue },
+                  }));
+                }}
               />
               <TextInput
                 label="CCIR"
                 value={draft.documentos.ccir ?? ''}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextValue = event.currentTarget?.value ?? '';
                   setDraft((prev) => ({
                     ...prev,
-                    documentos: { ...prev.documentos, ccir: event.currentTarget.value },
-                  }))
-                }
+                    documentos: { ...prev.documentos, ccir: nextValue },
+                  }));
+                }}
               />
               <TextInput
                 label="RGI"
                 value={draft.documentos.rgi ?? ''}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextValue = event.currentTarget?.value ?? '';
                   setDraft((prev) => ({
                     ...prev,
-                    documentos: { ...prev.documentos, rgi: event.currentTarget.value },
-                  }))
-                }
+                    documentos: { ...prev.documentos, rgi: nextValue },
+                  }));
+                }}
               />
             </Stack>
           </Tabs.Panel>
@@ -635,22 +1620,24 @@ export default function PropertyFullModal({
                   label="CNPJ"
                   placeholder="00.000.000/0000-00"
                   value={draft.fiscal.cnpj}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
-                      fiscal: { ...prev.fiscal, cnpj: event.currentTarget.value },
-                    }))
-                  }
+                      fiscal: { ...prev.fiscal, cnpj: nextValue },
+                    }));
+                  }}
                 />
                 <TextInput
                   label="Razao social"
                   value={draft.fiscal.razao_social}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
-                      fiscal: { ...prev.fiscal, razao_social: event.currentTarget.value },
-                    }))
-                  }
+                      fiscal: { ...prev.fiscal, razao_social: nextValue },
+                    }));
+                  }}
                 />
               </Group>
 
@@ -658,22 +1645,24 @@ export default function PropertyFullModal({
                 <TextInput
                   label="Nome fantasia"
                   value={draft.fiscal.nome_fantasia}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
-                      fiscal: { ...prev.fiscal, nome_fantasia: event.currentTarget.value },
-                    }))
-                  }
+                      fiscal: { ...prev.fiscal, nome_fantasia: nextValue },
+                    }));
+                  }}
                 />
                 <TextInput
                   label="Situacao cadastral"
                   value={draft.fiscal.situacao_cadastral}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
-                      fiscal: { ...prev.fiscal, situacao_cadastral: event.currentTarget.value },
-                    }))
-                  }
+                      fiscal: { ...prev.fiscal, situacao_cadastral: nextValue },
+                    }));
+                  }}
                 />
               </Group>
 
@@ -682,22 +1671,24 @@ export default function PropertyFullModal({
                   label="Data de abertura"
                   placeholder="DD/MM/AAAA"
                   value={draft.fiscal.data_abertura}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
-                      fiscal: { ...prev.fiscal, data_abertura: event.currentTarget.value },
-                    }))
-                  }
+                      fiscal: { ...prev.fiscal, data_abertura: nextValue },
+                    }));
+                  }}
                 />
                 <TextInput
                   label="Natureza juridica"
                   value={draft.fiscal.natureza_juridica}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
-                      fiscal: { ...prev.fiscal, natureza_juridica: event.currentTarget.value },
-                    }))
-                  }
+                      fiscal: { ...prev.fiscal, natureza_juridica: nextValue },
+                    }));
+                  }}
                 />
               </Group>
 
@@ -705,12 +1696,13 @@ export default function PropertyFullModal({
                 <TextInput
                   label="Porte"
                   value={draft.fiscal.porte}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
-                      fiscal: { ...prev.fiscal, porte: event.currentTarget.value },
-                    }))
-                  }
+                      fiscal: { ...prev.fiscal, porte: nextValue },
+                    }));
+                  }}
                 />
                 <NumberInput
                   label="Capital social"
@@ -734,12 +1726,13 @@ export default function PropertyFullModal({
                 description="Informe um por linha (ou separado por virgula/;)."
                 minRows={3}
                 value={draft.fiscal.cnaes}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextValue = event.currentTarget?.value ?? '';
                   setDraft((prev) => ({
                     ...prev,
-                    fiscal: { ...prev.fiscal, cnaes: event.currentTarget.value },
-                  }))
-                }
+                    fiscal: { ...prev.fiscal, cnaes: nextValue },
+                  }));
+                }}
               />
 
               <Text fw={600} size="sm">
@@ -750,28 +1743,30 @@ export default function PropertyFullModal({
                 <TextInput
                   label="Inscricao estadual"
                   value={draft.fiscal.inscricao_estadual}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
                       fiscal: {
                         ...prev.fiscal,
-                        inscricao_estadual: event.currentTarget.value,
+                        inscricao_estadual: nextValue,
                       },
-                    }))
-                  }
+                    }));
+                  }}
                 />
                 <TextInput
                   label="Inscricao municipal"
                   value={draft.fiscal.inscricao_municipal}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
                       fiscal: {
                         ...prev.fiscal,
-                        inscricao_municipal: event.currentTarget.value,
+                        inscricao_municipal: nextValue,
                       },
-                    }))
-                  }
+                    }));
+                  }}
                 />
               </Group>
 
@@ -779,15 +1774,16 @@ export default function PropertyFullModal({
                 <TextInput
                   label="Regime tributario"
                   value={draft.fiscal.regime_tributario}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
                       fiscal: {
                         ...prev.fiscal,
-                        regime_tributario: event.currentTarget.value,
+                        regime_tributario: nextValue,
                       },
-                    }))
-                  }
+                    }));
+                  }}
                 />
                 <NumberInput
                   label="Aliquota ICMS (%)"
@@ -811,25 +1807,27 @@ export default function PropertyFullModal({
                 <TextInput
                   label="Codigo do municipio (IBGE)"
                   value={draft.fiscal.codigo_municipio}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
                       fiscal: {
                         ...prev.fiscal,
-                        codigo_municipio: event.currentTarget.value,
+                        codigo_municipio: nextValue,
                       },
-                    }))
-                  }
+                    }));
+                  }}
                 />
                 <TextInput
                   label="Serie da NFe"
                   value={draft.fiscal.serie}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
-                      fiscal: { ...prev.fiscal, serie: event.currentTarget.value },
-                    }))
-                  }
+                      fiscal: { ...prev.fiscal, serie: nextValue },
+                    }));
+                  }}
                 />
               </Group>
 
@@ -837,27 +1835,140 @@ export default function PropertyFullModal({
                 <TextInput
                   label="Ultimo numero NFe emitida"
                   value={draft.fiscal.ultima_nf_emitida}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
                       fiscal: {
                         ...prev.fiscal,
-                        ultima_nf_emitida: event.currentTarget.value,
+                        ultima_nf_emitida: nextValue,
                       },
-                    }))
-                  }
+                    }));
+                  }}
                 />
                 <TextInput
                   label="Token NFe"
                   value={draft.fiscal.token}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget?.value ?? '';
                     setDraft((prev) => ({
                       ...prev,
-                      fiscal: { ...prev.fiscal, token: event.currentTarget.value },
-                    }))
-                  }
+                      fiscal: { ...prev.fiscal, token: nextValue },
+                    }));
+                  }}
                 />
               </Group>
+            </Stack>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="areas" pt="sm">
+            <Stack gap="sm">
+              <Text size="sm" c="dimmed">
+                Lance as areas por categoria para o sistema consolidar subtotal por
+                categoria e o total geral da propriedade.
+              </Text>
+              <Text size="xs" c="dimmed">
+                A categoria Talhoes e calculada automaticamente com base nos talhoes
+                cadastrados nesta propriedade.
+              </Text>
+
+              <Group align="end" grow>
+                <Select
+                  label="Categoria"
+                  placeholder="Selecione a categoria"
+                  data={areaCategoryOptions}
+                  value={areaDraftCategoryId}
+                  searchable
+                  nothingFoundMessage="Nenhuma categoria ativa"
+                  onChange={setAreaDraftCategoryId}
+                />
+                <NumberInput
+                  label="Area (ha)"
+                  min={0}
+                  decimalScale={2}
+                  value={areaDraftValue}
+                  onChange={(value) =>
+                    setAreaDraftValue(value == null || value === '' ? '' : Number(value))
+                  }
+                />
+                <Button
+                  onClick={addAreaAllocation}
+                  leftSection={<IconPlus size={14} />}
+                  disabled={!selectedAreaCategory || parsedAreaDraftValue == null}
+                >
+                  Adicionar
+                </Button>
+              </Group>
+
+              <Group gap="sm">
+                <Badge color="cyan" variant="light">
+                  {`Categorias com area: ${areaTotalByCategory.length}`}
+                </Badge>
+                <Badge color="green" variant="light">
+                  {`Total geral: ${areaTotalGeral.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })} ha`}
+                </Badge>
+              </Group>
+
+              {!hasAreaSummary ? (
+                <Text size="sm" c="dimmed">
+                  Nenhuma area cadastrada no resumo.
+                </Text>
+              ) : (
+                <Stack gap="xs">
+                  {areaTotalByCategory.map((group) => {
+                    const isAutomaticTalhoes = group.category_id === 'talhoes';
+                    const rows = draft.area_allocations.filter(
+                      (item) =>
+                        (item.category_id || item.category_name) === group.category_id,
+                    );
+                    return (
+                      <Card key={group.category_id} withBorder radius="md" p="sm">
+                        <Group justify="space-between" mb="xs">
+                          <Text fw={700}>{group.category_name}</Text>
+                          <Badge color="blue" variant="light">
+                            {`${group.total.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })} ha`}
+                          </Badge>
+                        </Group>
+                        <Stack gap={6}>
+                          {isAutomaticTalhoes ? (
+                            <Text size="sm" c="dimmed">
+                              Total calculado automaticamente dos talhoes cadastrados.
+                            </Text>
+                          ) : (
+                            rows.map((item) => (
+                              <Group key={item.id} justify="space-between" wrap="nowrap">
+                                <Text size="sm">
+                                  {`${(parseOptionalNumber(item.area_ha) ?? 0).toLocaleString(
+                                    'pt-BR',
+                                    {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    },
+                                  )} ha`}
+                                </Text>
+                                <ActionIcon
+                                  color="red"
+                                  variant="light"
+                                  onClick={() => removeAreaAllocation(item.id)}
+                                  aria-label="Remover area"
+                                >
+                                  <IconTrash size={14} />
+                                </ActionIcon>
+                              </Group>
+                            ))
+                          )}
+                        </Stack>
+                      </Card>
+                    );
+                  })}
+                </Stack>
+              )}
             </Stack>
           </Tabs.Panel>
 
@@ -884,31 +1995,29 @@ export default function PropertyFullModal({
                         <TextInput
                           label="Nome"
                           value={machine.nome}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            const nextValue = event.currentTarget?.value ?? '';
                             setDraft((prev) => ({
                               ...prev,
                               maquinas: prev.maquinas.map((item) =>
-                                item.id === machine.id
-                                  ? { ...item, nome: event.currentTarget.value }
-                                  : item,
+                                item.id === machine.id ? { ...item, nome: nextValue } : item,
                               ),
-                            }))
-                          }
+                            }));
+                          }}
                           style={{ flex: 1 }}
                         />
                         <TextInput
                           label="Tipo"
                           value={machine.tipo}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            const nextValue = event.currentTarget?.value ?? '';
                             setDraft((prev) => ({
                               ...prev,
                               maquinas: prev.maquinas.map((item) =>
-                                item.id === machine.id
-                                  ? { ...item, tipo: event.currentTarget.value }
-                                  : item,
+                                item.id === machine.id ? { ...item, tipo: nextValue } : item,
                               ),
-                            }))
-                          }
+                            }));
+                          }}
                           style={{ flex: 1 }}
                         />
                         <NumberInput
@@ -973,16 +2082,15 @@ export default function PropertyFullModal({
                         <TextInput
                           label="Nome"
                           value={galpao.nome}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            const nextValue = event.currentTarget?.value ?? '';
                             setDraft((prev) => ({
                               ...prev,
                               galpoes: prev.galpoes.map((item) =>
-                                item.id === galpao.id
-                                  ? { ...item, nome: event.currentTarget.value }
-                                  : item,
+                                item.id === galpao.id ? { ...item, nome: nextValue } : item,
                               ),
-                            }))
-                          }
+                            }));
+                          }}
                           style={{ flex: 1 }}
                         />
                         <NumberInput

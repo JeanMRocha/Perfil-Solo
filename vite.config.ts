@@ -37,6 +37,27 @@ export default defineConfig({
     'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(
       process.env.VITE_SUPABASE_ANON_KEY,
     ),
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+
+          if (id.includes('@mantine')) return 'vendor-mantine';
+          if (id.includes('react-router')) return 'vendor-router';
+          if (id.includes('@supabase')) return 'vendor-supabase';
+          if (id.includes('recharts')) return 'vendor-charts';
+          if (id.includes('react-konva') || id.includes('konva')) {
+            return 'vendor-konva';
+          }
+          if (id.includes('pdfjs-dist')) return 'vendor-pdf';
+
+          return 'vendor';
+        },
+      },
+    },
   },
   test: {
     globals: true,

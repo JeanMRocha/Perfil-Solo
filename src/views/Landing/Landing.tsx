@@ -18,7 +18,12 @@ import {
   IconShieldCheck,
   IconTarget,
 } from '@tabler/icons-react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  getSystemBrand,
+  subscribeSystemConfig,
+} from '../../services/systemConfigService';
 import './landing.css';
 
 const features = [
@@ -59,6 +64,15 @@ const plans = [
 ];
 
 export default function Landing() {
+  const [systemName, setSystemName] = useState(() => getSystemBrand().name);
+
+  useEffect(() => {
+    const unsubscribe = subscribeSystemConfig((config) => {
+      setSystemName(config.brand.name);
+    });
+    return unsubscribe;
+  }, []);
+
   return (
     <Box className="landing-root">
       <div className="landing-glow landing-glow-top" />
@@ -67,7 +81,7 @@ export default function Landing() {
       <Container size="lg" className="landing-shell">
         <Group justify="space-between" className="landing-nav">
           <Title order={3} className="brand-title">
-            PerfilSolo
+            {systemName}
           </Title>
 
           <Group>
@@ -89,7 +103,7 @@ export default function Landing() {
               Venda mais consultoria com um app que prova resultado.
             </Title>
             <Text className="hero-text">
-              Do cadastro da amostra ao relatorio final, o PerfilSolo conecta
+              Do cadastro da amostra ao relatorio final, o {systemName} conecta
               campo, laboratorio e decisao tecnica em um fluxo unico.
             </Text>
             <Group>

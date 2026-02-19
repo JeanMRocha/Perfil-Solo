@@ -13,7 +13,13 @@ import { useNavigate } from 'react-router-dom';
 import { LoaderInline } from '@components/loaders';
 import { setLoading } from '@global/loadingStore';
 import { signInLocal } from '@global/user';
+import { registerAndEnsureUserCredits } from '@services/creditsService';
 import { isLocalDataMode } from '@services/dataProvider';
+import {
+  clearTwoFactorVerificationSession,
+  isValidEmail,
+  requestIdentityChallengeCode,
+} from '@services/identityVerificationService';
 import { supabaseClient } from '@sb/supabaseClient';
 import ContactInfoModal from '../../components/modals/ContactInfoModal';
 import { updateProfile } from '../../services/profileService';
@@ -32,25 +38,44 @@ export default function Register() {
     try {
       setSubmitting(true);
       setLoading(true);
+      const normalizedEmail = String(email ?? '').trim().toLowerCase();
+      if (!isValidEmail(normalizedEmail)) {
+        notifications.show({
+          title: 'Email invalido',
+          message: 'Informe um email valido para cadastrar.',
+          color: 'red',
+        });
+        return;
+      }
 
       if (isLocalDataMode) {
-        signInLocal(email);
+        clearTwoFactorVerificationSession(normalizedEmail);
+        const localUser = signInLocal(normalizedEmail);
+        registerAndEnsureUserCredits({
+          id: localUser.id,
+          email: normalizedEmail || localUser.email || '',
+          name: name || String(localUser.user_metadata?.name ?? 'Usuario Local'),
+        });
+        const challenge = requestIdentityChallengeCode({
+          email: normalizedEmail,
+          reason: 'login',
+        });
         await updateProfile({
           name: name || 'Usuario Local',
-          email,
+          email: normalizedEmail,
           contact,
         });
         notifications.show({
           title: 'Conta local criada',
-          message: 'Cadastro local concluido com sucesso.',
+          message: `Cadastro concluido. Codigo de verificacao enviado: ${challenge.debug_code}`,
           color: 'green',
         });
-        navigate('/dashboard');
+        navigate('/auth');
         return;
       }
 
       const { data, error } = await supabaseClient.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
         options: {
           data: {
@@ -65,12 +90,25 @@ export default function Register() {
       if (error) throw error;
 
       if (data.session) {
+        const signedUser = data.session.user;
+        if (signedUser?.id && signedUser?.email) {
+          registerAndEnsureUserCredits({
+            id: signedUser.id,
+            email: signedUser.email,
+            name: name || String(signedUser.user_metadata?.name ?? ''),
+          });
+        }
+        clearTwoFactorVerificationSession(normalizedEmail);
+        const challenge = requestIdentityChallengeCode({
+          email: normalizedEmail,
+          reason: 'login',
+        });
         notifications.show({
           title: 'Conta criada',
-          message: 'Cadastro concluido e login efetuado.',
+          message: `Cadastro concluido. Codigo de verificacao enviado: ${challenge.debug_code}`,
           color: 'green',
         });
-        navigate('/dashboard');
+        navigate('/auth');
       } else {
         notifications.show({
           title: 'Confirme seu email',

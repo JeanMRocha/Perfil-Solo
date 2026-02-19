@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import {
   ActionIcon,
   Badge,
@@ -21,6 +22,8 @@ import {
   type LaboratoryService,
   upsertLaboratory,
 } from '../../services/laboratoriesService';
+import { $currUser } from '../../global-state/user';
+import { isLocalDataMode } from '../../services/dataProvider';
 
 type ServiceDraft = {
   id: string;
@@ -111,6 +114,8 @@ interface LaboratoriosSettingsProps {
 export default function LaboratoriosSettings({
   startInCreateMode = false,
 }: LaboratoriosSettingsProps) {
+  const user = useStore($currUser);
+  const currentUserId = user?.id ?? (isLocalDataMode ? 'local-user' : null);
   const [rows, setRows] = useState<LaboratoryRecord[]>(() => []);
   const [modalOpened, setModalOpened] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -118,14 +123,20 @@ export default function LaboratoriosSettings({
 
   useEffect(() => {
     let alive = true;
-    void listLaboratories().then((data) => {
+    if (!currentUserId) {
+      setRows([]);
+      return () => {
+        alive = false;
+      };
+    }
+    void listLaboratories(currentUserId).then((data) => {
       if (!alive) return;
       setRows(data);
     });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!startInCreateMode) return;
@@ -167,10 +178,23 @@ export default function LaboratoriosSettings({
   };
 
   const reloadRows = async () => {
-    setRows(await listLaboratories());
+    if (!currentUserId) {
+      setRows([]);
+      return;
+    }
+    setRows(await listLaboratories(currentUserId));
   };
 
   const handleSave = async () => {
+    if (!currentUserId) {
+      notifications.show({
+        title: 'Usuario nao identificado',
+        message: 'Nao foi possivel identificar o usuario para salvar laboratorio.',
+        color: 'red',
+      });
+      return;
+    }
+
     const nome = draft.nome.trim();
     if (nome.length < 3) {
       notifications.show({
@@ -185,6 +209,7 @@ export default function LaboratoriosSettings({
       setSaving(true);
       await upsertLaboratory({
         id: draft.id,
+        userId: currentUserId ?? undefined,
         nome,
         cnpj: draft.cnpj,
         email: draft.email,

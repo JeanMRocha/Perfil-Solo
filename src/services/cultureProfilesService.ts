@@ -1,4 +1,5 @@
 import type { NutrientKey, RangeMap, SoilParams } from '../types/soil';
+import { storageReadJson, storageRemove, storageWriteJson } from './safeLocalStorage';
 
 export const CULTURE_PROFILES_KEY = 'perfilsolo_culture_profiles_v1';
 
@@ -92,19 +93,13 @@ function createId() {
 }
 
 function readAllProfiles(): LocalCultureProfile[] {
-  try {
-    const raw = localStorage.getItem(CULTURE_PROFILES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as LocalCultureProfile[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch {
-    return [];
-  }
+  const parsed = storageReadJson<LocalCultureProfile[]>(CULTURE_PROFILES_KEY, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed;
 }
 
 function writeAllProfiles(rows: LocalCultureProfile[]) {
-  localStorage.setItem(CULTURE_PROFILES_KEY, JSON.stringify(rows));
+  storageWriteJson(CULTURE_PROFILES_KEY, rows);
 }
 
 export function listLocalCultureProfiles(): LocalCultureProfile[] {
@@ -231,7 +226,7 @@ export function deleteLocalCultureProfile(profileId: string): void {
 }
 
 export function clearLocalCultureProfiles(): void {
-  localStorage.removeItem(CULTURE_PROFILES_KEY);
+  storageRemove(CULTURE_PROFILES_KEY);
 }
 
 function matchesAge(

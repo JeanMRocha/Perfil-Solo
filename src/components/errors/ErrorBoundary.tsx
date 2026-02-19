@@ -14,6 +14,7 @@ import {
   IconRotateClockwise,
   IconHome,
 } from '@tabler/icons-react';
+import { registrarLogLocal } from '@services/loggerLocal';
 
 /**
  * 🌿 ErrorBoundary - PerfilSolo
@@ -140,7 +141,6 @@ export class ErrorBoundary extends Component<Props, State> {
         erroFallback,
       );
       try {
-        const { registrarLogLocal } = await import('@services/loggerLocal');
         await registrarLogLocal({
           tipo: 'error',
           mensagem: err.message,

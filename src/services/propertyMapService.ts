@@ -1,6 +1,10 @@
 import { supabaseClient } from '../supabase/supabaseClient';
 import type { Property, Talhao } from '../types/property';
-import type { ContactInfo } from '../types/contact';
+import {
+  getPrimaryEmail,
+  getPrimaryPhone,
+  type ContactInfo,
+} from '../types/contact';
 import { isLocalDataMode } from './dataProvider';
 import {
   type AnalysisRow,
@@ -15,6 +19,7 @@ import {
   getPropertiesByUser,
   getTalhaoByIdLocal,
   getTalhoesByProperty,
+  getTalhoesByProperties,
   updateTalhaoLocal,
   updatePropertyLocal,
 } from './localDb';
@@ -178,6 +183,79 @@ export function mapTalhaoToDraw(talhao: Talhao) {
   };
 }
 
+function toPositiveArea(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return parsed;
+}
+
+function sumTalhoesArea(talhoes: Talhao[]): number {
+  return talhoes.reduce((sum, row) => sum + toPositiveArea(row.area_ha), 0);
+}
+
+function sumNonTalhoesAllocations(property: Property | null): number {
+  const rows = Array.isArray(property?.area_allocations)
+    ? property?.area_allocations
+    : [];
+  return rows.reduce((sum, row) => {
+    const categoryId = String(row?.category_id ?? '').trim().toLowerCase();
+    if (categoryId === 'talhoes') return sum;
+    return sum + toPositiveArea(row?.area_ha);
+  }, 0);
+}
+
+async function findPropertyByIdForSync(propertyId: string): Promise<Property | null> {
+  if (isLocalDataMode) {
+    return getPropertyByIdLocal(propertyId);
+  }
+
+  const { data, error } = await (supabaseClient as any)
+    .from('properties')
+    .select('*')
+    .eq('id', propertyId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Property | null) ?? null;
+}
+
+async function persistPropertyTotalArea(
+  propertyId: string,
+  totalArea: number,
+): Promise<void> {
+  if (isLocalDataMode) {
+    await updatePropertyLocal({
+      propertyId,
+      patch: { total_area: totalArea },
+    });
+    return;
+  }
+
+  const { error } = await (supabaseClient as any)
+    .from('properties')
+    .update({
+      total_area: totalArea,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', propertyId);
+
+  if (error) throw error;
+}
+
+async function syncPropertyTotalArea(propertyId: string): Promise<void> {
+  const [property, talhoes] = await Promise.all([
+    findPropertyByIdForSync(propertyId),
+    fetchTalhoesByProperty(propertyId),
+  ]);
+
+  if (!property) return;
+
+  const talhoesArea = sumTalhoesArea(talhoes);
+  const otherAreas = sumNonTalhoesAllocations(property);
+  const nextTotalArea = talhoesArea + otherAreas;
+  await persistPropertyTotalArea(propertyId, nextTotalArea);
+}
+
 export async function fetchOrCreateUserProperties(
   userId: string,
 ): Promise<Property[]> {
@@ -223,15 +301,65 @@ export async function createPropertyForUser(
     return createPropertyLocal({ userId, nome, contact, patch });
   }
 
-  const { data, error } = await (supabaseClient as any)
-    .from('properties')
-    .insert({
-      user_id: userId,
-      nome,
-      contato: contact?.email ?? contact?.phone ?? null,
-    })
-    .select('*')
-    .single();
+  const resolvedContact = contact ?? patch?.contato_detalhes;
+  const basePayload: Record<string, unknown> = {
+    user_id: userId,
+    nome,
+    contato:
+      getPrimaryEmail(resolvedContact) ?? getPrimaryPhone(resolvedContact) ?? null,
+  };
+  if (patch?.cidade !== undefined) basePayload.cidade = patch.cidade;
+  if (patch?.estado !== undefined) basePayload.estado = patch.estado;
+  if (patch?.total_area !== undefined) basePayload.total_area = patch.total_area;
+
+  const extendedPayload: Record<string, unknown> = { ...basePayload };
+  if (patch?.contato_detalhes !== undefined) {
+    extendedPayload.contato_detalhes = patch.contato_detalhes;
+  }
+  if (patch?.proprietario_principal !== undefined) {
+    extendedPayload.proprietario_principal = patch.proprietario_principal;
+  }
+  if (patch?.documentos !== undefined) {
+    extendedPayload.documentos = patch.documentos;
+  }
+  if (patch?.fiscal !== undefined) {
+    extendedPayload.fiscal = patch.fiscal;
+  }
+  if (patch?.maquinas !== undefined) {
+    extendedPayload.maquinas = patch.maquinas;
+  }
+  if (patch?.galpoes !== undefined) {
+    extendedPayload.galpoes = patch.galpoes;
+  }
+  if (patch?.area_allocations !== undefined) {
+    extendedPayload.area_allocations = patch.area_allocations;
+  }
+
+  const hasExtendedFields =
+    patch?.contato_detalhes !== undefined ||
+    patch?.proprietario_principal !== undefined ||
+    patch?.documentos !== undefined ||
+    patch?.fiscal !== undefined ||
+    patch?.maquinas !== undefined ||
+    patch?.galpoes !== undefined ||
+    patch?.area_allocations !== undefined;
+
+  const runInsert = (payload: Record<string, unknown>) =>
+    (supabaseClient as any)
+      .from('properties')
+      .insert(payload)
+      .select('*')
+      .single();
+
+  let { data, error } = await runInsert(extendedPayload);
+
+  if (error && hasExtendedFields) {
+    const fallback = await runInsert(basePayload);
+    if (!fallback.error) {
+      data = fallback.data;
+      error = null;
+    }
+  }
 
   if (error) throw error;
   return data as Property;
@@ -247,23 +375,68 @@ export async function updatePropertyForUser(
     return updatePropertyLocal({ propertyId, nome, contact, patch });
   }
 
-  const updatePayload: Record<string, unknown> = {
+  const resolvedContact = contact ?? patch?.contato_detalhes;
+  const basePayload: Record<string, unknown> = {
     nome,
     updated_at: new Date().toISOString(),
   };
-  if (contact != null) {
-    updatePayload.contato = contact.email ?? contact.phone ?? null;
+  if (resolvedContact != null) {
+    basePayload.contato =
+      getPrimaryEmail(resolvedContact) ?? getPrimaryPhone(resolvedContact) ?? null;
   }
-  if (patch?.cidade !== undefined) updatePayload.cidade = patch.cidade;
-  if (patch?.estado !== undefined) updatePayload.estado = patch.estado;
-  if (patch?.total_area !== undefined) updatePayload.total_area = patch.total_area;
+  if (patch?.cidade !== undefined) basePayload.cidade = patch.cidade;
+  if (patch?.estado !== undefined) basePayload.estado = patch.estado;
+  if (patch?.total_area !== undefined) basePayload.total_area = patch.total_area;
 
-  const { data, error } = await (supabaseClient as any)
-    .from('properties')
-    .update(updatePayload)
-    .eq('id', propertyId)
-    .select('*')
-    .single();
+  const extendedPayload: Record<string, unknown> = { ...basePayload };
+  if (patch?.contato_detalhes !== undefined) {
+    extendedPayload.contato_detalhes = patch.contato_detalhes;
+  }
+  if (patch?.proprietario_principal !== undefined) {
+    extendedPayload.proprietario_principal = patch.proprietario_principal;
+  }
+  if (patch?.documentos !== undefined) {
+    extendedPayload.documentos = patch.documentos;
+  }
+  if (patch?.fiscal !== undefined) {
+    extendedPayload.fiscal = patch.fiscal;
+  }
+  if (patch?.maquinas !== undefined) {
+    extendedPayload.maquinas = patch.maquinas;
+  }
+  if (patch?.galpoes !== undefined) {
+    extendedPayload.galpoes = patch.galpoes;
+  }
+  if (patch?.area_allocations !== undefined) {
+    extendedPayload.area_allocations = patch.area_allocations;
+  }
+
+  const hasExtendedFields =
+    patch?.contato_detalhes !== undefined ||
+    patch?.proprietario_principal !== undefined ||
+    patch?.documentos !== undefined ||
+    patch?.fiscal !== undefined ||
+    patch?.maquinas !== undefined ||
+    patch?.galpoes !== undefined ||
+    patch?.area_allocations !== undefined;
+
+  const runUpdate = (payload: Record<string, unknown>) =>
+    (supabaseClient as any)
+      .from('properties')
+      .update(payload)
+      .eq('id', propertyId)
+      .select('*')
+      .single();
+
+  let { data, error } = await runUpdate(extendedPayload);
+
+  if (error && hasExtendedFields) {
+    const fallback = await runUpdate(basePayload);
+    if (!fallback.error) {
+      data = fallback.data;
+      error = null;
+    }
+  }
 
   if (error) throw error;
   return data as Property;
@@ -294,6 +467,25 @@ export async function fetchTalhoesByProperty(
     .from('talhoes')
     .select('*')
     .eq('property_id', propertyId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as Talhao[];
+}
+
+export async function fetchTalhoesByProperties(
+  propertyIds: string[],
+): Promise<Talhao[]> {
+  if (propertyIds.length === 0) return [];
+
+  if (isLocalDataMode) {
+    return getTalhoesByProperties(propertyIds);
+  }
+
+  const { data, error } = await (supabaseClient as any)
+    .from('talhoes')
+    .select('*')
+    .in('property_id', propertyIds)
     .order('created_at', { ascending: true });
 
   if (error) throw error;
@@ -392,7 +584,7 @@ export async function createTalhaoForProperty(input: {
   });
 
   if (isLocalDataMode) {
-    return createTalhaoLocal({
+    const created = await createTalhaoLocal({
       propertyId: input.propertyId,
       nome: input.nome,
       area_ha: input.area_ha,
@@ -401,6 +593,8 @@ export async function createTalhaoForProperty(input: {
       cor_identificacao: input.color ?? DEFAULT_TALHAO_COLOR,
       historico_culturas: input.historico_culturas,
     });
+    await syncPropertyTotalArea(input.propertyId);
+    return created;
   }
 
   const { data, error } = await (supabaseClient as any)
@@ -418,7 +612,9 @@ export async function createTalhaoForProperty(input: {
     .single();
 
   if (error) throw error;
-  return data as Talhao;
+  const created = data as Talhao;
+  await syncPropertyTotalArea(input.propertyId);
+  return created;
 }
 
 export async function updateTalhaoForProperty(input: {
@@ -447,7 +643,7 @@ export async function updateTalhaoForProperty(input: {
     : undefined;
 
   if (isLocalDataMode) {
-    return updateTalhaoLocal({
+    const updated = await updateTalhaoLocal({
       talhaoId: input.talhaoId,
       nome: input.nome,
       area_ha: input.area_ha,
@@ -456,6 +652,8 @@ export async function updateTalhaoForProperty(input: {
       coordenadas_svg: coordenadasSvg,
       historico_culturas: input.historico_culturas,
     });
+    await syncPropertyTotalArea(updated.property_id);
+    return updated;
   }
 
   const { data, error } = await (supabaseClient as any)
@@ -474,14 +672,27 @@ export async function updateTalhaoForProperty(input: {
     .single();
 
   if (error) throw error;
-  return data as Talhao;
+  const updated = data as Talhao;
+  await syncPropertyTotalArea(updated.property_id);
+  return updated;
 }
 
 export async function deleteTalhaoForProperty(talhaoId: string): Promise<void> {
   if (isLocalDataMode) {
+    const current = await getTalhaoByIdLocal(talhaoId);
     await deleteTalhaoLocal(talhaoId);
+    if (current?.property_id) {
+      await syncPropertyTotalArea(current.property_id);
+    }
     return;
   }
+
+  const { data: current, error: readError } = await (supabaseClient as any)
+    .from('talhoes')
+    .select('property_id')
+    .eq('id', talhaoId)
+    .maybeSingle();
+  if (readError) throw readError;
 
   const { error } = await (supabaseClient as any)
     .from('talhoes')
@@ -489,6 +700,10 @@ export async function deleteTalhaoForProperty(talhaoId: string): Promise<void> {
     .eq('id', talhaoId);
 
   if (error) throw error;
+  const propertyId = String(current?.property_id ?? '').trim();
+  if (propertyId) {
+    await syncPropertyTotalArea(propertyId);
+  }
 }
 
 export async function saveLinkedAnalysis(
@@ -533,6 +748,12 @@ async function assertAnalysisLinkIntegrity(
         'Integridade invalida: talhao nao pertence a propriedade informada.',
       );
     }
+    if (
+      input.laboratorio_id != null &&
+      input.laboratorio_id.toString().trim().length === 0
+    ) {
+      throw new Error('Integridade invalida: laboratorio_id vazio.');
+    }
     return;
   }
 
@@ -565,5 +786,23 @@ async function assertAnalysisLinkIntegrity(
     throw new Error(
       'Integridade invalida: talhao nao pertence a propriedade informada.',
     );
+  }
+
+  if (input.laboratorio_id) {
+    const laboratorioResult = await (supabaseClient as any)
+      .from('laboratorios')
+      .select('id,user_id')
+      .eq('id', input.laboratorio_id)
+      .single();
+
+    if (laboratorioResult.error || !laboratorioResult.data) {
+      throw laboratorioResult.error ?? new Error('Laboratorio vinculado nao encontrado.');
+    }
+
+    if (laboratorioResult.data.user_id !== input.user_id) {
+      throw new Error(
+        'Integridade invalida: laboratorio nao pertence ao mesmo usuario da analise.',
+      );
+    }
   }
 }

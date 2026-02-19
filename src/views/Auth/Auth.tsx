@@ -15,13 +15,28 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { useStore } from '@nanostores/react';
 import { IconCircleKey } from '@tabler/icons-react';
-import { Link, Navigate } from 'react-router-dom';
-import { $currUser, signInLocal } from '@global/user';
+import { useEffect, useState } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { $currUser, signInLocal, signOut } from '@global/user';
+import { registerAndEnsureUserCredits } from '@services/creditsService';
 import { isLocalDataMode } from '@services/dataProvider';
+import {
+  clearTwoFactorVerificationSession,
+  isTwoFactorVerifiedForEmail,
+  isValidEmail,
+  markTwoFactorVerifiedSession,
+  requestIdentityChallengeCode,
+  verifyIdentityChallengeCode,
+} from '@services/identityVerificationService';
 import { supabaseClient } from '@sb/supabaseClient';
 
 export default function Authentication() {
   const user = useStore($currUser);
+  const navigate = useNavigate();
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
 
   const form = useForm({
     initialValues: {
@@ -29,32 +44,92 @@ export default function Authentication() {
       password: '',
     },
     validate: {
-      email: (value) => (/^\S+@\S+$/.test(value) ? null : 'Email invalido'),
+      email: (value) => (isValidEmail(value) ? null : 'Email invalido'),
     },
   });
 
-  if (user) {
+  const userEmail = String(user?.email ?? '').trim().toLowerCase();
+  const needsTwoFactor =
+    !!user && !!userEmail && !isTwoFactorVerifiedForEmail(userEmail);
+
+  useEffect(() => {
+    if (!needsTwoFactor) return;
+    if (userEmail) setVerificationEmail(userEmail);
+  }, [needsTwoFactor, userEmail]);
+
+  if (user && !needsTwoFactor) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const handleSubmit = form.onSubmit(async (values) => {
-    if (isLocalDataMode) {
-      signInLocal(values.email);
+  const requestLoginCode = async (email: string) => {
+    const normalized = String(email ?? '').trim().toLowerCase();
+    if (!isValidEmail(normalized)) {
       notifications.show({
-        title: 'Modo local',
-        message: 'Acesso local liberado com sucesso.',
-        color: 'green',
+        title: 'Email invalido',
+        message: 'Informe um email valido para verificacao.',
+        color: 'red',
       });
       return;
     }
 
     try {
-      const { error } = await supabaseClient.auth.signInWithPassword({
-        email: values.email,
+      setSendingCode(true);
+      const challenge = requestIdentityChallengeCode({
+        email: normalized,
+        reason: 'login',
+      });
+      setVerificationEmail(challenge.email);
+      notifications.show({
+        title: 'Verificacao em 2 fatores',
+        message: `Codigo enviado para ${challenge.email}. Codigo de teste: ${challenge.debug_code}`,
+        color: 'blue',
+      });
+    } catch (error: any) {
+      notifications.show({
+        title: 'Falha ao enviar codigo',
+        message: String(error?.message ?? 'Nao foi possivel enviar o codigo.'),
+        color: 'red',
+      });
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const handleSubmit = form.onSubmit(async (values) => {
+    const loginEmail = String(values.email ?? '').trim().toLowerCase();
+    if (!isValidEmail(loginEmail)) {
+      notifications.show({
+        title: 'Email invalido',
+        message: 'Informe um email valido para continuar.',
+        color: 'red',
+      });
+      return;
+    }
+
+    if (isLocalDataMode) {
+      clearTwoFactorVerificationSession(loginEmail);
+      signInLocal(loginEmail);
+      await requestLoginCode(loginEmail);
+      return;
+    }
+
+    try {
+      clearTwoFactorVerificationSession(loginEmail);
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email: loginEmail,
         password: values.password,
       });
 
       if (error) throw error;
+      const signedUser = data.user;
+      if (signedUser?.id && signedUser?.email) {
+        registerAndEnsureUserCredits({
+          id: signedUser.id,
+          email: signedUser.email,
+          name: String(signedUser.user_metadata?.name ?? ''),
+        });
+      }
+      await requestLoginCode(loginEmail);
     } catch (err: any) {
       const message = String(err?.message ?? 'Falha ao autenticar.');
       const isNetwork = message.toLowerCase().includes('failed to fetch');
@@ -69,6 +144,54 @@ export default function Authentication() {
     }
   });
 
+  const confirmTwoFactor = async () => {
+    const email = verificationEmail || userEmail;
+    if (!isValidEmail(email)) {
+      notifications.show({
+        title: 'Email invalido',
+        message: 'Nao foi possivel identificar email para verificar.',
+        color: 'red',
+      });
+      return;
+    }
+
+    try {
+      setVerifyingCode(true);
+      verifyIdentityChallengeCode({
+        email,
+        reason: 'login',
+        code: verificationCode,
+      });
+      markTwoFactorVerifiedSession(email);
+      notifications.show({
+        title: 'Identidade confirmada',
+        message: 'Autenticacao em 2 fatores concluida com sucesso.',
+        color: 'green',
+      });
+      navigate('/dashboard', { replace: true });
+    } catch (error: any) {
+      notifications.show({
+        title: 'Codigo invalido',
+        message: String(error?.message ?? 'Nao foi possivel validar o codigo.'),
+        color: 'red',
+      });
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
+
+  const handleResetLogin = async () => {
+    try {
+      await signOut();
+    } catch {
+      // ignore
+    }
+    clearTwoFactorVerificationSession();
+    setVerificationCode('');
+    setVerificationEmail('');
+    form.reset();
+  };
+
   return (
     <Box h="100vh" w="100vw">
       <Center h="100vh" w="100%">
@@ -81,38 +204,74 @@ export default function Authentication() {
           </Group>
 
           <Paper withBorder shadow="md" p={30} mt={30} radius="md">
-            <form onSubmit={handleSubmit}>
-              <TextInput
-                label="Email"
-                placeholder="voce@empresa.com"
-                required
-                {...form.getInputProps('email')}
-              />
+            {needsTwoFactor ? (
+              <Box>
+                <Title order={4}>Verificacao em 2 fatores</Title>
+                <Text size="sm" c="dimmed" mt="xs">
+                  Confirme sua identidade no email cadastrado: {verificationEmail || userEmail}
+                </Text>
 
-              <PasswordInput
-                label="Senha"
-                placeholder={
-                  isLocalDataMode ? 'Nao utilizada no modo local' : 'Sua senha'
-                }
-                required={!isLocalDataMode}
-                mt="md"
-                disabled={isLocalDataMode}
-                {...form.getInputProps('password')}
-              />
+                <TextInput
+                  mt="md"
+                  label="Codigo de verificacao"
+                  placeholder="Digite o codigo de 6 digitos"
+                  value={verificationCode}
+                  onChange={(event) => setVerificationCode(event.currentTarget.value)}
+                />
 
-              <Button fullWidth mt="xl" type="submit">
-                {isLocalDataMode ? 'Entrar no modo local' : 'Sign in'}
-              </Button>
+                <Group mt="lg" justify="space-between">
+                  <Button
+                    variant="light"
+                    loading={sendingCode}
+                    onClick={() => void requestLoginCode(verificationEmail || userEmail)}
+                  >
+                    Reenviar codigo
+                  </Button>
+                  <Button loading={verifyingCode} onClick={() => void confirmTwoFactor()}>
+                    Confirmar identidade
+                  </Button>
+                </Group>
 
-              <Group justify="space-between" mt="md">
-                <Anchor component={Link} to="/auth/register" size="sm">
-                  Criar conta
-                </Anchor>
-                <Anchor component={Link} to="/auth/forgot-password" size="sm">
-                  Esqueci a senha
-                </Anchor>
-              </Group>
-            </form>
+                <Group justify="center" mt="md">
+                  <Anchor size="sm" onClick={() => void handleResetLogin()}>
+                    Voltar e trocar conta
+                  </Anchor>
+                </Group>
+              </Box>
+            ) : (
+              <form onSubmit={handleSubmit}>
+                <TextInput
+                  label="Email"
+                  placeholder="voce@empresa.com"
+                  required
+                  {...form.getInputProps('email')}
+                />
+
+                <PasswordInput
+                  label="Senha"
+                  placeholder={
+                    isLocalDataMode ? 'Nao utilizada no modo local' : 'Sua senha'
+                  }
+                  required={!isLocalDataMode}
+                  mt="md"
+                  disabled={isLocalDataMode}
+                  {...form.getInputProps('password')}
+                />
+
+                <Button fullWidth mt="xl" type="submit">
+                  {isLocalDataMode ? 'Entrar no modo local' : 'Sign in'}
+                </Button>
+
+                <Group justify="space-between" mt="md">
+                  <Anchor component={Link} to="/auth/register" size="sm">
+                    Criar conta
+                  </Anchor>
+                  <Anchor component={Link} to="/auth/forgot-password" size="sm">
+                    Esqueci a senha
+                  </Anchor>
+                </Group>
+              </form>
+            )}
           </Paper>
         </Container>
       </Center>

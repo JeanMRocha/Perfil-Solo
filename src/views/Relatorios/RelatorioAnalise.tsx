@@ -25,6 +25,10 @@ import {
 import type { AnalysisContainer } from '../../types/soil';
 import { analisesMock } from '../../data/analisesMock';
 import { getProfile, type UserProfile } from '../../services/profileService';
+import {
+  getSystemBrand,
+  subscribeSystemConfig,
+} from '../../services/systemConfigService';
 
 interface ReportProps {
   analysis?: AnalysisContainer;
@@ -89,6 +93,7 @@ function StatusBar({
 export default function RelatorioAnalise({}: ReportProps) {
   const [mode, setMode] = useState<'farmer' | 'consultant'>('consultant');
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [systemName, setSystemName] = useState(() => getSystemBrand().name);
 
   useEffect(() => {
     let alive = true;
@@ -100,6 +105,14 @@ export default function RelatorioAnalise({}: ReportProps) {
     return () => {
       alive = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeSystemConfig((config) => {
+      setSystemName(config.brand.name);
+    });
+
+    return unsubscribe;
   }, []);
 
   const mockData = {
@@ -184,7 +197,7 @@ export default function RelatorioAnalise({}: ReportProps) {
             <Group>
               <IconLeaf size={32} color="#4CAF50" />
               <Title order={2} c="green.9">
-                PerfilSolo Pro
+                {systemName} Pro
               </Title>
               {mode === 'consultant' && (
                 <Badge color="blue" variant="light">
@@ -315,7 +328,7 @@ export default function RelatorioAnalise({}: ReportProps) {
       <Divider my="xl" />
       <Group justify="space-between" align="end">
         <Text size="xs" c="dimmed">
-          Gerado por PerfilSolo Pro © 2026. <br />
+          Gerado por {systemName} Pro © 2026. <br />
           Responsavel Tecnico: {profile?.name || 'Consultor'} (CREA 12345)
         </Text>
         <Box style={{ textAlign: 'center' }}>

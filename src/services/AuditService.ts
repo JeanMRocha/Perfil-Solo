@@ -1,5 +1,6 @@
 import { isLocalDataMode } from './dataProvider';
 import { supabaseClient } from '../supabase/supabaseClient';
+import { storageReadJson, storageWriteJson } from './safeLocalStorage';
 
 const LOCAL_AUDIT_KEY = 'perfilsolo_local_audit_logs';
 
@@ -14,10 +15,9 @@ export interface AuditLogEntry {
 
 function appendLocalAudit(entry: AuditLogEntry) {
   try {
-    const current = localStorage.getItem(LOCAL_AUDIT_KEY);
-    const parsed = current ? (JSON.parse(current) as AuditLogEntry[]) : [];
+    const parsed = storageReadJson<AuditLogEntry[]>(LOCAL_AUDIT_KEY, []);
     parsed.push(entry);
-    localStorage.setItem(LOCAL_AUDIT_KEY, JSON.stringify(parsed.slice(-500)));
+    storageWriteJson(LOCAL_AUDIT_KEY, parsed.slice(-500));
   } catch {
     // Evita quebra do fluxo em navegadores com storage bloqueado.
   }

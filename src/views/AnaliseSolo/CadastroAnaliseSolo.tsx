@@ -59,8 +59,13 @@ import {
   listLaboratories,
   type LaboratoryRecord,
 } from '../../services/laboratoriesService';
+import { getSystemBrand } from '../../services/systemConfigService';
 import type { Property, Talhao } from '../../types/property';
-import type { ContactInfo } from '../../types/contact';
+import {
+  getPrimaryEmail,
+  getPrimaryPhone,
+  type ContactInfo,
+} from '../../types/contact';
 
 type ModuleKey = 'analise' | 'calagem' | 'gessagem' | 'adubacao';
 type RowStatus = 'ok' | 'attention' | 'critical' | 'info';
@@ -470,6 +475,7 @@ export default function CadastroAnaliseSolo() {
     () => laboratories.find((lab) => lab.id === selectedOrderLabId) ?? null,
     [laboratories, selectedOrderLabId],
   );
+  const manualLaboratoryName = `${getSystemBrand().name} Manual`;
   const selectedOrderServices = useMemo(() => {
     if (!selectedOrderLab) return [];
     return selectedOrderLab.servicos.filter((service) =>
@@ -654,12 +660,12 @@ export default function CadastroAnaliseSolo() {
   }, [selectedPropertyId, selectedTalhaoId]);
 
   const refreshLaboratories = useCallback(async () => {
-    const rows = await listLaboratories();
+    const rows = await listLaboratories(currentUserId ?? undefined);
     setLaboratories(rows);
     setSelectedOrderLabId((prev) =>
       prev && rows.some((row) => row.id === prev) ? prev : rows[0]?.id ?? null,
     );
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     setSelectedSideId(sideMenuItems[0]?.id ?? '');
@@ -820,7 +826,8 @@ export default function CadastroAnaliseSolo() {
         talhao_id: selectedTalhaoId ?? 'na',
         data_amostragem: nowIso.slice(0, 10),
         profundidade: mapDepthToEnum(analise.profundidade),
-        laboratorio: selectedOrderLab?.nome ?? 'PerfilSolo Manual',
+        laboratorio_id: selectedOrderLabId ?? undefined,
+        laboratorio: selectedOrderLab?.nome ?? manualLaboratoryName,
         raw: raw as any,
       });
 
@@ -1430,7 +1437,8 @@ export default function CadastroAnaliseSolo() {
         talhao_id: selectedTalhaoId,
         data_amostragem: nowIso.slice(0, 10),
         profundidade: mapDepthToEnum(analise.profundidade),
-        laboratorio: selectedOrderLab?.nome ?? 'PerfilSolo Manual',
+        laboratorio_id: selectedOrderLabId ?? undefined,
+        laboratorio: selectedOrderLab?.nome ?? manualLaboratoryName,
         raw: raw as any,
       });
 
@@ -1455,7 +1463,8 @@ export default function CadastroAnaliseSolo() {
         talhao_id: selectedTalhaoId,
         data_amostragem: nowIso.slice(0, 10),
         profundidade: mapDepthToEnum(analise.profundidade),
-        laboratorio: selectedOrderLab?.nome ?? 'PerfilSolo Manual',
+        laboratorio_id: selectedOrderLabId ?? undefined,
+        laboratorio: selectedOrderLab?.nome ?? manualLaboratoryName,
         raw: processed.raw ?? raw,
         normalized: processed.normalized ?? {},
         executions: {
@@ -1652,7 +1661,7 @@ export default function CadastroAnaliseSolo() {
           </Group>
 
           <Text c="rgba(255,255,255,0.88)" size="sm" mt={8}>
-            Contato propriedade: {selectedPropertyContact.email || '-'} | {selectedPropertyContact.phone || '-'}
+            Contato propriedade: {getPrimaryEmail(selectedPropertyContact) || '-'} | {getPrimaryPhone(selectedPropertyContact) || '-'}
           </Text>
         </Card>
       ) : (

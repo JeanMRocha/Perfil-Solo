@@ -62,6 +62,7 @@ export interface AnalysisContainer {
   talhao_id: string;
   data_amostragem: string;
   profundidade: '0-10' | '0-20' | '20-40' | 'outra';
+  laboratorio_id?: string;
   laboratorio?: string;
   
   // 1) Resultados como vieram do laudo

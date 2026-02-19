@@ -3,6 +3,7 @@ import { User } from '@supabase/supabase-js';
 import { PropsWithChildren } from 'react';
 import { Navigate } from 'react-router-dom';
 import { $currUser } from '../global-state/user';
+import { isTwoFactorVerifiedForEmail } from '../services/identityVerificationService';
 
 interface ProtectedPathProps extends PropsWithChildren {
   redirectUrl: string;
@@ -22,7 +23,16 @@ export const ProtectedPath = ({
   }
 
   // 🔒 se não há usuário logado, redireciona
-  if (shouldRedirect ? shouldRedirect(user) : user == null) {
+  if (user == null) {
+    return <Navigate to={redirectUrl} />;
+  }
+
+  if (shouldRedirect ? shouldRedirect(user) : false) {
+    return <Navigate to={redirectUrl} />;
+  }
+
+  const email = String(user.email ?? '').trim().toLowerCase();
+  if (!email || !isTwoFactorVerifiedForEmail(email)) {
     return <Navigate to={redirectUrl} />;
   }
 

@@ -11,6 +11,7 @@ import {
   Group,
   Modal,
   NumberInput,
+  Skeleton,
   Stack,
   Table,
   Text,
@@ -21,6 +22,7 @@ import {
   IconEdit,
   IconMapPin,
   IconPlus,
+  IconRefresh,
   IconSearch,
   IconTrash,
 } from '@tabler/icons-react';
@@ -38,6 +40,7 @@ import {
   deleteTalhaoForProperty,
   fetchOrCreateUserProperties,
   fetchTalhoesByProperty,
+  fetchTalhoesByProperties,
   updatePropertyForUser,
   updateTalhaoForProperty,
 } from '../../services/propertyMapService';
@@ -46,13 +49,26 @@ import type { Property, Talhao } from '../../types/property';
 type PropertyRow = Property & { talhoesCount: number };
 type PropertyModalMode = 'create' | 'edit';
 type TalhaoModalMode = 'create' | 'edit';
+type AreaSummaryRow = {
+  categoryId: string;
+  categoryName: string;
+  areaHa: number;
+};
 
 const DEFAULT_TALHAO_COLOR = '#81C784';
+const SKELETON_ROW_COUNT = 4;
 
 function asOptionalNumber(value: number | string | null): number | undefined {
   if (value == null || value === '') return undefined;
   const num = Number(value);
   return Number.isFinite(num) ? num : undefined;
+}
+
+function formatAreaHa(value: number): string {
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export default function Propriedades() {
@@ -61,6 +77,8 @@ export default function Propriedades() {
 
   const [loadingProperties, setLoadingProperties] = useState(true);
   const [loadingTalhoes, setLoadingTalhoes] = useState(false);
+  const [propertiesLoadError, setPropertiesLoadError] = useState<string | null>(null);
+  const [talhoesLoadError, setTalhoesLoadError] = useState<string | null>(null);
 
   const [propertyRows, setPropertyRows] = useState<PropertyRow[]>([]);
   const [talhoes, setTalhoes] = useState<Talhao[]>([]);
@@ -93,14 +111,23 @@ export default function Propriedades() {
     }
 
     setLoadingProperties(true);
+    setPropertiesLoadError(null);
     try {
       const properties = await fetchOrCreateUserProperties(currentUserId);
-      const withTalhoes = await Promise.all(
-        properties.map(async (property) => {
-          const linkedTalhoes = await fetchTalhoesByProperty(property.id);
-          return { ...property, talhoesCount: linkedTalhoes.length };
-        }),
+      const allTalhoes = await fetchTalhoesByProperties(
+        properties.map((property) => property.id),
       );
+      const talhoesCountByProperty = new Map<string, number>();
+      for (const talhao of allTalhoes) {
+        talhoesCountByProperty.set(
+          talhao.property_id,
+          (talhoesCountByProperty.get(talhao.property_id) ?? 0) + 1,
+        );
+      }
+      const withTalhoes = properties.map((property) => ({
+        ...property,
+        talhoesCount: talhoesCountByProperty.get(property.id) ?? 0,
+      }));
 
       setPropertyRows(withTalhoes);
       setSelectedPropertyId((prev) => {
@@ -108,6 +135,9 @@ export default function Propriedades() {
         return withTalhoes[0]?.id ?? null;
       });
     } catch (err: any) {
+      setPropertiesLoadError(
+        err?.message ?? 'Nao foi possivel carregar as propriedades.',
+      );
       notifications.show({
         title: 'Falha ao carregar propriedades',
         message: err?.message ?? 'Nao foi possivel carregar as propriedades.',
@@ -126,6 +156,7 @@ export default function Propriedades() {
     }
 
     setLoadingTalhoes(true);
+    setTalhoesLoadError(null);
     try {
       const rows = await fetchTalhoesByProperty(selectedPropertyId);
       setTalhoes(rows);
@@ -134,6 +165,10 @@ export default function Propriedades() {
         return rows[0]?.id ?? null;
       });
     } catch (err: any) {
+      setTalhoes([]);
+      setTalhoesLoadError(
+        err?.message ?? 'Nao foi possivel carregar os talhoes da propriedade.',
+      );
       notifications.show({
         title: 'Falha ao carregar talhoes',
         message: err?.message ?? 'Nao foi possivel carregar os talhoes da propriedade.',
@@ -172,6 +207,60 @@ export default function Propriedades() {
   const selectedTalhao = useMemo(
     () => talhoes.find((row) => row.id === selectedTalhaoId) ?? null,
     [talhoes, selectedTalhaoId],
+  );
+
+  const selectedPropertyTalhoesArea = useMemo(
+    () =>
+      talhoes.reduce((sum, row) => {
+        if (selectedPropertyId && row.property_id !== selectedPropertyId) return sum;
+        const area = Number(row.area_ha ?? 0);
+        if (!Number.isFinite(area) || area <= 0) return sum;
+        return sum + area;
+      }, 0),
+    [selectedPropertyId, talhoes],
+  );
+
+  const selectedPropertyAreaSummary = useMemo<AreaSummaryRow[]>(() => {
+    const groups = new Map<string, AreaSummaryRow>();
+
+    const allocations = selectedProperty?.area_allocations ?? [];
+    for (const item of allocations) {
+      const categoryId = String(item.category_id ?? '').trim();
+      if (!categoryId || categoryId === 'talhoes') continue;
+
+      const categoryName = String(item.category_name ?? '').trim() || 'Sem categoria';
+      const areaValue = Number(item.area_ha ?? 0);
+      if (!Number.isFinite(areaValue) || areaValue <= 0) continue;
+
+      const current = groups.get(categoryId);
+      if (current) {
+        current.areaHa += areaValue;
+      } else {
+        groups.set(categoryId, {
+          categoryId,
+          categoryName,
+          areaHa: areaValue,
+        });
+      }
+    }
+
+    if (selectedPropertyTalhoesArea > 0) {
+      groups.set('talhoes', {
+        categoryId: 'talhoes',
+        categoryName: 'Talhoes',
+        areaHa: selectedPropertyTalhoesArea,
+      });
+    }
+
+    return [...groups.values()].sort((a, b) =>
+      a.categoryName.localeCompare(b.categoryName, 'pt-BR'),
+    );
+  }, [selectedProperty?.area_allocations, selectedPropertyTalhoesArea]);
+
+  const selectedPropertyAreaTotal = useMemo(
+    () =>
+      selectedPropertyAreaSummary.reduce((sum, item) => sum + item.areaHa, 0),
+    [selectedPropertyAreaSummary],
   );
 
   const openPropertyCreate = () => {
@@ -281,8 +370,8 @@ export default function Propriedades() {
     });
   };
 
-  const closeTalhaoModal = () => {
-    if (savingTalhao) return;
+  const closeTalhaoModal = (force = false) => {
+    if (savingTalhao && !force) return;
     setTalhaoModalMode(null);
     setTalhaoDraft({
       nome: '',
@@ -338,7 +427,7 @@ export default function Propriedades() {
           color: 'green',
         });
       }
-      closeTalhaoModal();
+      closeTalhaoModal(true);
     } catch (err: any) {
       notifications.show({
         title: 'Falha ao salvar talhao',
@@ -380,6 +469,20 @@ export default function Propriedades() {
     setTalhaoDetailOpened(true);
   };
 
+  const showPropertiesSkeleton = loadingProperties && propertyRows.length === 0;
+  const showTalhoesSkeleton = loadingTalhoes && talhoes.length === 0;
+
+  const renderSkeletonRows = (columns: number) =>
+    Array.from({ length: SKELETON_ROW_COUNT }, (_, rowIndex) => (
+      <Table.Tr key={`skeleton-${columns}-${rowIndex}`}>
+        {Array.from({ length: columns }, (_, colIndex) => (
+          <Table.Td key={`skeleton-col-${rowIndex}-${colIndex}`}>
+            <Skeleton height={12} radius="xl" />
+          </Table.Td>
+        ))}
+      </Table.Tr>
+    ));
+
   return (
     <Container size="xl" mt="md">
       <PageHeader title="Propriedades e Talhoes" />
@@ -395,6 +498,7 @@ export default function Propriedades() {
         saving={savingProperty}
         userId={currentUserId}
         property={propertyModalMode === 'edit' ? selectedProperty : null}
+        talhoesAreaHa={propertyModalMode === 'edit' ? selectedPropertyTalhoesArea : 0}
       />
 
       <TalhaoDetailModal
@@ -418,9 +522,10 @@ export default function Propriedades() {
           <TextInput
             label="Nome do talhao"
             value={talhaoDraft.nome}
-            onChange={(event) =>
-              setTalhaoDraft((prev) => ({ ...prev, nome: event.currentTarget.value }))
-            }
+            onChange={(event) => {
+              const nextValue = event.currentTarget?.value ?? '';
+              setTalhaoDraft((prev) => ({ ...prev, nome: nextValue }));
+            }}
             data-autofocus
           />
           <NumberInput
@@ -436,12 +541,13 @@ export default function Propriedades() {
             label="Tipo de solo"
             placeholder="Argiloso, medio, arenoso..."
             value={talhaoDraft.tipo_solo}
-            onChange={(event) =>
+            onChange={(event) => {
+              const nextValue = event.currentTarget?.value ?? '';
               setTalhaoDraft((prev) => ({
                 ...prev,
-                tipo_solo: event.currentTarget.value,
-              }))
-            }
+                tipo_solo: nextValue,
+              }));
+            }}
           />
           <ColorInput
             label="Cor de identificacao"
@@ -452,7 +558,7 @@ export default function Propriedades() {
             format="hex"
           />
           <Group justify="flex-end">
-            <Button variant="light" color="gray" onClick={closeTalhaoModal}>
+            <Button variant="light" color="gray" onClick={() => closeTalhaoModal()}>
               Cancelar
             </Button>
             <Button onClick={saveTalhao} loading={savingTalhao}>
@@ -467,7 +573,20 @@ export default function Propriedades() {
           <Card withBorder radius="md" p="md">
             <Group justify="space-between" mb="sm">
               <Text fw={700}>Listagem de propriedades</Text>
-              <Badge color="green">{loadingProperties ? '...' : `${propertyRows.length} itens`}</Badge>
+              <Group gap="xs">
+                <Badge color="green">
+                  {loadingProperties ? 'Atualizando...' : `${propertyRows.length} itens`}
+                </Badge>
+                <Button
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconRefresh size={14} />}
+                  onClick={() => void loadProperties()}
+                  loading={loadingProperties}
+                >
+                  Atualizar
+                </Button>
+              </Group>
             </Group>
 
             <Group mb="sm">
@@ -475,10 +594,15 @@ export default function Propriedades() {
                 leftSection={<IconSearch size={14} />}
                 placeholder="Buscar por nome da propriedade"
                 value={propertySearch}
-                onChange={(event) => setPropertySearch(event.currentTarget.value)}
+                onChange={(event) => setPropertySearch(event.currentTarget?.value ?? '')}
                 style={{ flex: 1 }}
+                disabled={loadingProperties}
               />
-              <Button leftSection={<IconPlus size={14} />} onClick={openPropertyCreate}>
+              <Button
+                leftSection={<IconPlus size={14} />}
+                onClick={openPropertyCreate}
+                disabled={loadingProperties}
+              >
                 Cadastrar
               </Button>
             </Group>
@@ -490,7 +614,7 @@ export default function Propriedades() {
                 color="indigo"
                 leftSection={<IconMapPin size={14} />}
                 onClick={openTalhaoDetail}
-                disabled={!selectedTalhao}
+                disabled={!selectedTalhao || loadingProperties || loadingTalhoes}
               >
                 Detalhar
               </Button>
@@ -499,7 +623,7 @@ export default function Propriedades() {
                 variant="light"
                 leftSection={<IconEdit size={14} />}
                 onClick={openPropertyEdit}
-                disabled={!selectedProperty}
+                disabled={!selectedProperty || loadingProperties}
               >
                 Editar
               </Button>
@@ -509,7 +633,7 @@ export default function Propriedades() {
                 variant="light"
                 leftSection={<IconTrash size={14} />}
                 onClick={removeProperty}
-                disabled={!selectedProperty}
+                disabled={!selectedProperty || loadingProperties}
               >
                 Excluir
               </Button>
@@ -523,10 +647,23 @@ export default function Propriedades() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {loadingProperties ? (
+                {showPropertiesSkeleton ? (
+                  renderSkeletonRows(2)
+                ) : propertiesLoadError ? (
                   <Table.Tr>
                     <Table.Td colSpan={2}>
-                      <Text size="sm" c="dimmed">Carregando propriedades...</Text>
+                      <Group justify="space-between">
+                        <Text size="sm" c="red">
+                          Falha ao carregar propriedades.
+                        </Text>
+                        <Button
+                          size="xs"
+                          variant="light"
+                          onClick={() => void loadProperties()}
+                        >
+                          Tentar novamente
+                        </Button>
+                      </Group>
                     </Table.Td>
                   </Table.Tr>
                 ) : filteredProperties.length === 0 ? (
@@ -561,6 +698,47 @@ export default function Propriedades() {
             <Text size="sm" c="dimmed">
               Selecionada: {selectedProperty?.nome ?? 'nenhuma'}
             </Text>
+
+            {selectedProperty ? (
+              <>
+                <Divider my="sm" />
+                <Group justify="space-between" mb="xs">
+                  <Text fw={700} size="sm">
+                    Resumo de areas
+                  </Text>
+                  <Badge color="green" variant="light">
+                    {`${formatAreaHa(selectedPropertyAreaTotal)} ha`}
+                  </Badge>
+                </Group>
+
+                {selectedPropertyAreaSummary.length === 0 ? (
+                  <Text size="sm" c="dimmed">
+                    Sem areas categorizadas para esta propriedade.
+                  </Text>
+                ) : (
+                  <Table withTableBorder striped>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Categoria</Table.Th>
+                        <Table.Th>Area (ha)</Table.Th>
+                        <Table.Th>Origem</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {selectedPropertyAreaSummary.map((row) => (
+                        <Table.Tr key={row.categoryId}>
+                          <Table.Td>{row.categoryName}</Table.Td>
+                          <Table.Td>{formatAreaHa(row.areaHa)}</Table.Td>
+                          <Table.Td>
+                            {row.categoryId === 'talhoes' ? 'Automatica' : 'Cadastro'}
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                )}
+              </>
+            ) : null}
           </Card>
         </Grid.Col>
 
@@ -568,7 +746,21 @@ export default function Propriedades() {
           <Card withBorder radius="md" p="md">
             <Group justify="space-between" mb="sm">
               <Text fw={700}>Talhoes da propriedade</Text>
-              <Badge color="cyan">{loadingTalhoes ? '...' : `${talhoes.length} itens`}</Badge>
+              <Group gap="xs">
+                <Badge color="cyan">
+                  {loadingTalhoes ? 'Atualizando...' : `${talhoes.length} itens`}
+                </Badge>
+                <Button
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconRefresh size={14} />}
+                  onClick={() => void loadTalhoes()}
+                  loading={loadingTalhoes}
+                  disabled={!selectedProperty}
+                >
+                  Atualizar
+                </Button>
+              </Group>
             </Group>
 
             <Group mb="sm">
@@ -576,14 +768,14 @@ export default function Propriedades() {
                 leftSection={<IconSearch size={14} />}
                 placeholder="Buscar por nome do talhao"
                 value={talhaoSearch}
-                onChange={(event) => setTalhaoSearch(event.currentTarget.value)}
+                onChange={(event) => setTalhaoSearch(event.currentTarget?.value ?? '')}
                 style={{ flex: 1 }}
-                disabled={!selectedProperty}
+                disabled={!selectedProperty || loadingTalhoes}
               />
               <Button
                 leftSection={<IconPlus size={14} />}
                 onClick={openTalhaoCreate}
-                disabled={!selectedProperty}
+                disabled={!selectedProperty || loadingTalhoes}
               >
                 Cadastrar
               </Button>
@@ -595,7 +787,7 @@ export default function Propriedades() {
                 variant="light"
                 leftSection={<IconEdit size={14} />}
                 onClick={openTalhaoEdit}
-                disabled={!selectedTalhao}
+                disabled={!selectedTalhao || loadingTalhoes}
               >
                 Editar
               </Button>
@@ -605,7 +797,7 @@ export default function Propriedades() {
                 variant="light"
                 leftSection={<IconTrash size={14} />}
                 onClick={removeTalhao}
-                disabled={!selectedTalhao}
+                disabled={!selectedTalhao || loadingTalhoes}
               >
                 Excluir
               </Button>
@@ -628,10 +820,24 @@ export default function Propriedades() {
                       </Text>
                     </Table.Td>
                   </Table.Tr>
-                ) : loadingTalhoes ? (
+                ) : showTalhoesSkeleton ? (
+                  renderSkeletonRows(3)
+                ) : talhoesLoadError ? (
                   <Table.Tr>
                     <Table.Td colSpan={3}>
-                      <Text size="sm" c="dimmed">Carregando talhoes...</Text>
+                      <Group justify="space-between">
+                        <Text size="sm" c="red">
+                          Falha ao carregar talhoes.
+                        </Text>
+                        <Button
+                          size="xs"
+                          variant="light"
+                          onClick={() => void loadTalhoes()}
+                          disabled={!selectedProperty}
+                        >
+                          Tentar novamente
+                        </Button>
+                      </Group>
                     </Table.Td>
                   </Table.Tr>
                 ) : filteredTalhoes.length === 0 ? (

@@ -1,6 +1,11 @@
 import localforage from 'localforage';
 import type { Property, Talhao } from '../types/property';
-import type { ContactInfo } from '../types/contact';
+import {
+  getPrimaryEmail,
+  getPrimaryPhone,
+  type ContactInfo,
+} from '../types/contact';
+import { storageRemove } from './safeLocalStorage';
 
 type LocalForage = ReturnType<typeof localforage.createInstance>;
 
@@ -11,6 +16,7 @@ export type AnalysisRow = {
   talhao_id: string;
   data_amostragem: string;
   profundidade: string;
+  laboratorio_id?: string;
   laboratorio?: string;
   raw: Record<string, any>;
   normalized: Record<string, any>;
@@ -47,12 +53,8 @@ export async function clearLocalDb(): Promise<void> {
     talhoesStore.clear(),
     analysesStore.clear(),
   ]);
-  try {
-    localStorage.removeItem(LOCAL_CULTURE_PROFILES_KEY);
-    localStorage.removeItem(LOCAL_LABORATORIES_KEY);
-  } catch {
-    // noop
-  }
+  storageRemove(LOCAL_CULTURE_PROFILES_KEY);
+  storageRemove(LOCAL_LABORATORIES_KEY);
 }
 
 function nowIso() {
@@ -167,6 +169,10 @@ function mergePropertyPatch(
       safePatch.maquinas !== undefined ? safePatch.maquinas : current.maquinas,
     galpoes:
       safePatch.galpoes !== undefined ? safePatch.galpoes : current.galpoes,
+    area_allocations:
+      safePatch.area_allocations !== undefined
+        ? safePatch.area_allocations
+        : current.area_allocations,
   };
 }
 
@@ -193,7 +199,7 @@ export async function createPropertyLocal(input: {
     id: createId(),
     user_id: input.userId,
     nome: input.nome,
-    contato: input.contact?.email ?? input.contact?.phone ?? '',
+    contato: getPrimaryEmail(input.contact) ?? getPrimaryPhone(input.contact) ?? '',
     contato_detalhes: input.contact ?? {},
     created_at: createdAt,
     updated_at: createdAt,
@@ -204,8 +210,8 @@ export async function createPropertyLocal(input: {
     ...merged,
     contato_detalhes: contactDetails,
     contato:
-      contactDetails.email ??
-      contactDetails.phone ??
+      getPrimaryEmail(contactDetails) ??
+      getPrimaryPhone(contactDetails) ??
       merged.contato ??
       '',
   };
@@ -236,10 +242,10 @@ export async function updatePropertyLocal(input: {
     nome: input.nome ?? merged.nome,
     contato:
       input.contact != null
-        ? input.contact.email ?? input.contact.phone ?? ''
+        ? getPrimaryEmail(input.contact) ?? getPrimaryPhone(input.contact) ?? ''
         : merged.contato ??
-          mergedContactDetails?.email ??
-          mergedContactDetails?.phone ??
+          getPrimaryEmail(mergedContactDetails) ??
+          getPrimaryPhone(mergedContactDetails) ??
           '',
     contato_detalhes: mergedContactDetails,
     updated_at: nowIso(),
@@ -270,6 +276,17 @@ export async function getTalhoesByProperty(
 ): Promise<Talhao[]> {
   const all = await listAll<Talhao>(talhoesStore);
   return sortByCreatedAsc(all.filter((row) => row.property_id === propertyId));
+}
+
+export async function getTalhoesByProperties(
+  propertyIds: string[],
+): Promise<Talhao[]> {
+  if (propertyIds.length === 0) return [];
+  const propertyIdSet = new Set(propertyIds);
+  const all = await listAll<Talhao>(talhoesStore);
+  return sortByCreatedAsc(
+    all.filter((row) => propertyIdSet.has(row.property_id)),
+  );
 }
 
 export async function getTalhaoByIdLocal(
@@ -418,6 +435,13 @@ export async function getAllAnalysesLocal(): Promise<AnalysisRow[]> {
       return true;
     }),
   );
+}
+
+export async function getAnalysesByUserLocal(
+  userId: string,
+): Promise<AnalysisRow[]> {
+  const rows = await getAllAnalysesLocal();
+  return rows.filter((row) => !row.user_id || row.user_id === userId);
 }
 
 export async function createAnalysisLocal(

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Avatar,
+  Badge,
   Button,
   Card,
   Container,
@@ -14,10 +15,29 @@ import {
   TextInput,
   Textarea,
 } from '@mantine/core';
+import { useStore } from '@nanostores/react';
 import { IconBuildingStore, IconHome, IconMapPin, IconUpload, IconUser } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
+import { $currUser } from '../../global-state/user';
+import {
+  AVATAR_MARKET_UPDATED_EVENT,
+  clearUploadedAvatarForUser,
+  getRuralAvatarCatalog,
+  getUserAvatarInventory,
+  resolveUserAvatarDisplay,
+  selectRuralAvatarIcon,
+  setUploadedAvatarForUser,
+  unlockRuralAvatarIcon,
+  type RuralAvatarIcon,
+  type UserAvatarInventory,
+} from '../../services/avatarMarketplaceService';
+import {
+  CREDITS_UPDATED_EVENT,
+  getUserCredits,
+  registerAndEnsureUserCredits,
+} from '../../services/creditsService';
 import {
   getProfile,
   updateProfile,
@@ -34,8 +54,24 @@ type ProfileTab =
   | 'nfe'
   | 'observacoes';
 
+const MAX_LOGO_FILE_BYTES = 1_500_000;
+const MAX_AVATAR_FILE_BYTES = 1_500_000;
+const ACCEPTED_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/svg+xml',
+  'image/gif',
+]);
+
 function onlyDigits(value: string): string {
   return value.replace(/\D/g, '');
+}
+
+function isAcceptedImageFile(file: File): boolean {
+  if (!file.type) return false;
+  if (ACCEPTED_IMAGE_TYPES.has(file.type)) return true;
+  return file.type.startsWith('image/');
 }
 
 function buildAddress(producer: ProducerProfile): string {
@@ -66,13 +102,24 @@ function RowField({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export default function ProfilePage() {
+  const user = useStore($currUser);
   const [profile, setProfile] = useState<UserProfileT | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [locating, setLocating] = useState(false);
   const [loadingCep, setLoadingCep] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('identificacao');
+  const [avatarInventory, setAvatarInventory] = useState<UserAvatarInventory | null>(
+    null,
+  );
+  const [avatarDisplay, setAvatarDisplay] = useState<{ src?: string; emoji?: string }>(
+    {},
+  );
+  const [creditBalance, setCreditBalance] = useState(0);
   const navigate = useNavigate();
+  const userId = String(user?.id ?? '').trim();
+  const userEmail = String(user?.email ?? '').trim().toLowerCase();
+  const ruralIcons = getRuralAvatarCatalog();
 
   useEffect(() => {
     (async () => {
@@ -84,6 +131,54 @@ export default function ProfilePage() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!userId || !userEmail) {
+      setAvatarInventory(null);
+      setAvatarDisplay({});
+      setCreditBalance(0);
+      return;
+    }
+
+    registerAndEnsureUserCredits({
+      id: userId,
+      email: userEmail,
+      name: String(user?.user_metadata?.name ?? ''),
+    });
+
+    const refreshAvatarAndCredits = () => {
+      setAvatarInventory(getUserAvatarInventory(userId));
+      setAvatarDisplay(resolveUserAvatarDisplay(userId));
+      setCreditBalance(getUserCredits(userId));
+    };
+
+    const onCreditsUpdated = (event: Event) => {
+      const custom = event as CustomEvent<{ userId?: string }>;
+      if (custom.detail?.userId && custom.detail.userId !== userId) return;
+      refreshAvatarAndCredits();
+    };
+
+    const onAvatarUpdated = (event: Event) => {
+      const custom = event as CustomEvent<{ userId?: string }>;
+      if (custom.detail?.userId && custom.detail.userId !== userId) return;
+      refreshAvatarAndCredits();
+    };
+
+    const onStorage = () => {
+      refreshAvatarAndCredits();
+    };
+
+    refreshAvatarAndCredits();
+    window.addEventListener(CREDITS_UPDATED_EVENT, onCreditsUpdated);
+    window.addEventListener(AVATAR_MARKET_UPDATED_EVENT, onAvatarUpdated);
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      window.removeEventListener(CREDITS_UPDATED_EVENT, onCreditsUpdated);
+      window.removeEventListener(AVATAR_MARKET_UPDATED_EVENT, onAvatarUpdated);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [userId, userEmail, user?.user_metadata?.name]);
 
   if (loading) {
     return (
@@ -129,12 +224,116 @@ export default function ProfilePage() {
       setProfile((prev) => (prev ? { ...prev, logo_url: '' } : prev));
       return;
     }
+
+    if (file.size > MAX_LOGO_FILE_BYTES) {
+      notifications.show({
+        title: 'Arquivo muito grande',
+        message: 'Use uma imagem de ate 1.5 MB para o logotipo.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    if (!isAcceptedImageFile(file)) {
+      notifications.show({
+        title: 'Formato nao suportado',
+        message: 'Use PNG, JPG, WEBP, SVG ou GIF para o logotipo.',
+        color: 'yellow',
+      });
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       const result = String(reader.result ?? '');
       setProfile((prev) => (prev ? { ...prev, logo_url: result } : prev));
     };
+    reader.onerror = () => {
+      notifications.show({
+        title: 'Falha no upload',
+        message: 'Nao foi possivel ler o arquivo do logotipo.',
+        color: 'red',
+      });
+    };
     reader.readAsDataURL(file);
+  };
+
+  const handleUserAvatarFile = (file: File | null) => {
+    if (!userId) return;
+    if (!file) {
+      clearUploadedAvatarForUser(userId);
+      notifications.show({
+        title: 'Avatar removido',
+        message: 'Avatar personalizado removido. O icone rural sera usado.',
+        color: 'blue',
+      });
+      return;
+    }
+
+    if (file.size > MAX_AVATAR_FILE_BYTES) {
+      notifications.show({
+        title: 'Arquivo muito grande',
+        message: 'Use uma imagem de ate 1.5 MB para o avatar.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    if (!isAcceptedImageFile(file)) {
+      notifications.show({
+        title: 'Formato nao suportado',
+        message: 'Use PNG, JPG, WEBP, SVG ou GIF para o avatar.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? '');
+      setUploadedAvatarForUser(userId, result);
+      notifications.show({
+        title: 'Avatar atualizado',
+        message: 'Novo avatar enviado com sucesso.',
+        color: 'teal',
+      });
+    };
+    reader.onerror = () => {
+      notifications.show({
+        title: 'Falha no upload',
+        message: 'Nao foi possivel ler o arquivo do avatar.',
+        color: 'red',
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSelectRuralIcon = (icon: RuralAvatarIcon) => {
+    if (!userId) return;
+    try {
+      const unlocked = avatarInventory?.unlocked_icon_ids.includes(icon.id) ?? false;
+      if (!unlocked) {
+        unlockRuralAvatarIcon(userId, icon.id, userId);
+        notifications.show({
+          title: 'Icone desbloqueado',
+          message: `${icon.label} liberado com custo de ${icon.price_credits} credito.`,
+          color: 'teal',
+        });
+        return;
+      }
+      selectRuralAvatarIcon(userId, icon.id);
+      notifications.show({
+        title: 'Icone selecionado',
+        message: `${icon.label} agora e seu avatar ativo.`,
+        color: 'blue',
+      });
+    } catch (error: any) {
+      notifications.show({
+        title: 'Falha ao atualizar avatar',
+        message: String(error?.message ?? 'Nao foi possivel atualizar avatar.'),
+        color: 'red',
+      });
+    }
   };
 
   const handleLocate = () => {
@@ -330,8 +529,8 @@ export default function ProfilePage() {
             <Avatar radius="md" size="lg" src={profile.logo_url || undefined}>
               <IconBuildingStore size={18} />
             </Avatar>
-            <Avatar radius="xl" size="lg" src={profile.avatar_url || undefined}>
-              <IconUser size={18} />
+            <Avatar radius="xl" size="lg" src={avatarDisplay.src || undefined}>
+              {avatarDisplay.emoji || <IconUser size={18} />}
             </Avatar>
           </Group>
         </Group>
@@ -411,6 +610,49 @@ export default function ProfilePage() {
                       placeholder="Ou informe URL do logotipo"
                     />
                   </Group>
+                </RowField>
+                <RowField label="Avatar do usuario">
+                  <Stack gap="xs">
+                    <Group align="center">
+                      <FileInput
+                        placeholder="Upload de avatar"
+                        leftSection={<IconUpload size={14} />}
+                        onChange={handleUserAvatarFile}
+                        accept="image/*"
+                      />
+                      <Badge color="grape">Saldo: {creditBalance} creditos</Badge>
+                    </Group>
+
+                    <Group gap="xs">
+                      {ruralIcons.map((icon) => {
+                        const isUnlocked =
+                          avatarInventory?.unlocked_icon_ids.includes(icon.id) ?? false;
+                        const isSelected = avatarInventory?.selected_icon_id === icon.id;
+                        return (
+                          <Card key={icon.id} withBorder p="xs" radius="md">
+                            <Stack gap={4} align="center">
+                              <Text size="lg">{icon.emoji}</Text>
+                              <Text size="xs" fw={700}>
+                                {icon.label}
+                              </Text>
+                              <Button
+                                size="xs"
+                                variant={isSelected ? 'filled' : 'light'}
+                                color={isSelected ? 'teal' : 'gray'}
+                                onClick={() => handleSelectRuralIcon(icon)}
+                              >
+                                {isSelected
+                                  ? 'Selecionado'
+                                  : isUnlocked
+                                    ? 'Usar'
+                                    : `Desbloquear (${icon.price_credits})`}
+                              </Button>
+                            </Stack>
+                          </Card>
+                        );
+                      })}
+                    </Group>
+                  </Stack>
                 </RowField>
               </Stack>
             </Card>
