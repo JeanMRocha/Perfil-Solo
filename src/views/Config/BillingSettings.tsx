@@ -31,38 +31,82 @@ export default function BillingSettings() {
   const user = useStore($currUser);
   const [profile, setProfile] = useState<ProfileBilling | null>(null);
   const [loading, setLoading] = useState(true);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutLoadingPriceId, setCheckoutLoadingPriceId] = useState<
+    string | null
+  >(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadProfile = async () => {
+  const canManagePlan = isLocalDataMode || !!user?.id;
+
+  const loadProfile = async () => {
+    setLoadError(null);
+    setLoading(true);
+
+    try {
       if (isLocalDataMode) {
         const saved = localStorage.getItem(LOCAL_BILLING_KEY);
         const parsed = saved ? (JSON.parse(saved) as ProfileBilling) : null;
-        setProfile(parsed ?? {
-          plan_id: 'free',
-          subscription_status: 'active',
-        });
-        setLoading(false);
+        setProfile(
+          parsed ?? {
+            plan_id: 'free',
+            subscription_status: 'active',
+          },
+        );
         return;
       }
 
       if (!user?.id) {
-        setLoading(false);
+        setProfile(null);
         return;
       }
 
-      const { data } = await (supabaseClient as any)
+      const { data, error } = await (supabaseClient as any)
         .from('profiles')
         .select('plan_id,subscription_status')
         .eq('id', user.id)
         .maybeSingle();
 
+      if (error) throw error;
       setProfile(data ?? null);
+    } catch (err: any) {
+      setLoadError(err?.message ?? 'Falha ao carregar assinatura.');
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
+  useEffect(() => {
     void loadProfile();
   }, [user?.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutStatus = params.get('checkout');
+
+    if (checkoutStatus === 'success') {
+      notifications.show({
+        title: 'Pagamento confirmado',
+        message: 'Seu checkout foi concluido. Atualizando status do plano...',
+        color: 'green',
+      });
+      void loadProfile();
+    }
+
+    if (checkoutStatus === 'cancelled') {
+      notifications.show({
+        title: 'Checkout cancelado',
+        message: 'Nenhuma alteracao foi aplicada ao seu plano.',
+        color: 'yellow',
+      });
+    }
+
+    if (checkoutStatus) {
+      params.delete('checkout');
+      const next = params.toString();
+      const nextUrl = `${window.location.pathname}${next ? `?${next}` : ''}`;
+      window.history.replaceState(null, '', nextUrl);
+    }
+  }, []);
 
   const plan = profile?.plan_id ?? user?.user_metadata?.plan_id ?? 'free';
   const status =
@@ -71,6 +115,8 @@ export default function BillingSettings() {
     'inactive';
 
   const handleSubscribe = async (priceId: string) => {
+    if (!canManagePlan) return;
+
     if (isLocalDataMode) {
       const nextPlan: ProfileBilling['plan_id'] =
         priceId === PUBLIC_PRICE_ENTERPRISE ? 'enterprise' : 'pro';
@@ -88,7 +134,7 @@ export default function BillingSettings() {
       return;
     }
 
-    setCheckoutLoading(true);
+    setCheckoutLoadingPriceId(priceId);
     try {
       const { data, error } = await supabaseClient.functions.invoke(
         'create-checkout-session',
@@ -115,8 +161,32 @@ export default function BillingSettings() {
         color: 'red',
       });
     } finally {
-      setCheckoutLoading(false);
+      setCheckoutLoadingPriceId(null);
     }
+  };
+
+  const handleDowngradeToFree = () => {
+    if (!isLocalDataMode) {
+      notifications.show({
+        title: 'Ajuste de plano',
+        message:
+          'Para downgrade em producao, cancele a assinatura no portal Stripe.',
+        color: 'blue',
+      });
+      return;
+    }
+
+    const localProfile: ProfileBilling = {
+      plan_id: 'free',
+      subscription_status: 'active',
+    };
+    localStorage.setItem(LOCAL_BILLING_KEY, JSON.stringify(localProfile));
+    setProfile(localProfile);
+    notifications.show({
+      title: 'Modo local',
+      message: 'Plano FREE aplicado localmente.',
+      color: 'teal',
+    });
   };
 
   return (
@@ -129,6 +199,11 @@ export default function BillingSettings() {
         {loading ? (
           <Text c="dimmed" size="sm">
             Carregando status da assinatura...
+          </Text>
+        ) : null}
+        {loadError ? (
+          <Text c="red" size="sm">
+            {loadError}
           </Text>
         ) : null}
       </Stack>
@@ -154,7 +229,12 @@ export default function BillingSettings() {
           <Text fw={700} size="xl" mb="md">
             R$ 0/mes
           </Text>
-          <Button fullWidth variant="default" disabled={plan === 'free'}>
+          <Button
+            fullWidth
+            variant="default"
+            disabled={loading || !canManagePlan || plan === 'free'}
+            onClick={handleDowngradeToFree}
+          >
             {plan === 'free' ? 'Plano Atual' : 'Downgrade'}
           </Button>
         </Card>
@@ -176,9 +256,9 @@ export default function BillingSettings() {
           </Text>
           <Button
             fullWidth
-            loading={checkoutLoading}
+            loading={checkoutLoadingPriceId === PUBLIC_PRICE_PRO}
             onClick={() => handleSubscribe(PUBLIC_PRICE_PRO)}
-            disabled={plan === 'pro'}
+            disabled={loading || !canManagePlan || plan === 'pro'}
           >
             {plan === 'pro' ? 'Plano Atual' : 'Assinar Pro'}
           </Button>
@@ -198,8 +278,9 @@ export default function BillingSettings() {
             fullWidth
             variant="light"
             color="grape"
-            loading={checkoutLoading}
+            loading={checkoutLoadingPriceId === PUBLIC_PRICE_ENTERPRISE}
             onClick={() => handleSubscribe(PUBLIC_PRICE_ENTERPRISE)}
+            disabled={loading || !canManagePlan}
           >
             Falar com Vendas
           </Button>

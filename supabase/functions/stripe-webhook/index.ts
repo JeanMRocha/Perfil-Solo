@@ -1,6 +1,10 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import Stripe from 'https://esm.sh/stripe@11.1.0?target=deno';
+import {
+  buildProfileSubscriptionUpdate,
+  resolvePlanFromPrice,
+} from '../_shared/billingLogic.ts';
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
   apiVersion: '2022-11-15',
@@ -44,10 +48,11 @@ serve(async (req) => {
           ? subscription.customer
           : subscription.customer.id;
 
-      let planId: 'free' | 'pro' | 'enterprise' = 'free';
-      if (priceId === Deno.env.get('STRIPE_PRICE_PRO')) planId = 'pro';
-      if (priceId === Deno.env.get('STRIPE_PRICE_ENTERPRISE'))
-        planId = 'enterprise';
+      const planId = resolvePlanFromPrice(
+        priceId,
+        Deno.env.get('STRIPE_PRICE_PRO'),
+        Deno.env.get('STRIPE_PRICE_ENTERPRISE'),
+      );
 
       let userId: string | null = metadataUserId ?? null;
       if (!userId) {
@@ -62,16 +67,15 @@ serve(async (req) => {
       if (userId) {
         await supabase
           .from('profiles')
-          .update({
-            plan_id: status === 'active' ? planId : 'free',
-            subscription_status: status,
-            stripe_customer_id: customerId,
-            stripe_subscription_id: subscription.id,
-            current_period_end: subscription.current_period_end
-              ? new Date(subscription.current_period_end * 1000).toISOString()
-              : null,
-            updated_at: new Date().toISOString(),
-          })
+          .update(
+            buildProfileSubscriptionUpdate({
+              status,
+              planId,
+              customerId,
+              subscriptionId: subscription.id,
+              currentPeriodEnd: subscription.current_period_end,
+            }),
+          )
           .eq('id', userId);
       }
       break;
