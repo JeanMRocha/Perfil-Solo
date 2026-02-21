@@ -28,8 +28,52 @@ type NotificationInsertInput = {
   expires_at?: string | null;
 };
 
+type TemporaryNotificationTemplate = {
+  title: string;
+  message: string;
+  level: AppNotificationLevel;
+  expires_in_days: number;
+};
+
+const TEMP_PROGRESS_NOTIFICATIONS: TemporaryNotificationTemplate[] = [
+  {
+    title: 'Trilha Fase 1 ativa',
+    message:
+      'A base gamificada foi iniciada. Cards e graficos antigos foram removidos para reconstruir o painel.',
+    level: 'success',
+    expires_in_days: 30,
+  },
+  {
+    title: 'Missao em progresso: propriedades',
+    message:
+      'Definir mapa de propriedades e talhoes como base de jogo. Esta missao e temporaria e pode mudar por fase.',
+    level: 'info',
+    expires_in_days: 30,
+  },
+  {
+    title: 'Missao em progresso: analises',
+    message:
+      'Conectar o fluxo de analises ao novo painel gamificado. Notificacao temporaria para acompanhamento da fase.',
+    level: 'info',
+    expires_in_days: 30,
+  },
+  {
+    title: 'Missao pendente: economia',
+    message:
+      'Adicionar conquistas e moedas no loop principal do produto. Item temporario para planejamento da fase atual.',
+    level: 'warning',
+    expires_in_days: 30,
+  },
+];
+
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function addDaysIso(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
 }
 
 function toTime(dateLike: string | null | undefined): number {
@@ -237,5 +281,39 @@ export async function deleteNotification(
 export async function clearAllNotifications(userId: string): Promise<void> {
   if (writeRows(userId, [])) {
     emitUpdated(userId);
+  }
+}
+
+export async function ensureTemporaryProgressNotifications(
+  userId: string,
+): Promise<void> {
+  const normalizedUserId = cleanText(userId, 120, '');
+  if (!normalizedUserId) return;
+
+  const rows = readRows(normalizedUserId);
+  const existingSignatures = new Set(
+    rows.map((row) => `${row.title}::${row.message}`),
+  );
+
+  const missing = TEMP_PROGRESS_NOTIFICATIONS.filter((template) => {
+    const signature = `${template.title}::${template.message}`;
+    return !existingSignatures.has(signature);
+  });
+
+  if (missing.length === 0) return;
+
+  const createdRows: AppNotification[] = missing.map((template) => ({
+    id: createId(),
+    user_id: normalizedUserId,
+    title: template.title,
+    message: template.message,
+    level: template.level,
+    created_at: nowIso(),
+    read_at: null,
+    expires_at: addDaysIso(template.expires_in_days),
+  }));
+
+  if (writeRows(normalizedUserId, [...createdRows, ...rows])) {
+    emitUpdated(normalizedUserId);
   }
 }

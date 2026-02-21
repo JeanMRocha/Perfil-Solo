@@ -6,6 +6,8 @@ import {
   Container,
   Group,
   Modal,
+  MultiSelect,
+  SegmentedControl,
   SimpleGrid,
   Stack,
   Text,
@@ -16,43 +18,99 @@ import { useStore } from '@nanostores/react';
 import PageHeader from '../../components/PageHeader';
 import ContactInfoModal from '../../components/modals/ContactInfoModal';
 import { $currUser } from '../../global-state/user';
+import {
+  PERSON_TYPE_META_LIST,
+  getPersonTypeColor,
+  getPersonTypeLabel,
+  normalizePersonTypes,
+  type PersonTypeIdentifier,
+} from '../../modules/people';
 import { isLocalDataMode } from '../../services/dataProvider';
 import {
-  createClient,
-  deleteClient,
-  listClientsByUser,
-  type ClientRecord,
-  updateClient,
-} from '../../services/clientsService';
+  createPerson,
+  deletePerson,
+  listPeopleByUser,
+  removePersonType,
+  type PersonRecord,
+  updatePerson,
+} from '../../services/peopleService';
 import type { ContactInfo } from '../../types/contact';
 
-interface ClientesProps {
+interface PessoasProps {
   startInCreateMode?: boolean;
+  fixedType?: PersonTypeIdentifier | null;
 }
 
-export default function Clientes({ startInCreateMode = false }: ClientesProps) {
+type FilterType = 'all' | PersonTypeIdentifier;
+
+function titleFromType(type: PersonTypeIdentifier | null): string {
+  if (!type) return 'Pessoas';
+  if (type === 'customer') return 'Clientes';
+  return getPersonTypeLabel(type);
+}
+
+function descriptionFromType(type: PersonTypeIdentifier | null): string {
+  if (!type) {
+    return 'Modulo central de pessoas para reutilizar em clientes, fornecedores e perfis.';
+  }
+  if (type === 'customer') {
+    return 'Cadastro de clientes reutilizavel em relatorios e propriedades.';
+  }
+  return `Cadastro de ${getPersonTypeLabel(type).toLowerCase()} reutilizavel em outros modulos.`;
+}
+
+function fixedTypesOrDraft(
+  fixedType: PersonTypeIdentifier | null,
+  draftTypes: string[],
+): PersonTypeIdentifier[] {
+  if (fixedType) return [fixedType];
+  return normalizePersonTypes(draftTypes, ['customer']);
+}
+
+export default function PessoasHub({
+  startInCreateMode = false,
+  fixedType = null,
+}: PessoasProps) {
   const user = useStore($currUser);
   const currentUserId = user?.id ?? (isLocalDataMode ? 'local-user' : null);
+  const fixed = fixedType ?? null;
+  const title = titleFromType(fixed);
+  const description = descriptionFromType(fixed);
 
-  const [clients, setClients] = useState<ClientRecord[]>([]);
+  const [people, setPeople] = useState<PersonRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpened, setModalOpened] = useState(false);
   const [draftName, setDraftName] = useState('');
-  const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [draftDocument, setDraftDocument] = useState('');
+  const [draftTypes, setDraftTypes] = useState<string[]>(fixed ? [fixed] : ['customer']);
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [contactModalOpened, setContactModalOpened] = useState(false);
-  const [contactClientId, setContactClientId] = useState<string | null>(null);
+  const [contactPersonId, setContactPersonId] = useState<string | null>(null);
   const [savingContact, setSavingContact] = useState(false);
+  const [filterType, setFilterType] = useState<FilterType>(fixed ?? 'all');
 
-  const editingClient = useMemo(
-    () => clients.find((client) => client.id === editingClientId) ?? null,
-    [clients, editingClientId],
+  const editingPerson = useMemo(
+    () => people.find((person) => person.id === editingPersonId) ?? null,
+    [people, editingPersonId],
   );
-  const contactClient = useMemo(
-    () => clients.find((client) => client.id === contactClientId) ?? null,
-    [clients, contactClientId],
+  const contactPerson = useMemo(
+    () => people.find((person) => person.id === contactPersonId) ?? null,
+    [people, contactPersonId],
   );
+
+  const filteredPeople = useMemo(() => {
+    if (fixed) return people.filter((person) => person.types.includes(fixed));
+    if (filterType === 'all') return people;
+    return people.filter((person) => person.types.includes(filterType));
+  }, [people, filterType, fixed]);
+
+  useEffect(() => {
+    if (fixed) {
+      setFilterType(fixed);
+    }
+  }, [fixed]);
 
   useEffect(() => {
     let alive = true;
@@ -60,9 +118,9 @@ export default function Clientes({ startInCreateMode = false }: ClientesProps) {
       if (!currentUserId) return;
       setLoading(true);
       try {
-        const rows = await listClientsByUser(currentUserId);
+        const rows = await listPeopleByUser(currentUserId);
         if (!alive) return;
-        setClients(rows);
+        setPeople(rows);
       } finally {
         if (alive) setLoading(false);
       }
@@ -75,35 +133,51 @@ export default function Clientes({ startInCreateMode = false }: ClientesProps) {
 
   useEffect(() => {
     if (!startInCreateMode) return;
-    setEditingClientId(null);
+    setEditingPersonId(null);
     setDraftName('');
+    setDraftDocument('');
+    setDraftTypes(fixed ? [fixed] : ['customer']);
     setModalOpened(true);
-  }, [startInCreateMode]);
+  }, [startInCreateMode, fixed]);
 
   const openCreateModal = () => {
-    setEditingClientId(null);
+    setEditingPersonId(null);
     setDraftName('');
+    setDraftDocument('');
+    setDraftTypes(fixed ? [fixed] : ['customer']);
     setModalOpened(true);
   };
 
-  const openEditModal = (client: ClientRecord) => {
-    setEditingClientId(client.id);
-    setDraftName(client.nome);
+  const openEditModal = (person: PersonRecord) => {
+    setEditingPersonId(person.id);
+    setDraftName(person.name);
+    setDraftDocument(person.document ?? '');
+    setDraftTypes(fixed ? [fixed] : person.types);
     setModalOpened(true);
   };
 
-  const openContactModal = (client: ClientRecord) => {
-    setContactClientId(client.id);
+  const openContactModal = (person: PersonRecord) => {
+    setContactPersonId(person.id);
     setContactModalOpened(true);
   };
 
-  const handleSaveClient = async () => {
+  const handleSavePerson = async () => {
     if (!currentUserId) return;
-    const nome = draftName.trim();
-    if (nome.length < 3) {
+    const name = draftName.trim();
+    if (name.length < 3) {
       notifications.show({
         title: 'Nome invalido',
-        message: 'Use pelo menos 3 caracteres para o nome do cliente.',
+        message: 'Use pelo menos 3 caracteres para o nome da pessoa.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    const types = fixedTypesOrDraft(fixed, draftTypes);
+    if (!types.length) {
+      notifications.show({
+        title: 'Tipo obrigatorio',
+        message: 'Selecione ao menos um identificador para a pessoa.',
         color: 'yellow',
       });
       return;
@@ -111,30 +185,39 @@ export default function Clientes({ startInCreateMode = false }: ClientesProps) {
 
     try {
       setSaving(true);
-      if (!editingClientId) {
-        const created = await createClient({ userId: currentUserId, nome });
-        setClients((prev) => [created, ...prev]);
+      if (!editingPersonId) {
+        const created = await createPerson({
+          userId: currentUserId,
+          name,
+          document: draftDocument.trim(),
+          types,
+        });
+        setPeople((prev) => [created, ...prev]);
         notifications.show({
-          title: 'Cliente criado',
-          message: `${created.nome} adicionado com sucesso.`,
+          title: 'Pessoa criada',
+          message: `${created.name} adicionada com sucesso.`,
           color: 'green',
         });
       } else {
-        const updated = await updateClient(editingClientId, { nome });
-        setClients((prev) =>
-          prev.map((client) => (client.id === updated.id ? updated : client)),
+        const updated = await updatePerson(editingPersonId, {
+          name,
+          document: draftDocument.trim(),
+          types,
+        });
+        setPeople((prev) =>
+          prev.map((person) => (person.id === updated.id ? updated : person)),
         );
         notifications.show({
-          title: 'Cliente atualizado',
-          message: `${updated.nome} atualizado com sucesso.`,
+          title: 'Pessoa atualizada',
+          message: `${updated.name} atualizada com sucesso.`,
           color: 'green',
         });
       }
       setModalOpened(false);
     } catch (err: any) {
       notifications.show({
-        title: 'Falha ao salvar cliente',
-        message: err?.message ?? 'Nao foi possivel salvar cliente.',
+        title: 'Falha ao salvar pessoa',
+        message: err?.message ?? 'Nao foi possivel salvar pessoa.',
         color: 'red',
       });
     } finally {
@@ -142,36 +225,40 @@ export default function Clientes({ startInCreateMode = false }: ClientesProps) {
     }
   };
 
-  const handleDeleteClient = async (clientId: string) => {
+  const handleDeletePerson = async (person: PersonRecord) => {
     try {
-      await deleteClient(clientId);
-      setClients((prev) => prev.filter((client) => client.id !== clientId));
+      if (fixed) {
+        await removePersonType(person.id, fixed, { deleteIfNoTypes: true });
+      } else {
+        await deletePerson(person.id);
+      }
+      setPeople((prev) => prev.filter((row) => row.id !== person.id));
       notifications.show({
-        title: 'Cliente removido',
-        message: 'Cliente excluido com sucesso.',
+        title: 'Pessoa removida',
+        message: 'Pessoa excluida com sucesso.',
         color: 'green',
       });
     } catch (err: any) {
       notifications.show({
-        title: 'Falha ao excluir cliente',
-        message: err?.message ?? 'Nao foi possivel excluir cliente.',
+        title: 'Falha ao excluir pessoa',
+        message: err?.message ?? 'Nao foi possivel excluir pessoa.',
         color: 'red',
       });
     }
   };
 
   const handleSaveContact = async (contact: ContactInfo) => {
-    if (!contactClientId) return;
+    if (!contactPersonId) return;
     try {
       setSavingContact(true);
-      const updated = await updateClient(contactClientId, { contact });
-      setClients((prev) =>
-        prev.map((client) => (client.id === updated.id ? updated : client)),
+      const updated = await updatePerson(contactPersonId, { contact });
+      setPeople((prev) =>
+        prev.map((person) => (person.id === updated.id ? updated : person)),
       );
       setContactModalOpened(false);
       notifications.show({
         title: 'Contato atualizado',
-        message: `Contato de ${updated.nome} salvo com sucesso.`,
+        message: `Contato de ${updated.name} salvo com sucesso.`,
         color: 'green',
       });
     } catch (err: any) {
@@ -185,85 +272,138 @@ export default function Clientes({ startInCreateMode = false }: ClientesProps) {
     }
   };
 
+  const segmentedData = [
+    { value: 'all', label: 'Todos' },
+    ...PERSON_TYPE_META_LIST.map((row) => ({
+      value: row.id,
+      label: row.label,
+    })),
+  ];
+
   return (
-    <Container size="md" mt="xl">
-      <PageHeader title="Clientes" />
+    <Container size="lg" mt="xl">
+      <PageHeader title={title} />
 
       <ContactInfoModal
         opened={contactModalOpened}
         onClose={() => setContactModalOpened(false)}
         onSave={handleSaveContact}
-        value={contactClient?.contact ?? {}}
+        value={contactPerson?.contact ?? {}}
         saving={savingContact}
-        title="Contato do cliente"
-        subtitle="Dados para compartilhar laudos e resultados."
+        title="Contato da pessoa"
+        subtitle="Dados para compartilhamento e reaproveitamento em outros modulos."
       />
 
       <Modal
         opened={modalOpened}
         onClose={() => setModalOpened(false)}
-        title={editingClient ? 'Editar cliente' : 'Novo cliente'}
+        title={editingPerson ? 'Editar pessoa' : 'Nova pessoa'}
         centered
       >
         <Stack>
           <TextInput
-            label="Nome do cliente"
+            label="Nome"
             value={draftName}
             onChange={(event) => setDraftName(event.currentTarget.value)}
             placeholder="Ex.: Fazenda Boa Esperanca"
           />
+          <TextInput
+            label="Documento (CPF/CNPJ)"
+            value={draftDocument}
+            onChange={(event) => setDraftDocument(event.currentTarget.value)}
+            placeholder="Opcional"
+          />
+          <MultiSelect
+            label="Identificadores"
+            data={PERSON_TYPE_META_LIST.map((row) => ({
+              value: row.id,
+              label: row.label,
+            }))}
+            value={fixed ? [fixed] : draftTypes}
+            onChange={(value) => setDraftTypes(value)}
+            disabled={Boolean(fixed)}
+            searchable
+            clearable={!fixed}
+            placeholder="Selecione os tipos da pessoa"
+          />
+          {fixed ? (
+            <Text size="xs" c="dimmed">
+              Este cadastro esta fixo como {getPersonTypeLabel(fixed).toLowerCase()}.
+            </Text>
+          ) : null}
           <Group justify="flex-end">
             <Button variant="light" color="gray" onClick={() => setModalOpened(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveClient} loading={saving}>
-              Salvar cliente
+            <Button onClick={handleSavePerson} loading={saving}>
+              Salvar pessoa
             </Button>
           </Group>
         </Stack>
       </Modal>
 
-      <Group justify="space-between" mb="md">
-        <Text c="dimmed">
-          Cadastro de clientes com contato reaproveitavel nos relatorios.
-        </Text>
-        <Button onClick={openCreateModal}>Novo cliente</Button>
+      <Group justify="space-between" mb="sm" mt="sm" wrap="wrap">
+        <Text c="dimmed">{description}</Text>
+        <Button onClick={openCreateModal}>Nova pessoa</Button>
       </Group>
 
+      {!fixed ? (
+        <Group mb="md">
+          <SegmentedControl
+            value={filterType}
+            onChange={(value) => setFilterType(value as FilterType)}
+            data={segmentedData}
+            size="xs"
+          />
+        </Group>
+      ) : null}
+
       {loading ? (
-        <Text c="dimmed">Carregando clientes...</Text>
-      ) : clients.length === 0 ? (
-        <Text c="dimmed">Nenhum cliente cadastrado ainda.</Text>
+        <Text c="dimmed">Carregando pessoas...</Text>
+      ) : filteredPeople.length === 0 ? (
+        <Text c="dimmed">Nenhuma pessoa cadastrada ainda.</Text>
       ) : (
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          {clients.map((client) => (
-            <Card key={client.id} withBorder radius="md" p="md">
+          {filteredPeople.map((person) => (
+            <Card key={person.id} withBorder radius="md" p="md">
               <Stack gap={6}>
                 <Group justify="space-between">
-                  <Text fw={700}>{client.nome}</Text>
-                  <Badge color="indigo">Cliente</Badge>
+                  <Text fw={700}>{person.name}</Text>
+                  <Group gap={4}>
+                    {person.types.map((type) => (
+                      <Badge key={`${person.id}-${type}`} color={getPersonTypeColor(type)}>
+                        {getPersonTypeLabel(type)}
+                      </Badge>
+                    ))}
+                  </Group>
                 </Group>
                 <Text size="sm" c="dimmed">
-                  Email: {client.contact.email || '-'}
+                  Documento: {person.document || '-'}
                 </Text>
                 <Text size="sm" c="dimmed">
-                  Telefone: {client.contact.phone || '-'}
+                  Email: {person.contact.email || '-'}
                 </Text>
                 <Text size="sm" c="dimmed">
-                  Endereco: {client.contact.address || '-'}
+                  Telefone: {person.contact.phone || '-'}
+                </Text>
+                <Text size="sm" c="dimmed">
+                  Site: {person.contact.website || '-'}
+                </Text>
+                <Text size="sm" c="dimmed">
+                  Endereco: {person.contact.address || '-'}
                 </Text>
                 <Group mt="xs">
-                  <Button size="xs" variant="light" onClick={() => openEditModal(client)}>
-                    Editar nome
+                  <Button size="xs" variant="light" onClick={() => openEditModal(person)}>
+                    Editar
                   </Button>
-                  <Button size="xs" variant="light" onClick={() => openContactModal(client)}>
+                  <Button size="xs" variant="light" onClick={() => openContactModal(person)}>
                     Contato
                   </Button>
                   <Button
                     size="xs"
                     color="red"
                     variant="light"
-                    onClick={() => handleDeleteClient(client.id)}
+                    onClick={() => void handleDeletePerson(person)}
                   >
                     Excluir
                   </Button>

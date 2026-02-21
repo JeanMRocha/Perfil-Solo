@@ -1,6 +1,11 @@
 import { isLocalDataMode } from './dataProvider';
 import { supabaseClient } from '../supabase/supabaseClient';
 import { storageReadJson, storageWriteJson } from './safeLocalStorage';
+import {
+  isLocalObservabilityEnabled,
+  isRemoteObservabilityEnabled,
+  shouldCaptureObservability,
+} from './observabilityConfig';
 
 const LOCAL_AUDIT_KEY = 'perfilsolo_local_audit_logs';
 
@@ -25,12 +30,17 @@ function appendLocalAudit(entry: AuditLogEntry) {
 
 export class AuditService {
   static async log(entry: AuditLogEntry) {
-    if (isLocalDataMode) {
+    if (!shouldCaptureObservability('audit')) return;
+
+    const shouldPersistLocal =
+      isLocalObservabilityEnabled() || isLocalDataMode || !isRemoteObservabilityEnabled();
+
+    if (shouldPersistLocal) {
       appendLocalAudit(entry);
       console.log(
         `[Audit][local] ${entry.action} em ${entry.table_name} (${entry.record_id}) registrado.`,
       );
-      return;
+      if (!isRemoteObservabilityEnabled()) return;
     }
 
     try {

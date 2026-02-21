@@ -1,8 +1,6 @@
 import { supabaseClient } from '../supabase/supabaseClient';
 import type { Property, Talhao } from '../types/property';
 import {
-  getPrimaryEmail,
-  getPrimaryPhone,
   type ContactInfo,
 } from '../types/contact';
 import { isLocalDataMode } from './dataProvider';
@@ -23,6 +21,7 @@ import {
   updateTalhaoLocal,
   updatePropertyLocal,
 } from './localDb';
+import { claimCreditEngagementReward } from './creditsService';
 
 export type MapPoint = {
   x: number;
@@ -298,24 +297,25 @@ export async function createPropertyForUser(
   patch?: Partial<Property>,
 ): Promise<Property> {
   if (isLocalDataMode) {
-    return createPropertyLocal({ userId, nome, contact, patch });
+    const created = await createPropertyLocal({ userId, nome, contact, patch });
+    claimCreditEngagementReward({
+      user_id: userId,
+      rule_id: 'property_created',
+      created_by: userId,
+      reference_id: created.id,
+    });
+    return created;
   }
 
-  const resolvedContact = contact ?? patch?.contato_detalhes;
   const basePayload: Record<string, unknown> = {
     user_id: userId,
     nome,
-    contato:
-      getPrimaryEmail(resolvedContact) ?? getPrimaryPhone(resolvedContact) ?? null,
   };
   if (patch?.cidade !== undefined) basePayload.cidade = patch.cidade;
   if (patch?.estado !== undefined) basePayload.estado = patch.estado;
   if (patch?.total_area !== undefined) basePayload.total_area = patch.total_area;
 
   const extendedPayload: Record<string, unknown> = { ...basePayload };
-  if (patch?.contato_detalhes !== undefined) {
-    extendedPayload.contato_detalhes = patch.contato_detalhes;
-  }
   if (patch?.proprietario_principal !== undefined) {
     extendedPayload.proprietario_principal = patch.proprietario_principal;
   }
@@ -336,7 +336,6 @@ export async function createPropertyForUser(
   }
 
   const hasExtendedFields =
-    patch?.contato_detalhes !== undefined ||
     patch?.proprietario_principal !== undefined ||
     patch?.documentos !== undefined ||
     patch?.fiscal !== undefined ||
@@ -362,7 +361,14 @@ export async function createPropertyForUser(
   }
 
   if (error) throw error;
-  return data as Property;
+  const created = data as Property;
+  claimCreditEngagementReward({
+    user_id: userId,
+    rule_id: 'property_created',
+    created_by: userId,
+    reference_id: created.id,
+  });
+  return created;
 }
 
 export async function updatePropertyForUser(
@@ -375,23 +381,15 @@ export async function updatePropertyForUser(
     return updatePropertyLocal({ propertyId, nome, contact, patch });
   }
 
-  const resolvedContact = contact ?? patch?.contato_detalhes;
   const basePayload: Record<string, unknown> = {
     nome,
     updated_at: new Date().toISOString(),
   };
-  if (resolvedContact != null) {
-    basePayload.contato =
-      getPrimaryEmail(resolvedContact) ?? getPrimaryPhone(resolvedContact) ?? null;
-  }
   if (patch?.cidade !== undefined) basePayload.cidade = patch.cidade;
   if (patch?.estado !== undefined) basePayload.estado = patch.estado;
   if (patch?.total_area !== undefined) basePayload.total_area = patch.total_area;
 
   const extendedPayload: Record<string, unknown> = { ...basePayload };
-  if (patch?.contato_detalhes !== undefined) {
-    extendedPayload.contato_detalhes = patch.contato_detalhes;
-  }
   if (patch?.proprietario_principal !== undefined) {
     extendedPayload.proprietario_principal = patch.proprietario_principal;
   }
@@ -412,7 +410,6 @@ export async function updatePropertyForUser(
   }
 
   const hasExtendedFields =
-    patch?.contato_detalhes !== undefined ||
     patch?.proprietario_principal !== undefined ||
     patch?.documentos !== undefined ||
     patch?.fiscal !== undefined ||
@@ -594,6 +591,16 @@ export async function createTalhaoForProperty(input: {
       historico_culturas: input.historico_culturas,
     });
     await syncPropertyTotalArea(input.propertyId);
+    const property = await findPropertyByIdForSync(input.propertyId);
+    const ownerUserId = String(property?.user_id ?? '').trim();
+    if (ownerUserId) {
+      claimCreditEngagementReward({
+        user_id: ownerUserId,
+        rule_id: 'talhao_created',
+        created_by: ownerUserId,
+        reference_id: created.id,
+      });
+    }
     return created;
   }
 
@@ -614,6 +621,16 @@ export async function createTalhaoForProperty(input: {
   if (error) throw error;
   const created = data as Talhao;
   await syncPropertyTotalArea(input.propertyId);
+  const property = await findPropertyByIdForSync(input.propertyId);
+  const ownerUserId = String(property?.user_id ?? '').trim();
+  if (ownerUserId) {
+    claimCreditEngagementReward({
+      user_id: ownerUserId,
+      rule_id: 'talhao_created',
+      created_by: ownerUserId,
+      reference_id: created.id,
+    });
+  }
   return created;
 }
 

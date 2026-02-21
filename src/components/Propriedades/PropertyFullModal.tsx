@@ -19,12 +19,21 @@ import { IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { formatCep, lookupAddressByCep, normalizeCep } from '../../services/cepService';
 import { listClientsByUser, type ClientRecord } from '../../services/clientsService';
 import {
+  createEmptyContactAddressDraft,
+  mapContactAddressDrafts,
+  normalizeContactAddressDrafts,
+  type ContactAddressDraft,
+} from '../../modules/address';
+import {
+  mapCanonicalPointsToContactInfo,
+  mapContactInfoToCanonicalPoints,
+} from '../../modules/contact';
+import {
   listPropertyAreaCategories,
   subscribePropertyAreaCategories,
   type PropertyAreaCategory,
 } from '../../services/propertyAreaCategoriesService';
 import type {
-  ContactAddress,
   ContactChannel,
   ContactInfo,
   ContactSocialLink,
@@ -89,19 +98,6 @@ type ContactSocialDraft = {
   id: string;
   network: string;
   url: string;
-};
-
-type ContactAddressDraft = {
-  id: string;
-  label: string;
-  cep: string;
-  state: string;
-  city: string;
-  neighborhood: string;
-  address: string;
-  address_number: string;
-  address_complement: string;
-  ibge_code: string;
 };
 
 type PropertyFormDraft = {
@@ -209,93 +205,31 @@ function mapContactChannelsDraft(
   return [{ id: createLocalId('contact-item'), label: 'Principal', value: fallback }];
 }
 
-function normalizeContactAddresses(
-  addresses: ContactAddress[] | undefined,
-): ContactAddressDraft[] {
-  if (!Array.isArray(addresses) || addresses.length === 0) return [];
-  return addresses
-    .map((row) => ({
-      id: toText(row?.id) || createLocalId('address-item'),
-      label: toText(row?.label),
-      cep: formatCep(row?.cep),
-      state: toText(row?.state),
-      city: toText(row?.city),
-      neighborhood: toText(row?.neighborhood),
-      address: toText(row?.address),
-      address_number: toText(row?.address_number),
-      address_complement: toText(row?.address_complement),
-      ibge_code: toText(row?.ibge_code),
-    }))
-    .filter(
-      (row) =>
-        Boolean(
-          row.label ||
-            row.cep ||
-            row.state ||
-            row.city ||
-            row.neighborhood ||
-            row.address ||
-            row.address_number ||
-            row.address_complement ||
-            row.ibge_code,
-        ),
-    );
-}
-
-function mapContactAddressesDraft(
-  addresses: ContactAddress[] | undefined,
-  fallback: {
-    cep?: string;
-    neighborhood?: string;
-    address?: string;
-    address_number?: string;
-    address_complement?: string;
-    city?: string;
-    state?: string;
-  },
-): ContactAddressDraft[] {
-  const normalized = normalizeContactAddresses(addresses);
-  if (normalized.length > 0) return normalized;
-  const hasFallback = Boolean(
-    toText(fallback.cep) ||
-      toText(fallback.neighborhood) ||
-      toText(fallback.address) ||
-      toText(fallback.address_number) ||
-      toText(fallback.address_complement) ||
-      toText(fallback.city) ||
-      toText(fallback.state),
-  );
-  if (!hasFallback) return [];
-  return [
-    {
-      id: createLocalId('address-item'),
-      label: 'Principal',
-      cep: formatCep(fallback.cep),
-      state: toText(fallback.state),
-      city: toText(fallback.city),
-      neighborhood: toText(fallback.neighborhood),
-      address: toText(fallback.address),
-      address_number: toText(fallback.address_number),
-      address_complement: toText(fallback.address_complement),
-      ibge_code: '',
-    },
-  ];
-}
-
 function normalizeContact(contact: ContactInfo): ContactInfo | undefined {
-  const emails = normalizeContactChannels(contact.emails);
-  const phones = normalizeContactChannels(contact.phones);
-  const socialLinks = normalizeSocialLinks(contact.social_links);
-  const addresses = normalizeContactAddresses(contact.addresses);
+  const contactPoints = mapContactInfoToCanonicalPoints(contact);
+  const normalizedByModule = mapCanonicalPointsToContactInfo(
+    contactPoints,
+    contact,
+  );
+  const emails = normalizeContactChannels(normalizedByModule.emails);
+  const phones = normalizeContactChannels(normalizedByModule.phones);
+  const socialLinks = normalizeSocialLinks(normalizedByModule.social_links);
+  const addresses = normalizeContactAddressDrafts(contact.addresses, createLocalId);
   const primaryAddress = addresses[0];
-  const primaryEmail = emails[0]?.value ?? toText(contact.email);
-  const primaryPhone = phones[0]?.value ?? toText(contact.phone);
+  const primaryEmail = emails[0]?.value ?? toText(normalizedByModule.email);
+  const primaryPhone = phones[0]?.value ?? toText(normalizedByModule.phone);
+  const website = toText(normalizedByModule.website);
 
   const normalized: ContactInfo = {
     email: primaryEmail || undefined,
     phone: primaryPhone || undefined,
+    website: website || undefined,
     emails: emails.length > 0 ? emails : undefined,
     phones: phones.length > 0 ? phones : undefined,
+    websites:
+      normalizedByModule.websites && normalizedByModule.websites.length > 0
+        ? normalizedByModule.websites
+        : undefined,
     social_links: socialLinks.length > 0 ? socialLinks : undefined,
     addresses: addresses.length > 0 ? addresses : undefined,
     cep: primaryAddress?.cep || formatCep(contact.cep),
@@ -310,6 +244,7 @@ function normalizeContact(contact: ContactInfo): ContactInfo | undefined {
     !primaryPhone &&
     emails.length === 0 &&
     phones.length === 0 &&
+    !website &&
     socialLinks.length === 0 &&
     addresses.length === 0 &&
     !normalized.cep &&
@@ -457,7 +392,9 @@ function buildInitialDraft(property?: Property | null): PropertyFormDraft {
       emails: mapContactChannelsDraft(contact.emails, contact.email),
       phones: mapContactChannelsDraft(contact.phones, contact.phone),
       social_links: normalizeSocialLinks(contact.social_links),
-      addresses: mapContactAddressesDraft(contact.addresses, {
+      addresses: mapContactAddressDrafts(
+        contact.addresses,
+        {
         cep: contact.cep,
         neighborhood: contact.neighborhood,
         address: contact.address,
@@ -465,7 +402,9 @@ function buildInitialDraft(property?: Property | null): PropertyFormDraft {
         address_complement: contact.address_complement,
         city: property?.cidade,
         state: property?.estado,
-      }),
+        },
+        createLocalId,
+      ),
     },
     proprietario: property?.proprietario_principal ?? null,
     documentos: property?.documentos ?? {},
@@ -824,18 +763,7 @@ export default function PropertyFullModal({
         ...prev.contato,
         addresses: [
           ...(prev.contato.addresses ?? []),
-          {
-            id: createLocalId('address-item'),
-            label: '',
-            cep: '',
-            state: '',
-            city: '',
-            neighborhood: '',
-            address: '',
-            address_number: '',
-            address_complement: '',
-            ibge_code: '',
-          },
+          createEmptyContactAddressDraft(createLocalId),
         ],
       },
     }));

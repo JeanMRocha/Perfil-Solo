@@ -1,28 +1,22 @@
-import { Group, Button, Text, Divider } from '@mantine/core';
-import { IconArrowLeft } from '@tabler/icons-react';
-import { useNavigate } from 'react-router-dom';
+import { Group, Text, Divider } from '@mantine/core';
+import { useStore } from '@nanostores/react';
+import { $tema } from '@global/themeStore';
+import { getBrandPalette } from '../mantine/brand';
 
 interface PageHeaderProps {
   title: string;
   color?: string;
 }
 
-export default function PageHeader({ title, color = 'green' }: PageHeaderProps) {
-  const navigate = useNavigate();
+export default function PageHeader({ title, color }: PageHeaderProps) {
+  const tema = useStore($tema);
+  const palette = getBrandPalette(tema);
 
   return (
     <>
       <Group justify="space-between" align="center" mb="md" mt="md">
         <Group>
-          <Button
-            variant="light"
-            color={color}
-            leftSection={<IconArrowLeft size={16} />}
-            onClick={() => navigate('/dashboard')}
-          >
-            Voltar
-          </Button>
-          <Text fz="xl" fw={700} c={`${color}.8`}>
+          <Text fz="xl" fw={700} c={color ? `${color}.8` : palette.typography.title}>
             {title}
           </Text>
         </Group>

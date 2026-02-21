@@ -1,14 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Avatar,
-  Badge,
+  Box,
   Button,
   Card,
   Container,
   FileInput,
   Grid,
   Group,
+  Modal,
   Select,
+  SimpleGrid,
   Stack,
   Tabs,
   Text,
@@ -18,9 +20,12 @@ import {
 import { useStore } from '@nanostores/react';
 import { IconBuildingStore, IconHome, IconMapPin, IconUpload, IconUser } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
-import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
 import { $currUser } from '../../global-state/user';
+import {
+  buildAddressLine,
+  canonicalAddressFromCepLookup,
+} from '../../modules/address';
 import {
   AVATAR_MARKET_UPDATED_EVENT,
   clearUploadedAvatarForUser,
@@ -34,8 +39,8 @@ import {
   type UserAvatarInventory,
 } from '../../services/avatarMarketplaceService';
 import {
+  claimCreditEngagementReward,
   CREDITS_UPDATED_EVENT,
-  getUserCredits,
   registerAndEnsureUserCredits,
 } from '../../services/creditsService';
 import {
@@ -44,6 +49,10 @@ import {
   type ProducerProfile,
   type UserProfile as UserProfileT,
 } from '../../services/profileService';
+import { trackGamificationEvent } from '../../services/gamificationService';
+import { isLocalDataMode } from '../../services/dataProvider';
+import { upsertUserProfilePerson } from '../../services/peopleService';
+import { lookupAddressByCep, normalizeCep } from '../../services/cepService';
 
 type ProfileTab =
   | 'identificacao'
@@ -64,10 +73,6 @@ const ACCEPTED_IMAGE_TYPES = new Set([
   'image/gif',
 ]);
 
-function onlyDigits(value: string): string {
-  return value.replace(/\D/g, '');
-}
-
 function isAcceptedImageFile(file: File): boolean {
   if (!file.type) return false;
   if (ACCEPTED_IMAGE_TYPES.has(file.type)) return true;
@@ -75,7 +80,7 @@ function isAcceptedImageFile(file: File): boolean {
 }
 
 function buildAddress(producer: ProducerProfile): string {
-  const parts = [
+  return buildAddressLine([
     producer.endereco,
     producer.numero,
     producer.complemento,
@@ -83,25 +88,35 @@ function buildAddress(producer: ProducerProfile): string {
     producer.cidade,
     producer.estado,
     producer.cep,
-  ]
-    .map((item) => item.trim())
-    .filter(Boolean);
+  ]);
+}
 
-  return parts.join(' - ');
+function hasCompletedAddress(producer: ProducerProfile): boolean {
+  const street = String(producer.endereco ?? '').trim();
+  const city = String(producer.cidade ?? '').trim();
+  const state = String(producer.estado ?? '').trim();
+  const number = String(producer.numero ?? '').trim();
+  return Boolean(street && city && state && number);
 }
 
 function RowField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Grid align="center" gutter="sm">
-      <Grid.Col span={{ base: 12, md: 3 }}>
+      <Grid.Col span={{ base: 12, md: 2 }}>
         <Text ta={{ base: 'left', md: 'right' }}>{label}:</Text>
       </Grid.Col>
-      <Grid.Col span={{ base: 12, md: 9 }}>{children}</Grid.Col>
+      <Grid.Col span={{ base: 12, md: 10 }}>
+        <Box maw={820}>{children}</Box>
+      </Grid.Col>
     </Grid>
   );
 }
 
-export default function ProfilePage() {
+interface ProfilePageProps {
+  embedded?: boolean;
+}
+
+export default function ProfilePage({ embedded = false }: ProfilePageProps) {
   const user = useStore($currUser);
   const [profile, setProfile] = useState<UserProfileT | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,17 +124,18 @@ export default function ProfilePage() {
   const [locating, setLocating] = useState(false);
   const [loadingCep, setLoadingCep] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('identificacao');
+  const [avatarModalOpened, setAvatarModalOpened] = useState(false);
   const [avatarInventory, setAvatarInventory] = useState<UserAvatarInventory | null>(
     null,
   );
   const [avatarDisplay, setAvatarDisplay] = useState<{ src?: string; emoji?: string }>(
     {},
   );
-  const [creditBalance, setCreditBalance] = useState(0);
-  const navigate = useNavigate();
   const userId = String(user?.id ?? '').trim();
   const userEmail = String(user?.email ?? '').trim().toLowerCase();
   const ruralIcons = getRuralAvatarCatalog();
+  const selectedRuralIcon =
+    ruralIcons.find((icon) => icon.id === avatarInventory?.selected_icon_id) ?? null;
 
   useEffect(() => {
     (async () => {
@@ -136,7 +152,6 @@ export default function ProfilePage() {
     if (!userId || !userEmail) {
       setAvatarInventory(null);
       setAvatarDisplay({});
-      setCreditBalance(0);
       return;
     }
 
@@ -149,7 +164,6 @@ export default function ProfilePage() {
     const refreshAvatarAndCredits = () => {
       setAvatarInventory(getUserAvatarInventory(userId));
       setAvatarDisplay(resolveUserAvatarDisplay(userId));
-      setCreditBalance(getUserCredits(userId));
     };
 
     const onCreditsUpdated = (event: Event) => {
@@ -181,6 +195,9 @@ export default function ProfilePage() {
   }, [userId, userEmail, user?.user_metadata?.name]);
 
   if (loading) {
+    if (embedded) {
+      return <Text c="dimmed">Carregando...</Text>;
+    }
     return (
       <Container size="xl" mt="xl">
         <PageHeader title="Dados do Produtor" />
@@ -190,6 +207,16 @@ export default function ProfilePage() {
   }
 
   if (!profile || !profile.producer) {
+    if (embedded) {
+      return (
+        <Stack>
+          <Text c="red.6">Nao foi possivel carregar o cadastro.</Text>
+          <Button mt="md" onClick={() => window.location.reload()}>
+            Tentar novamente
+          </Button>
+        </Stack>
+      );
+    }
     return (
       <Container size="xl" mt="xl">
         <PageHeader title="Dados do Produtor" />
@@ -371,15 +398,13 @@ export default function ProfilePage() {
   };
 
   const handleCepBlur = async () => {
-    const cep = onlyDigits(producer.cep);
+    const cep = normalizeCep(producer.cep);
     if (cep.length !== 8) return;
 
     try {
       setLoadingCep(true);
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      if (!response.ok) throw new Error('Falha ao consultar CEP.');
-      const data = await response.json();
-      if (data?.erro) {
+      const lookup = await lookupAddressByCep(cep);
+      if (!lookup) {
         notifications.show({
           title: 'CEP nao encontrado',
           message: 'Revise o CEP informado.',
@@ -387,6 +412,7 @@ export default function ProfilePage() {
         });
         return;
       }
+      const parsed = canonicalAddressFromCepLookup(lookup);
 
       setProfile((prev) => {
         if (!prev || !prev.producer) return prev;
@@ -394,18 +420,20 @@ export default function ProfilePage() {
           ...prev,
           producer: {
             ...prev.producer,
-            endereco: data.logradouro ?? prev.producer.endereco,
-            bairro: data.bairro ?? prev.producer.bairro,
-            cidade: data.localidade ?? prev.producer.cidade,
-            estado: data.uf ?? prev.producer.estado,
-            complemento: data.complemento ?? prev.producer.complemento,
+            cep: parsed.cep ?? prev.producer.cep,
+            endereco: parsed.street ?? prev.producer.endereco,
+            bairro: parsed.neighborhood ?? prev.producer.bairro,
+            cidade: parsed.city ?? prev.producer.cidade,
+            estado: parsed.state ?? prev.producer.estado,
+            complemento: parsed.complement ?? prev.producer.complemento,
           },
         };
       });
-    } catch {
+    } catch (error: any) {
       notifications.show({
         title: 'Falha ao buscar CEP',
-        message: 'Nao foi possivel preencher endereco automaticamente.',
+        message:
+          error?.message ?? 'Nao foi possivel preencher endereco automaticamente.',
         color: 'red',
       });
     } finally {
@@ -433,7 +461,49 @@ export default function ProfilePage() {
       };
 
       await updateProfile(next);
+      const personUserId = userId || (isLocalDataMode ? 'local-user' : '');
+      if (personUserId) {
+        try {
+          await upsertUserProfilePerson({
+            userId: personUserId,
+            name:
+              next.producer?.contact_name ||
+              next.producer?.nome_exibicao ||
+              next.name ||
+              'Usuario',
+            email:
+              next.producer?.contact_email ||
+              next.contact?.email ||
+              next.email ||
+              '',
+            phone: next.producer?.contact_phone || next.contact?.phone || '',
+            website: next.producer?.website || next.contact?.website || '',
+            address:
+              buildAddress(next.producer ?? producer) ||
+              next.contact?.address ||
+              '',
+          });
+        } catch (err: any) {
+          notifications.show({
+            title: 'Perfil salvo com alerta',
+            message:
+              err?.message ??
+              'Nao foi possivel sincronizar a pessoa de perfil no modulo Pessoas.',
+            color: 'yellow',
+          });
+        }
+      }
       setProfile(next);
+      if (userId && next.producer && hasCompletedAddress(next.producer)) {
+        claimCreditEngagementReward({
+          user_id: userId,
+          rule_id: 'profile_address',
+          created_by: userId,
+        });
+      }
+      if (userId) {
+        void trackGamificationEvent(userId, 'profile_saved').catch(() => null);
+      }
       notifications.show({
         title: 'Cadastro salvo',
         message: 'Dados do produtor atualizados com sucesso.',
@@ -454,7 +524,6 @@ export default function ProfilePage() {
       if (activeTab === 'identificacao') {
         nextProducer.razao_social = '';
         nextProducer.nome_exibicao = '';
-        nextProducer.nome_referencia = '';
         nextProducer.website = '';
         nextProfile = {
           ...nextProfile,
@@ -512,25 +581,25 @@ export default function ProfilePage() {
     });
   };
 
-  return (
-    <Container size="xl" mt="xl">
-      <PageHeader title="Dados do Produtor" />
-
-      <Text c="dimmed" size="sm" mb="sm">
-        <IconHome size={14} style={{ verticalAlign: 'text-bottom' }} /> DADOS DO PRODUTOR {'>>'} PRODUTOR RURAL {'>>'}
-      </Text>
+  const profileContent = (
+    <>
+      {!embedded ? (
+        <Text c="dimmed" size="sm" mb="sm">
+          <IconHome size={14} style={{ verticalAlign: 'text-bottom' }} /> DADOS DO PRODUTOR {'>>'} PRODUTOR RURAL {'>>'}
+        </Text>
+      ) : null}
 
       <Card withBorder radius="md" p="md">
         <Group justify="space-between" mb="sm">
           <Text fw={700} size="xl">
             Produtor Rural
           </Text>
-          <Group gap="sm">
-            <Avatar radius="md" size="lg" src={profile.logo_url || undefined}>
-              <IconBuildingStore size={18} />
+          <Group gap="md">
+            <Avatar radius="md" size={56} src={profile.logo_url || undefined}>
+              <IconBuildingStore size={28} />
             </Avatar>
-            <Avatar radius="xl" size="lg" src={avatarDisplay.src || undefined}>
-              {avatarDisplay.emoji || <IconUser size={18} />}
+            <Avatar radius="xl" size={56} src={avatarDisplay.src || undefined}>
+              {avatarDisplay.emoji || <IconUser size={28} />}
             </Avatar>
           </Group>
         </Group>
@@ -553,9 +622,6 @@ export default function ProfilePage() {
           <Tabs.Panel value="identificacao" pt="md">
             <Card withBorder p="md">
               <Stack gap="sm">
-                <RowField label="Id">
-                  <TextInput value={producer.id} readOnly />
-                </RowField>
                 <RowField label="Razao social">
                   <TextInput
                     value={producer.razao_social}
@@ -569,14 +635,6 @@ export default function ProfilePage() {
                     value={producer.nome_exibicao}
                     onChange={(event) =>
                       setProducerField('nome_exibicao', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
-                <RowField label="Nome de referencia">
-                  <TextInput
-                    value={producer.nome_referencia}
-                    onChange={(event) =>
-                      setProducerField('nome_referencia', event.currentTarget.value)
                     }
                   />
                 </RowField>
@@ -612,47 +670,23 @@ export default function ProfilePage() {
                   </Group>
                 </RowField>
                 <RowField label="Avatar do usuario">
-                  <Stack gap="xs">
-                    <Group align="center">
-                      <FileInput
-                        placeholder="Upload de avatar"
-                        leftSection={<IconUpload size={14} />}
-                        onChange={handleUserAvatarFile}
-                        accept="image/*"
-                      />
-                      <Badge color="grape">Saldo: {creditBalance} creditos</Badge>
-                    </Group>
-
-                    <Group gap="xs">
-                      {ruralIcons.map((icon) => {
-                        const isUnlocked =
-                          avatarInventory?.unlocked_icon_ids.includes(icon.id) ?? false;
-                        const isSelected = avatarInventory?.selected_icon_id === icon.id;
-                        return (
-                          <Card key={icon.id} withBorder p="xs" radius="md">
-                            <Stack gap={4} align="center">
-                              <Text size="lg">{icon.emoji}</Text>
-                              <Text size="xs" fw={700}>
-                                {icon.label}
-                              </Text>
-                              <Button
-                                size="xs"
-                                variant={isSelected ? 'filled' : 'light'}
-                                color={isSelected ? 'teal' : 'gray'}
-                                onClick={() => handleSelectRuralIcon(icon)}
-                              >
-                                {isSelected
-                                  ? 'Selecionado'
-                                  : isUnlocked
-                                    ? 'Usar'
-                                    : `Desbloquear (${icon.price_credits})`}
-                              </Button>
-                            </Stack>
-                          </Card>
-                        );
-                      })}
-                    </Group>
-                  </Stack>
+                  <Group align="center" gap="sm" wrap="wrap">
+                    <Avatar radius="xl" size={42} src={avatarDisplay.src || undefined}>
+                      {avatarDisplay.emoji || <IconUser size={20} />}
+                    </Avatar>
+                    <Text size="sm" c="dimmed">
+                      {selectedRuralIcon
+                        ? `Avatar atual: ${selectedRuralIcon.label}`
+                        : 'Avatar atual'}
+                    </Text>
+                    <Button
+                      size="xs"
+                      variant="light"
+                      onClick={() => setAvatarModalOpened(true)}
+                    >
+                      Gerenciar avatar
+                    </Button>
+                  </Group>
                 </RowField>
               </Stack>
             </Card>
@@ -950,6 +984,66 @@ export default function ProfilePage() {
           </Tabs.Panel>
         </Tabs>
 
+        <Modal
+          opened={avatarModalOpened}
+          onClose={() => setAvatarModalOpened(false)}
+          title="Gerenciar avatar"
+          size="lg"
+          centered
+        >
+          <Stack gap="sm">
+            <Group justify="space-between" wrap="wrap">
+              <Group gap="sm" wrap="nowrap">
+                <Avatar radius="xl" size={48} src={avatarDisplay.src || undefined}>
+                  {avatarDisplay.emoji || <IconUser size={24} />}
+                </Avatar>
+                <Text size="sm" c="dimmed">
+                  {selectedRuralIcon
+                    ? `Selecionado: ${selectedRuralIcon.label}`
+                    : 'Nenhum avatar selecionado'}
+                </Text>
+              </Group>
+            </Group>
+
+            <FileInput
+              placeholder="Upload de avatar personalizado"
+              leftSection={<IconUpload size={14} />}
+              onChange={handleUserAvatarFile}
+              accept="image/*"
+            />
+
+            <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="sm">
+              {ruralIcons.map((icon) => {
+                const isUnlocked =
+                  avatarInventory?.unlocked_icon_ids.includes(icon.id) ?? false;
+                const isSelected = avatarInventory?.selected_icon_id === icon.id;
+                return (
+                  <Card key={icon.id} withBorder p="xs" radius="md">
+                    <Stack gap={4} align="center">
+                      <Text size="lg">{icon.emoji}</Text>
+                      <Text size="xs" fw={700}>
+                        {icon.label}
+                      </Text>
+                      <Button
+                        size="xs"
+                        variant={isSelected ? 'filled' : 'light'}
+                        color={isSelected ? 'teal' : 'gray'}
+                        onClick={() => handleSelectRuralIcon(icon)}
+                      >
+                        {isSelected
+                          ? 'Selecionado'
+                          : isUnlocked
+                            ? 'Usar'
+                            : `Desbloquear (${icon.price_credits})`}
+                      </Button>
+                    </Stack>
+                  </Card>
+                );
+              })}
+            </SimpleGrid>
+          </Stack>
+        </Modal>
+
         <Group mt="md">
           <Button onClick={handleSave} loading={saving}>
             Salvar
@@ -957,11 +1051,17 @@ export default function ProfilePage() {
           <Button variant="light" color="red" onClick={handleClearCurrentTab}>
             Limpar formulario
           </Button>
-          <Button variant="light" color="gray" onClick={() => navigate('/dashboard')}>
-            Voltar para listagem
-          </Button>
         </Group>
       </Card>
+    </>
+  );
+
+  if (embedded) return profileContent;
+
+  return (
+    <Container size="xl" mt="xl">
+      <PageHeader title="Dados do Produtor" />
+      {profileContent}
     </Container>
   );
 }

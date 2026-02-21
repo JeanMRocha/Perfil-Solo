@@ -15,6 +15,7 @@ import {
   IconHome,
 } from '@tabler/icons-react';
 import { registrarLogLocal } from '@services/loggerLocal';
+import { shouldCaptureObservability } from '@services/observabilityConfig';
 
 /**
  * 🌿 ErrorBoundary - PerfilSolo
@@ -127,6 +128,8 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('🔹 Raw:', logDetalhado.raw);
     console.groupEnd();
 
+    if (!shouldCaptureObservability('error')) return;
+
     // 🔹 Tenta logger remoto; se falhar, logger local
     try {
       const { registrarLog } = await import('@services/loggerService');
@@ -210,7 +213,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 variant="light"
                 color="gray"
               >
-                Voltar ao painel
+                Abrir painel
               </Button>
               <Button
                 onClick={this.handleCopyLog}

@@ -1,7 +1,12 @@
 import type { ContactInfo } from '../types/contact';
-import { storageReadJson, storageWriteJson } from './safeLocalStorage';
-
-const CLIENTS_KEY = 'perfilsolo_clients_v1';
+import {
+  createPerson,
+  ensurePersonType,
+  listPeopleByType,
+  removePersonType,
+  type PersonRecord,
+  updatePerson,
+} from './peopleService';
 
 export interface ClientRecord {
   id: string;
@@ -12,36 +17,20 @@ export interface ClientRecord {
   updated_at: string;
 }
 
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function createId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function readAll(): ClientRecord[] {
-  const parsed = storageReadJson<ClientRecord[]>(CLIENTS_KEY, []);
-  if (!Array.isArray(parsed)) return [];
-  return parsed;
-}
-
-function writeAll(rows: ClientRecord[]) {
-  storageWriteJson(CLIENTS_KEY, rows);
+function mapPersonToClient(row: PersonRecord): ClientRecord {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    nome: row.name,
+    contact: row.contact,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
 export async function listClientsByUser(userId: string): Promise<ClientRecord[]> {
-  const rows = readAll()
-    .filter((row) => row.user_id === userId)
-    .sort((a, b) => {
-      const aTime = new Date(a.created_at).getTime();
-      const bTime = new Date(b.created_at).getTime();
-      return bTime - aTime;
-    });
-  return rows;
+  const rows = await listPeopleByType(userId, 'customer');
+  return rows.map(mapPersonToClient);
 }
 
 export async function createClient(input: {
@@ -49,42 +38,27 @@ export async function createClient(input: {
   nome: string;
   contact?: ContactInfo;
 }): Promise<ClientRecord> {
-  const createdAt = nowIso();
-  const row: ClientRecord = {
-    id: createId(),
-    user_id: input.userId,
-    nome: input.nome.trim(),
-    contact: input.contact ?? {},
-    created_at: createdAt,
-    updated_at: createdAt,
-  };
-  const rows = readAll();
-  rows.push(row);
-  writeAll(rows);
-  return row;
+  const row = await createPerson({
+    userId: input.userId,
+    name: input.nome,
+    types: ['customer'],
+    contact: input.contact,
+  });
+  return mapPersonToClient(row);
 }
 
 export async function updateClient(
   clientId: string,
   input: { nome?: string; contact?: ContactInfo },
 ): Promise<ClientRecord> {
-  const rows = readAll();
-  const index = rows.findIndex((row) => row.id === clientId);
-  if (index < 0) throw new Error('Cliente nao encontrado.');
-
-  const current = rows[index];
-  const updated: ClientRecord = {
-    ...current,
-    nome: input.nome?.trim() || current.nome,
-    contact: input.contact ?? current.contact,
-    updated_at: nowIso(),
-  };
-  rows[index] = updated;
-  writeAll(rows);
-  return updated;
+  let row = await updatePerson(clientId, {
+    name: input.nome,
+    contact: input.contact,
+  });
+  row = await ensurePersonType(row.id, 'customer');
+  return mapPersonToClient(row);
 }
 
 export async function deleteClient(clientId: string): Promise<void> {
-  const rows = readAll().filter((row) => row.id !== clientId);
-  writeAll(rows);
+  await removePersonType(clientId, 'customer', { deleteIfNoTypes: true });
 }

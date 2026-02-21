@@ -793,7 +793,7 @@ function GridLayout(props: {
               }}
               title={
                 props.manualCultivar
-                  ? 'Voltar para lista de cultivares'
+                  ? 'Usar lista de cultivares'
                   : 'Informar cultivar manualmente'
               }
             >

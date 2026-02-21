@@ -9,12 +9,15 @@ import {
   createCreditCoupon,
   formatCreditPrice,
   getCreditAdRewardConfig,
+  listCreditEngagementRewardRules,
+  listCreditEngagementUsersPerformance,
   getUserCredits,
   grantCreditsToUser,
   listCreditCouponRedemptions,
   listCreditCoupons,
   listCreditPurchaseRequests,
   listCreditTransactionsForUser,
+  saveCreditEngagementRewardRules,
   refundCreditTransaction,
   registerAndEnsureUserCredits,
   removeCreditsFromUser,
@@ -26,6 +29,9 @@ import {
   type CreditCoupon,
   type CreditCouponRedemption,
   type CreditCouponType,
+  type CreditEngagementRule,
+  type CreditEngagementRuleId,
+  type CreditEngagementUserPerformance,
   type CreditPurchaseRequest,
   type CreditTransaction,
 } from '../../services/creditsService';
@@ -75,6 +81,12 @@ export default function UserManagement() {
   const [requests, setRequests] = useState<CreditPurchaseRequest[]>([]);
   const [purchaseReceipts, setPurchaseReceipts] = useState<InAppPurchaseReceipt[]>([]);
   const [adConfig, setAdConfig] = useState<CreditAdRewardConfig>(getCreditAdRewardConfig());
+  const [engagementRules, setEngagementRules] = useState<CreditEngagementRule[]>(
+    listCreditEngagementRewardRules(),
+  );
+  const [engagementPerformanceRows, setEngagementPerformanceRows] = useState<
+    CreditEngagementUserPerformance[]
+  >([]);
   const [couponRows, setCouponRows] = useState<CreditCoupon[]>([]);
   const [couponRedemptions, setCouponRedemptions] = useState<CreditCouponRedemption[]>([]);
   const [couponCode, setCouponCode] = useState('');
@@ -114,6 +126,8 @@ export default function UserManagement() {
     setRequests(listCreditPurchaseRequests().slice(0, 30));
     setPurchaseReceipts(listAllInAppPurchaseReceipts().slice(0, 300));
     setAdConfig(getCreditAdRewardConfig());
+    setEngagementRules(listCreditEngagementRewardRules());
+    setEngagementPerformanceRows(listCreditEngagementUsersPerformance().slice(0, 200));
     setCouponRows(listCreditCoupons());
     setCouponRedemptions(listCreditCouponRedemptions(50));
   };
@@ -322,6 +336,33 @@ export default function UserManagement() {
     });
   };
 
+  const handleEngagementRuleChange = (
+    ruleId: CreditEngagementRuleId,
+    patch: Partial<Pick<CreditEngagementRule, 'credits' | 'max_claims_per_user' | 'enabled'>>,
+  ) => {
+    setEngagementRules((prev) =>
+      prev.map((row) =>
+        row.id === ruleId
+          ? {
+              ...row,
+              ...patch,
+            }
+          : row,
+      ),
+    );
+  };
+
+  const saveEngagementRules = () => {
+    const saved = saveCreditEngagementRewardRules(engagementRules);
+    setEngagementRules(saved);
+    setEngagementPerformanceRows(listCreditEngagementUsersPerformance().slice(0, 200));
+    notifications.show({
+      title: 'Regras de conquista atualizadas',
+      message: 'Limites e valores de recompensa foram salvos.',
+      color: 'teal',
+    });
+  };
+
   const handleCreateCoupon = () => {
     try {
       const expiresAtIso = couponExpiresAt ? new Date(couponExpiresAt).toISOString() : null;
@@ -522,10 +563,14 @@ export default function UserManagement() {
           <RulesTab
             initialCreditsConfig={initialCreditsConfig}
             adConfig={adConfig}
+            engagementRules={engagementRules}
+            engagementPerformanceRows={engagementPerformanceRows}
             onInitialCreditsConfigChange={setInitialCreditsConfig}
             onSaveInitialCredits={saveInitialCredits}
             onAdConfigChange={setAdConfig}
             onSaveAdConfig={saveAdConfig}
+            onEngagementRuleChange={handleEngagementRuleChange}
+            onSaveEngagementRules={saveEngagementRules}
           />
         </Tabs.Panel>
 

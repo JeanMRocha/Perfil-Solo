@@ -14,7 +14,7 @@ interface UsersRegistryConfig {
 
 const USERS_REGISTRY_KEY = 'perfilsolo_users_registry_v1';
 const USERS_CONFIG_KEY = 'perfilsolo_users_registry_config_v1';
-const DEFAULT_INITIAL_CREDITS = 50;
+const DEFAULT_INITIAL_CREDITS = 0;
 
 export const USERS_REGISTRY_UPDATED_EVENT = 'perfilsolo-users-registry-updated';
 

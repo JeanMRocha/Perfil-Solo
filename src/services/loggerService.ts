@@ -1,6 +1,11 @@
 import { isLocalDataMode } from '@services/dataProvider';
 import { supabaseClient } from '@sb/supabaseClient';
 import { storageReadJson, storageWriteJson } from './safeLocalStorage';
+import {
+  isLocalObservabilityEnabled,
+  isRemoteObservabilityEnabled,
+  shouldCaptureObservability,
+} from './observabilityConfig';
 
 const LOCAL_LOG_KEY = 'perfilsolo_local_logs';
 
@@ -23,6 +28,8 @@ function appendLocalLog(entry: Record<string, any>) {
 }
 
 export async function registrarLog(evento: LogEvento) {
+  if (!shouldCaptureObservability('event')) return;
+
   const data = {
     tipo: evento.tipo,
     mensagem: evento.mensagem,
@@ -36,9 +43,12 @@ export async function registrarLog(evento: LogEvento) {
   console.table(data);
   console.groupEnd();
 
-  if (isLocalDataMode) {
+  const shouldPersistLocal =
+    isLocalObservabilityEnabled() || isLocalDataMode || !isRemoteObservabilityEnabled();
+
+  if (shouldPersistLocal) {
     appendLocalLog(data);
-    return;
+    if (!isRemoteObservabilityEnabled()) return;
   }
 
   try {

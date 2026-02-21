@@ -1,5 +1,5 @@
-import Clientes from '../Clientes/Clientes';
+import PessoasHub from '../Clientes/Clientes';
 
 export default function PessoasCadastro() {
-  return <Clientes startInCreateMode />;
+  return <PessoasHub startInCreateMode />;
 }

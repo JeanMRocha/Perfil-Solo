@@ -1685,7 +1685,7 @@ export default function CadastroAnaliseSolo() {
               color="gray"
               onClick={() => setAnalysisViewMode('list')}
             >
-              Voltar para listagem
+              Fechar detalhamento
             </Button>
           </Group>
 

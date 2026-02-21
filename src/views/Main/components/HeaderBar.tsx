@@ -15,6 +15,7 @@ import { IconMap2, IconMenu2, IconUser } from '@tabler/icons-react';
 import type { ComponentType } from 'react';
 import HeaderCreditsSummary from '@components/layout/HeaderCreditsSummary';
 import type { AppNotification } from '../../../services/notificationsService';
+import { getBrandPalette } from '../../../mantine/brand';
 import NotificationPopover from './NotificationPopover';
 
 export interface HeaderMenuItem {
@@ -32,9 +33,10 @@ interface HeaderBarProps {
   avatarSource: string;
   avatarEmoji: string;
   planLabel: string;
-  creditsLabel: string;
-  creditsProgress: number;
   creditsNumber: number;
+  purchasedCredits: number;
+  earnedCredits: number;
+  spentCredits: number;
   isSuperMode: boolean;
   menuTextVisible: boolean;
   brandDisplayName: string;
@@ -46,7 +48,8 @@ interface HeaderBarProps {
   headerActionIconStyles: Record<string, any>;
   isActive: (path: string) => boolean;
   onNavigate: (path: string) => void;
-  onToggleUserMenu: () => void;
+  onOpenUserCenter: () => void;
+  onOpenBilling: () => void;
   onToggleMainMenu: () => void;
   onModeToggle: (checked: boolean) => void;
   notificationsOpened: boolean;
@@ -73,9 +76,10 @@ export default function HeaderBar({
   avatarSource,
   avatarEmoji,
   planLabel,
-  creditsLabel,
-  creditsProgress,
   creditsNumber,
+  purchasedCredits,
+  earnedCredits,
+  spentCredits,
   isSuperMode,
   menuTextVisible,
   brandDisplayName,
@@ -87,7 +91,8 @@ export default function HeaderBar({
   headerActionIconStyles,
   isActive,
   onNavigate,
-  onToggleUserMenu,
+  onOpenUserCenter,
+  onOpenBilling,
   onToggleMainMenu,
   onModeToggle,
   notificationsOpened,
@@ -104,6 +109,12 @@ export default function HeaderBar({
   notificationLevelColor,
   formatNotificationDate,
 }: HeaderBarProps) {
+  const brandLogoSize = Math.max(30, headerHeight - 8);
+  const brandFallbackIconSize = Math.max(14, Math.round(brandLogoSize * 0.42));
+  const userAvatarSize = 34;
+  const userAvatarGlyphSize = 20;
+  const brandPalette = getBrandPalette(themeMode);
+
   return (
     <Box h="100%">
       <Box
@@ -111,25 +122,31 @@ export default function HeaderBar({
         h={headerHeight}
         style={{
           position: 'relative',
-          borderBottom: themeMode === 'dark' ? '1px solid #1f2937' : '1px solid #d1fae5',
+          borderBottom: `1px solid ${brandPalette.header.border}`,
         }}
       >
         <Group justify="space-between" h="100%" wrap="nowrap">
           <Group gap="xs" wrap="nowrap">
             <UnstyledButton
-              onClick={onToggleUserMenu}
+              onClick={onOpenUserCenter}
               styles={userTriggerStyles}
-              title="Abrir menu do usuario"
+              title="Abrir central do usuario"
             >
-              <Group gap="xs" wrap="nowrap">
-                <Avatar size="sm" radius="xl" src={avatarSource}>
-                  {avatarEmoji || <IconUser size={14} />}
+              <Group gap="sm" wrap="nowrap">
+                <Avatar size={userAvatarSize} radius="xl" src={avatarSource}>
+                  {avatarEmoji ? (
+                    <span style={{ fontSize: userAvatarGlyphSize, lineHeight: 1 }}>
+                      {avatarEmoji}
+                    </span>
+                  ) : (
+                    <IconUser size={userAvatarGlyphSize} />
+                  )}
                 </Avatar>
                 <Box style={{ minWidth: 0 }}>
                   <Text fw={700} c={headerText} truncate="end">
                     {userName}
                   </Text>
-                  <Text size="xs" c={themeMode === 'dark' ? 'gray.4' : 'dimmed'} truncate="end">
+                  <Text size="xs" c={brandPalette.header.textMuted} truncate="end">
                     {companyName}
                   </Text>
                 </Box>
@@ -158,10 +175,12 @@ export default function HeaderBar({
           <Group gap="sm" wrap="nowrap" style={{ marginLeft: 'auto' }}>
             <HeaderCreditsSummary
               planLabel={planLabel}
-              creditsLabel={creditsLabel}
-              creditsProgress={creditsProgress}
               creditsNumber={creditsNumber}
+              purchasedCredits={purchasedCredits}
+              earnedCredits={earnedCredits}
+              spentCredits={spentCredits}
               isDark={themeMode === 'dark'}
+              onOpenBilling={onOpenBilling}
             />
             <ActionIcon
               variant="light"
@@ -189,10 +208,19 @@ export default function HeaderBar({
           }}
         >
           <Group gap={6} wrap="nowrap">
-            <Avatar radius="sm" size="sm" src={brandLogoUrl || undefined}>
-              <IconMap2 size={14} color="#16a34a" />
+            <Avatar
+              radius="sm"
+              size={brandLogoSize}
+              src={brandLogoUrl || undefined}
+              styles={{
+                root: {
+                  border: `1px solid ${brandPalette.header.logoBorder}`,
+                },
+              }}
+            >
+              <IconMap2 size={brandFallbackIconSize} color={brandPalette.header.logoFallback} />
             </Avatar>
-            <Title order={3} c="green.8">
+            <Title order={3} c={brandPalette.header.brandTitle}>
               {brandDisplayName}
             </Title>
           </Group>
@@ -201,7 +229,7 @@ export default function HeaderBar({
               size="10px"
               fw={700}
               ff="monospace"
-              c={themeMode === 'dark' ? '#f3f4f6' : '#111827'}
+              c={brandPalette.header.text}
               style={{ minWidth: 42, textAlign: 'right' }}
             >
               {isSuperMode ? 'SUPER' : 'NORMAL'}
@@ -222,8 +250,8 @@ export default function HeaderBar({
           px="md"
           h={headerHeight}
           style={{
-            borderBottom: themeMode === 'dark' ? '1px solid #1f2937' : '1px solid #d1fae5',
-            background: themeMode === 'dark' ? '#1f2937' : '#fffbeb',
+            borderBottom: `1px solid ${brandPalette.header.border}`,
+            background: brandPalette.menu.superRowBackground,
           }}
         >
           <ScrollArea h="100%" type="never" scrollbars="x">
@@ -237,7 +265,7 @@ export default function HeaderBar({
                 return (
                   <Button
                     key={item.path}
-                    size="sm"
+                    size="xs"
                     radius="xl"
                     styles={menuPillButtonStyles}
                     leftSection={menuTextVisible ? <Icon size={16} /> : undefined}
@@ -261,8 +289,8 @@ export default function HeaderBar({
         px="md"
         h={headerHeight}
         style={{
-          borderBottom: themeMode === 'dark' ? '1px solid #1f2937' : '1px solid #d1fae5',
-          background: themeMode === 'dark' ? '#0f172a' : '#f8fafc',
+          borderBottom: `1px solid ${brandPalette.header.border}`,
+          background: brandPalette.menu.mainRowBackground,
         }}
       >
         <ScrollArea h="100%" type="never" scrollbars="x">
@@ -273,7 +301,7 @@ export default function HeaderBar({
               return (
                 <Button
                   key={item.path}
-                  size="sm"
+                  size="xs"
                   radius="xl"
                   styles={menuPillButtonStyles}
                   leftSection={menuTextVisible ? <Icon size={16} /> : undefined}

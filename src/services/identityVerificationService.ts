@@ -22,11 +22,28 @@ interface IdentityChallengeRequestResult {
   debug_code: string;
 }
 
+interface TwoFactorSecuritySetting {
+  email: string;
+  enabled: boolean;
+  confirmed_at: string | null;
+  updated_at: string;
+}
+
+export interface TwoFactorSecurityStatus {
+  email: string;
+  enabled: boolean;
+  confirmed: boolean;
+  confirmed_at: string | null;
+}
+
 const CHALLENGE_STORAGE_KEY = 'perfilsolo_identity_challenges_v1';
 const VERIFIED_EMAILS_SESSION_KEY = 'perfilsolo_identity_verified_emails_v1';
+const TWO_FACTOR_SETTINGS_KEY = 'perfilsolo_two_factor_settings_v1';
 const CODE_EXPIRY_MINUTES = 10;
 const RESEND_COOLDOWN_SECONDS = 30;
 const MAX_ATTEMPTS = 5;
+
+export const TWO_FACTOR_SETTINGS_UPDATED_EVENT = 'perfilsolo-two-factor-settings-updated';
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -57,6 +74,52 @@ function readVerifiedEmails(): string[] {
 
 function writeVerifiedEmails(rows: string[]): void {
   storageWriteJson(VERIFIED_EMAILS_SESSION_KEY, rows, 'session');
+}
+
+function emitTwoFactorSettingsUpdated(email: string): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent(TWO_FACTOR_SETTINGS_UPDATED_EVENT, {
+      detail: { email },
+    }),
+  );
+}
+
+function normalizeTwoFactorSetting(
+  email: string,
+  input?: Partial<TwoFactorSecuritySetting>,
+): TwoFactorSecuritySetting {
+  const normalizedEmail = normalizeEmail(email);
+  return {
+    email: normalizedEmail,
+    enabled: typeof input?.enabled === 'boolean' ? input.enabled : false,
+    confirmed_at: input?.confirmed_at ? String(input.confirmed_at) : null,
+    updated_at: input?.updated_at ? String(input.updated_at) : nowIso(),
+  };
+}
+
+function readTwoFactorSettings(): Record<string, TwoFactorSecuritySetting> {
+  const parsed = storageReadJson<Record<string, Partial<TwoFactorSecuritySetting>>>(
+    TWO_FACTOR_SETTINGS_KEY,
+    {},
+  );
+  if (!parsed || typeof parsed !== 'object') return {};
+
+  const rows: Record<string, TwoFactorSecuritySetting> = {};
+  Object.entries(parsed).forEach(([key, value]) => {
+    const email = normalizeEmail(key);
+    if (!email) return;
+    rows[email] = normalizeTwoFactorSetting(email, value);
+  });
+  return rows;
+}
+
+function writeTwoFactorSettings(
+  rows: Record<string, TwoFactorSecuritySetting>,
+  changedEmail: string,
+): void {
+  storageWriteJson(TWO_FACTOR_SETTINGS_KEY, rows);
+  emitTwoFactorSettingsUpdated(changedEmail);
 }
 
 function removeChallenge(email: string, reason: IdentityChallengeReason): void {
@@ -199,6 +262,89 @@ export function isTwoFactorVerifiedForEmail(email: string): boolean {
   const normalized = normalizeEmail(email);
   if (!normalized) return false;
   return readVerifiedEmails().includes(normalized);
+}
+
+export function getTwoFactorStatusForEmail(email: string): TwoFactorSecurityStatus {
+  const normalized = normalizeEmail(email);
+  if (!normalized) {
+    return {
+      email: '',
+      enabled: false,
+      confirmed: false,
+      confirmed_at: null,
+    };
+  }
+
+  const rows = readTwoFactorSettings();
+  const setting = rows[normalized] ?? normalizeTwoFactorSetting(normalized);
+  return {
+    email: setting.email,
+    enabled: setting.enabled,
+    confirmed: Boolean(setting.confirmed_at),
+    confirmed_at: setting.confirmed_at,
+  };
+}
+
+export function isTwoFactorEnabledForEmail(email: string): boolean {
+  return getTwoFactorStatusForEmail(email).enabled;
+}
+
+export function markTwoFactorActivationConfirmed(email: string): TwoFactorSecurityStatus {
+  const normalized = normalizeEmail(email);
+  if (!normalized) {
+    throw new Error('Email invalido para confirmar 2 etapas.');
+  }
+
+  const rows = readTwoFactorSettings();
+  const current = rows[normalized] ?? normalizeTwoFactorSetting(normalized);
+  const next: TwoFactorSecuritySetting = {
+    ...current,
+    confirmed_at: current.confirmed_at ?? nowIso(),
+    updated_at: nowIso(),
+  };
+  rows[normalized] = next;
+  writeTwoFactorSettings(rows, normalized);
+
+  return {
+    email: next.email,
+    enabled: next.enabled,
+    confirmed: Boolean(next.confirmed_at),
+    confirmed_at: next.confirmed_at,
+  };
+}
+
+export function setTwoFactorEnabledForEmail(
+  email: string,
+  enabled: boolean,
+): TwoFactorSecurityStatus {
+  const normalized = normalizeEmail(email);
+  if (!normalized) {
+    throw new Error('Email invalido para configurar 2 etapas.');
+  }
+
+  const rows = readTwoFactorSettings();
+  const current = rows[normalized] ?? normalizeTwoFactorSetting(normalized);
+  if (enabled && !current.confirmed_at) {
+    throw new Error(
+      'Confirme sua identidade antes de ativar o fator de 2 etapas.',
+    );
+  }
+
+  const next: TwoFactorSecuritySetting = {
+    ...current,
+    enabled,
+    updated_at: nowIso(),
+  };
+
+  rows[normalized] = next;
+  writeTwoFactorSettings(rows, normalized);
+
+  return {
+    email: next.email,
+    enabled: next.enabled,
+    confirmed: Boolean(next.confirmed_at),
+    confirmed_at: next.confirmed_at,
+  };
 }
 
 export function clearTwoFactorVerificationSession(email?: string): void {

@@ -5,14 +5,22 @@ import {
   Text,
 } from '@mantine/core';
 import {
-  IconApi,
-  IconBook,
+  IconApiApp,
+  IconBook2,
+  IconBriefcase2,
+  IconBuildingFactory2,
+  IconCodeDots,
+  IconFileAnalytics,
   IconHome,
-  IconMap,
+  IconMapPin2,
+  IconPackage,
+  IconPlant2,
   IconPhotoUp,
   IconSchool,
   IconSettings,
+  IconTestPipe2,
   IconUser,
+  IconUsersGroup,
 } from '@tabler/icons-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '@nanostores/react';
@@ -34,10 +42,13 @@ import {
 import {
   CREDITS_UPDATED_EVENT,
   getUserCredits,
+  listCreditTransactionsForUser,
   registerAndEnsureUserCredits,
+  type CreditTransaction,
 } from '../../services/creditsService';
 import {
   APP_NOTIFICATIONS_UPDATED_EVENT,
+  ensureTemporaryProgressNotifications,
   getUnreadNotificationsCount,
   listNotifications,
   markNotificationRead,
@@ -56,10 +67,11 @@ import {
   updateUserMenuTextVisible,
   type AppUserMode,
 } from '../../services/userPreferencesService';
+import { subscribeBrandTheme } from '../../services/brandThemeService';
+import { trackGamificationEvent } from '../../services/gamificationService';
+import { getBrandPalette } from '../../mantine/brand';
 import HeaderBar from './components/HeaderBar';
 import MainDrawer from './components/MainDrawer';
-import SidebarNav from './components/SidebarNav';
-import UserDrawer from './components/UserDrawer';
 
 function normalizePlanLabel(input: unknown): string {
   const raw = String(input ?? 'free').trim().toLowerCase();
@@ -67,8 +79,10 @@ function normalizePlanLabel(input: unknown): string {
   return raw.toUpperCase();
 }
 
-function resolveUserName(user: any): string {
+function resolveUserName(profile: UserProfile | null, user: any): string {
   const candidate =
+    profile?.producer?.nome_exibicao?.trim() ??
+    profile?.name?.trim() ??
     user?.user_metadata?.name ??
     user?.user_metadata?.full_name ??
     user?.email ??
@@ -76,8 +90,19 @@ function resolveUserName(user: any): string {
   return String(candidate);
 }
 
-const CREDITS_PROGRESS_BASELINE = 1000;
 const HEADER_HEIGHT = 60;
+
+type CreditsBreakdown = {
+  purchased: number;
+  earned: number;
+  spent: number;
+};
+
+const EMPTY_CREDITS_BREAKDOWN: CreditsBreakdown = {
+  purchased: 0,
+  earned: 0,
+  spent: 0,
+};
 
 function normalizeCredits(input: unknown): number {
   const parsed = Number(input);
@@ -85,14 +110,29 @@ function normalizeCredits(input: unknown): number {
   return Math.max(0, Math.round(parsed));
 }
 
-function resolveCreditsScaleMax(credits: number): number {
-  if (credits <= CREDITS_PROGRESS_BASELINE) return CREDITS_PROGRESS_BASELINE;
-  const bucket = Math.ceil(credits / CREDITS_PROGRESS_BASELINE);
-  return bucket * CREDITS_PROGRESS_BASELINE;
-}
+function deriveCreditsBreakdown(
+  rows: CreditTransaction[],
+): CreditsBreakdown {
+  return rows.reduce<CreditsBreakdown>(
+    (acc, row) => {
+      const amount = Number(row.amount);
+      if (!Number.isFinite(amount) || amount === 0) return acc;
 
-function formatCreditsNumber(input: number): string {
-  return new Intl.NumberFormat('pt-BR').format(input);
+      if (amount < 0) {
+        acc.spent += Math.abs(amount);
+        return acc;
+      }
+
+      if (row.type === 'purchase_approved') {
+        acc.purchased += amount;
+        return acc;
+      }
+
+      acc.earned += amount;
+      return acc;
+    },
+    { ...EMPTY_CREDITS_BREAKDOWN },
+  );
 }
 
 function formatAppVersion(): string {
@@ -138,8 +178,6 @@ export default function AppLayout() {
   const user = useStore($currUser);
   const [drawerOpened, { open: openDrawer, close: closeDrawer }] =
     useDisclosure(false);
-  const [userDrawerOpened, { open: openUserDrawer, close: closeUserDrawer }] =
-    useDisclosure(false);
   const [notificationsOpened, setNotificationsOpened] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -151,6 +189,9 @@ export default function AppLayout() {
   >(null);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [walletCredits, setWalletCredits] = useState(0);
+  const [creditsBreakdown, setCreditsBreakdown] = useState<CreditsBreakdown>(
+    EMPTY_CREDITS_BREAKDOWN,
+  );
   const [avatarSrc, setAvatarSrc] = useState('');
   const [avatarEmoji, setAvatarEmoji] = useState('');
   const [appMode, setAppMode] = useState<AppUserMode>(() => getUserAppMode());
@@ -158,6 +199,7 @@ export default function AppLayout() {
   const [menuTextVisible, setMenuTextVisible] = useState<boolean>(() =>
     getUserMenuTextVisible(),
   );
+  const [, setBrandThemeVersion] = useState(0);
   const currentUserId = String(user?.id ?? '').trim();
 
   useEffect(() => {
@@ -202,6 +244,7 @@ export default function AppLayout() {
     }
 
     const refreshUnread = async () => {
+      await ensureTemporaryProgressNotifications(currentUserId);
       const total = await getUnreadNotificationsCount(currentUserId);
       if (!alive) return;
       setUnreadNotifications(total);
@@ -279,9 +322,10 @@ export default function AppLayout() {
   useEffect(() => {
     const currentUserId = String(user?.id ?? '').trim();
     const currentUserEmail = String(user?.email ?? '').trim();
-    const currentUserName = resolveUserName(user);
+    const currentUserName = resolveUserName(profile, user);
     if (!currentUserId || !currentUserEmail) {
       setWalletCredits(0);
+      setCreditsBreakdown(EMPTY_CREDITS_BREAKDOWN);
       setAvatarSrc('');
       setAvatarEmoji('');
       return;
@@ -295,6 +339,8 @@ export default function AppLayout() {
 
     const refresh = () => {
       setWalletCredits(getUserCredits(currentUserId));
+      const transactions = listCreditTransactionsForUser(currentUserId);
+      setCreditsBreakdown(deriveCreditsBreakdown(transactions));
       const resolved = resolveUserAvatarDisplay(currentUserId);
       setAvatarSrc(resolved.src ?? '');
       setAvatarEmoji(resolved.emoji ?? '');
@@ -326,7 +372,33 @@ export default function AppLayout() {
       window.removeEventListener(AVATAR_MARKET_UPDATED_EVENT, onAvatarUpdated);
       window.removeEventListener('storage', onStorage);
     };
-  }, [user?.id, user?.email, user?.user_metadata?.name]);
+  }, [user?.id, user?.email, user?.user_metadata?.name, profile?.name, profile?.producer?.nome_exibicao]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    void trackGamificationEvent(currentUserId, 'app_open').catch(() => null);
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    if (location.pathname === '/dashboard') {
+      void trackGamificationEvent(currentUserId, 'visit_dashboard').catch(() => null);
+      return;
+    }
+
+    if (location.pathname === '/user') {
+      void trackGamificationEvent(currentUserId, 'visit_user_center').catch(() => null);
+    }
+  }, [currentUserId, location.pathname]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeBrandTheme(() => {
+      setBrandThemeVersion((current) => current + 1);
+    });
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeSystemConfig((config) => {
@@ -354,25 +426,21 @@ export default function AppLayout() {
     return unsubscribe;
   }, [currentUserId]);
 
-  const userName = resolveUserName(user);
-  const userEmail = String(profile?.email ?? user?.email ?? 'usuario@local');
+  const userName = resolveUserName(profile, user);
   const planLabel = normalizePlanLabel(
     (user as any)?.plan_id ?? (user as any)?.user_metadata?.plan_id,
   );
+  const brandPalette = getBrandPalette(tema);
   const creditsNumber = normalizeCredits(walletCredits);
-  const creditsScaleMax = resolveCreditsScaleMax(creditsNumber);
-  const creditsLabel = formatCreditsNumber(creditsNumber);
-  const creditsProgress = Math.min(100, (creditsNumber / creditsScaleMax) * 100);
   const avatarSource = avatarSrc || profile?.avatar_url || profile?.logo_url || '';
   const companyName = profile?.company_name?.trim() || brand.name;
   const isSuperMode = appMode === 'super';
   const brandDisplayName = brand.name.trim() || 'PerfilSolo';
   const appVersionLabel = formatAppVersion();
-  const headerBg = tema === 'dark' ? '#111827' : '#f0fdf4';
-  const headerText = tema === 'dark' ? '#f3f4f6' : '#0f172a';
-  const navBg = tema === 'dark' ? '#0b1220' : '#ffffff';
-  const footerBg = tema === 'dark' ? '#0b1220' : '#f8fafc';
-  const footerBorder = tema === 'dark' ? '#1f2937' : '#e5e7eb';
+  const headerBg = brandPalette.header.background;
+  const headerText = brandPalette.header.text;
+  const footerBg = brandPalette.footer.background;
+  const footerBorder = brandPalette.footer.border;
   const softShadow =
     tema === 'dark'
       ? '0 8px 18px rgba(0, 0, 0, 0.35)'
@@ -384,12 +452,21 @@ export default function AppLayout() {
   const menuPillButtonStyles = {
     root: {
       marginTop: 4,
+      height: 32,
+      paddingInline: 10,
       boxShadow: softShadow,
       transition: 'transform 0.16s ease, box-shadow 0.16s ease',
       '&:hover': {
         transform: 'translateY(-1px)',
         boxShadow: hoverShadow,
       },
+    },
+    label: {
+      fontSize: 12,
+      lineHeight: 1.1,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
     },
     section: {
       marginTop: 2,
@@ -433,14 +510,49 @@ export default function AppLayout() {
       icon: IconHome,
     },
     {
+      label: 'Culturas',
+      path: '/cadastros/culturas/busca',
+      icon: IconPlant2,
+    },
+    {
+      label: 'Laboratorios',
+      path: '/cadastros/laboratorios/busca',
+      icon: IconBuildingFactory2,
+    },
+    {
+      label: 'Pessoas',
+      path: '/cadastros/pessoas/busca',
+      icon: IconUsersGroup,
+    },
+    {
+      label: 'Produtos',
+      path: '/cadastros/produtos/busca',
+      icon: IconPackage,
+    },
+    {
+      label: 'Servicos',
+      path: '/cadastros/servicos/busca',
+      icon: IconBriefcase2,
+    },
+    {
+      label: 'Analises de Solo',
+      path: '/analise-solo',
+      icon: IconTestPipe2,
+    },
+    {
+      label: 'Relatorios',
+      path: '/relatorios',
+      icon: IconFileAnalytics,
+    },
+    {
       label: 'Propriedade',
       path: '/propriedades',
-      icon: IconMap,
+      icon: IconMapPin2,
     },
     {
       label: 'Modo API',
       path: '/integracoes/api',
-      icon: IconApi,
+      icon: IconApiApp,
     },
     {
       label: 'Aulas',
@@ -450,7 +562,7 @@ export default function AppLayout() {
     {
       label: 'Conhecimento',
       path: '/conhecimento',
-      icon: IconBook,
+      icon: IconBook2,
     },
   ];
   const superMenuItems = [
@@ -472,13 +584,12 @@ export default function AppLayout() {
     {
       label: 'API Docs',
       path: '/integracoes/api',
-      icon: IconApi,
+      icon: IconCodeDots,
     },
   ];
 
   const closeHeaderOverlays = () => {
     closeDrawer();
-    closeUserDrawer();
     setNotificationsOpened(false);
     setNotificationExpandedId(null);
   };
@@ -488,15 +599,13 @@ export default function AppLayout() {
     navigate(path);
   };
 
-  const toggleUserMenu = () => {
-    if (userDrawerOpened) {
-      closeUserDrawer();
+  const toggleMenuRoute = (path: string) => {
+    const normalizedPath = path.split('?')[0] ?? path;
+    if (isActive(normalizedPath)) {
+      go('/dashboard');
       return;
     }
-    closeDrawer();
-    setNotificationsOpened(false);
-    setNotificationExpandedId(null);
-    openUserDrawer();
+    go(path);
   };
 
   const toggleMainMenu = () => {
@@ -504,7 +613,6 @@ export default function AppLayout() {
       closeDrawer();
       return;
     }
-    closeUserDrawer();
     setNotificationsOpened(false);
     setNotificationExpandedId(null);
     openDrawer();
@@ -517,7 +625,6 @@ export default function AppLayout() {
       return;
     }
     closeDrawer();
-    closeUserDrawer();
     setNotificationsOpened(true);
   };
 
@@ -577,31 +684,12 @@ export default function AppLayout() {
   return (
     <AppShell
       header={{ height: headerTotalHeight }}
-      navbar={{ width: 250, breakpoint: 'sm' }}
       footer={{ height: 42 }}
       padding="md"
       styles={{
         header: {
           background: headerBg,
-          borderBottom: tema === 'dark' ? '1px solid #1f2937' : '1px solid #d1fae5',
-        },
-        navbar: {
-          background: navBg,
-          borderRight: tema === 'dark' ? '1px solid #1f2937' : '1px solid #e5e7eb',
-          '& .mantine-NavLink-root': {
-            paddingTop: 10,
-            paddingBottom: 10,
-            borderRadius: 10,
-            marginBottom: 4,
-            transition: 'transform 0.16s ease, box-shadow 0.16s ease',
-          },
-          '& .mantine-NavLink-root:hover': {
-            transform: 'translateY(-1px)',
-            boxShadow: hoverShadow,
-          },
-          '& .mantine-NavLink-section': {
-            marginTop: 2,
-          },
+          borderBottom: `1px solid ${brandPalette.header.border}`,
         },
         footer: {
           background: footerBg,
@@ -619,9 +707,10 @@ export default function AppLayout() {
           avatarSource={avatarSource}
           avatarEmoji={avatarEmoji}
           planLabel={planLabel}
-          creditsLabel={creditsLabel}
-          creditsProgress={creditsProgress}
           creditsNumber={creditsNumber}
+          purchasedCredits={creditsBreakdown.purchased}
+          earnedCredits={creditsBreakdown.earned}
+          spentCredits={creditsBreakdown.spent}
           isSuperMode={isSuperMode}
           menuTextVisible={menuTextVisible}
           brandDisplayName={brandDisplayName}
@@ -632,8 +721,9 @@ export default function AppLayout() {
           menuPillButtonStyles={menuPillButtonStyles}
           headerActionIconStyles={headerActionIconStyles}
           isActive={isActive}
-          onNavigate={(path) => navigate(path)}
-          onToggleUserMenu={toggleUserMenu}
+          onNavigate={toggleMenuRoute}
+          onOpenUserCenter={() => toggleMenuRoute('/user?tab=perfil')}
+          onOpenBilling={() => toggleMenuRoute('/user?tab=plano')}
           onToggleMainMenu={toggleMainMenu}
           onModeToggle={handleModeToggle}
           notificationsOpened={notificationsOpened}
@@ -651,10 +741,6 @@ export default function AppLayout() {
           formatNotificationDate={formatNotificationDate}
         />
       </AppShell.Header>
-
-      <AppShell.Navbar p="md">
-        <SidebarNav isActive={isActive} onNavigate={navigate} />
-      </AppShell.Navbar>
 
       <AppShell.Main>
         <Outlet />
@@ -702,20 +788,7 @@ export default function AppLayout() {
         onClose={closeDrawer}
         onToggleTheme={alternarTema}
         onMenuTextToggle={handleMenuTextToggle}
-        onGo={go}
-      />
-
-      <UserDrawer
-        opened={userDrawerOpened}
-        userName={userName}
-        companyName={companyName}
-        userEmail={userEmail}
-        avatarSource={avatarSource}
-        avatarEmoji={avatarEmoji}
-        planLabel={planLabel}
-        creditsLabel={creditsLabel}
-        onClose={closeUserDrawer}
-        onGo={go}
+        onGo={toggleMenuRoute}
       />
 
       {loading && (

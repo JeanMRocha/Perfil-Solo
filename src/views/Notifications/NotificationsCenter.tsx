@@ -19,6 +19,7 @@ import {
   APP_NOTIFICATIONS_UPDATED_EVENT,
   clearAllNotifications,
   deleteNotification,
+  ensureTemporaryProgressNotifications,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -69,6 +70,7 @@ export default function NotificationsCenter() {
 
     setLoading(true);
     try {
+      await ensureTemporaryProgressNotifications(currentUserId);
       const list = await listNotifications(currentUserId);
       setRows(list);
     } finally {

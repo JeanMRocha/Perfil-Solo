@@ -9,7 +9,6 @@ export interface ProducerProfile {
   id: string;
   razao_social: string;
   nome_exibicao: string;
-  nome_referencia: string;
   website: string;
   cpf: string;
   cnpj: string;
@@ -54,6 +53,7 @@ function baseContact(): ContactInfo {
   return {
     email: (profileData as any).contact?.email ?? '',
     phone: (profileData as any).contact?.phone ?? '',
+    website: (profileData as any).contact?.website ?? '',
     address: (profileData as any).contact?.address ?? '',
   };
 }
@@ -68,7 +68,6 @@ function baseProducer(): ProducerProfile {
     id: '107',
     razao_social: company || name,
     nome_exibicao: company || name,
-    nome_referencia: company || name,
     website: '',
     cpf: '',
     cnpj: '',

@@ -1,4 +1,5 @@
 import { registrarLogLocal } from '@services/loggerLocal';
+import { isObservabilityKindEnabled } from '@services/observabilityConfig';
 
 /**
  * 🌍 Captura global de erros fora do ciclo do React.
@@ -6,6 +7,11 @@ import { registrarLogLocal } from '@services/loggerLocal';
  */
 
 export function initGlobalErrorCatcher() {
+  if (!isObservabilityKindEnabled('error')) {
+    console.log('Global Error Catcher inicializado em modo observabilidade off.');
+    return;
+  }
+
   window.addEventListener('error', (event) => {
     const err = event.error || new Error(event.message);
     console.error('🔥 Erro global detectado:', err);

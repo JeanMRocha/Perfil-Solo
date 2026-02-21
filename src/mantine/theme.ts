@@ -1,6 +1,11 @@
-import { createTheme } from "@mantine/core";
+import { createTheme } from '@mantine/core';
+import { BRAND_ACCENT_COLORS, BRAND_COLORS } from './brand';
 
 export const mantineTheme = createTheme({
-  primaryColor: "teal",
-  primaryShade: 6,
+  primaryColor: 'brand',
+  primaryShade: { light: 6, dark: 5 },
+  colors: {
+    brand: BRAND_COLORS,
+    accent: BRAND_ACCENT_COLORS,
+  },
 });

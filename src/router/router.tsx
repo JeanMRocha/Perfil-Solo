@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { Navigate, createBrowserRouter } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { ProtectedPath } from '@components/ProtectedPath';
 import SuperModeGuard from '@components/SuperModeGuard';
@@ -13,10 +13,8 @@ const Authentication = lazy(() => import('@views/Auth/Auth'));
 const Register = lazy(() => import('@views/Auth/Register'));
 const ForgotPassword = lazy(() => import('@views/Auth/ForgotPassword'));
 
-const UserProfile = lazy(() => import('@views/User/Profile'));
-const Settings = lazy(() => import('@views/Config/Settings'));
+const UserCenter = lazy(() => import('@views/User/UserCenter'));
 const Propriedades = lazy(() => import('@views/Propriedades/Propriedades'));
-const Clientes = lazy(() => import('@views/Clientes/Clientes'));
 const CulturasBusca = lazy(() => import('@views/Cadastros/CulturasBusca'));
 const CulturasCadastro = lazy(() => import('@views/Cadastros/CulturasCadastro'));
 const LaboratoriosBusca = lazy(() => import('@views/Cadastros/LaboratoriosBusca'));
@@ -51,7 +49,9 @@ const UserManagement = lazy(() => import('@views/Super/UserManagement'));
 const ApiMode = lazy(() => import('@views/Integracoes/ApiMode'));
 const AulasHub = lazy(() => import('@views/Aulas/AulasHub'));
 const KnowledgeHub = lazy(() => import('@views/Knowledge/KnowledgeHub'));
-const CreditsCenter = lazy(() => import('@views/Credits/CreditsCenter'));
+const ThemePersonalization = lazy(
+  () => import('@views/Config/ThemePersonalization'),
+);
 
 export const router = createBrowserRouter([
   {
@@ -82,16 +82,20 @@ export const router = createBrowserRouter([
       {
         path: 'user',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando perfil..." />}>
-            <UserProfile />
+          <Suspense fallback={<LoaderGlobal message="Carregando central do usuario..." />}>
+            <UserCenter />
           </Suspense>
         ),
       },
       {
         path: 'config',
+        element: <Navigate to="/user?tab=plano" replace />,
+      },
+      {
+        path: 'config/aparencia',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando configuracoes..." />}>
-            <Settings />
+          <Suspense fallback={<LoaderGlobal message="Carregando personalizacao..." />}>
+            <ThemePersonalization />
           </Suspense>
         ),
       },
@@ -216,11 +220,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'clientes',
-        element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando clientes..." />}>
-            <Clientes />
-          </Suspense>
-        ),
+        element: <Navigate to="/cadastros/pessoas/busca" replace />,
       },
       {
         path: 'legal/privacidade',
@@ -286,19 +286,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'creditos',
-        element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando creditos..." />}>
-            <CreditsCenter />
-          </Suspense>
-        ),
+        element: <Navigate to="/user?tab=creditos" replace />,
       },
       {
         path: 'cupons',
-        element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando cupons..." />}>
-            <CreditsCenter />
-          </Suspense>
-        ),
+        element: <Navigate to="/user?tab=cupons" replace />,
       },
       {
         path: 'aulas',

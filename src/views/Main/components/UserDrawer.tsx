@@ -51,10 +51,10 @@ export default function UserDrawer({
           <Badge color="grape">Creditos {creditsLabel}</Badge>
         </Group>
 
-        <NavLink label="Perfil" leftSection={<IconUser size={16} />} onClick={() => onGo('/user')} />
-        <NavLink label="Configuracoes" leftSection={<IconSettings size={16} />} onClick={() => onGo('/config')} />
-        <NavLink label="Creditos" leftSection={<IconGraph size={16} />} onClick={() => onGo('/creditos')} />
-        <NavLink label="Cupons" leftSection={<IconTicket size={16} />} onClick={() => onGo('/cupons')} />
+        <NavLink label="Perfil" leftSection={<IconUser size={16} />} onClick={() => onGo('/user?tab=perfil')} />
+        <NavLink label="Configuracoes" leftSection={<IconSettings size={16} />} onClick={() => onGo('/user?tab=plano')} />
+        <NavLink label="Creditos" leftSection={<IconGraph size={16} />} onClick={() => onGo('/user?tab=creditos')} />
+        <NavLink label="Cupons" leftSection={<IconTicket size={16} />} onClick={() => onGo('/user?tab=cupons')} />
         <NavLink color="red" label="Sair" leftSection={<IconLogout size={16} />} onClick={() => onGo('/auth/logout')} />
       </Stack>
     </Drawer>

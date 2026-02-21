@@ -135,14 +135,14 @@ export default function ForgotPassword() {
 
         {step === 'done' ? (
           <Button color="blue" radius="md" onClick={() => navigate('/auth')}>
-            Voltar ao login
+            Ir para login
           </Button>
         ) : null}
 
         {submitting && <LoaderInline message="Processando..." />}
 
         <Text fz="sm" ta="center" mt="sm">
-          <a href="/auth">Voltar ao login</a>
+          <a href="/auth">Ir para login</a>
         </Text>
       </Stack>
     </Card>

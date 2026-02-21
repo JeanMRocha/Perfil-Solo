@@ -18,12 +18,17 @@ import { IconCircleKey } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { $currUser, signInLocal, signOut } from '@global/user';
-import { registerAndEnsureUserCredits } from '@services/creditsService';
+import {
+  claimCreditEngagementReward,
+  registerAndEnsureUserCredits,
+} from '@services/creditsService';
 import { isLocalDataMode } from '@services/dataProvider';
 import {
   clearTwoFactorVerificationSession,
+  isTwoFactorEnabledForEmail,
   isTwoFactorVerifiedForEmail,
   isValidEmail,
+  markTwoFactorActivationConfirmed,
   markTwoFactorVerifiedSession,
   requestIdentityChallengeCode,
   verifyIdentityChallengeCode,
@@ -50,7 +55,10 @@ export default function Authentication() {
 
   const userEmail = String(user?.email ?? '').trim().toLowerCase();
   const needsTwoFactor =
-    !!user && !!userEmail && !isTwoFactorVerifiedForEmail(userEmail);
+    !!user &&
+    !!userEmail &&
+    isTwoFactorEnabledForEmail(userEmail) &&
+    !isTwoFactorVerifiedForEmail(userEmail);
 
   useEffect(() => {
     if (!needsTwoFactor) return;
@@ -107,13 +115,19 @@ export default function Authentication() {
     }
 
     if (isLocalDataMode) {
+      const requiresTwoFactor = isTwoFactorEnabledForEmail(loginEmail);
       clearTwoFactorVerificationSession(loginEmail);
       signInLocal(loginEmail);
-      await requestLoginCode(loginEmail);
+      if (requiresTwoFactor) {
+        await requestLoginCode(loginEmail);
+        return;
+      }
+      navigate('/dashboard', { replace: true });
       return;
     }
 
     try {
+      const requiresTwoFactor = isTwoFactorEnabledForEmail(loginEmail);
       clearTwoFactorVerificationSession(loginEmail);
       const { data, error } = await supabaseClient.auth.signInWithPassword({
         email: loginEmail,
@@ -129,7 +143,11 @@ export default function Authentication() {
           name: String(signedUser.user_metadata?.name ?? ''),
         });
       }
-      await requestLoginCode(loginEmail);
+      if (requiresTwoFactor) {
+        await requestLoginCode(loginEmail);
+        return;
+      }
+      navigate('/dashboard', { replace: true });
     } catch (err: any) {
       const message = String(err?.message ?? 'Falha ao autenticar.');
       const isNetwork = message.toLowerCase().includes('failed to fetch');
@@ -162,7 +180,16 @@ export default function Authentication() {
         reason: 'login',
         code: verificationCode,
       });
+      markTwoFactorActivationConfirmed(email);
       markTwoFactorVerifiedSession(email);
+      if (user?.id) {
+        claimCreditEngagementReward({
+          user_id: String(user.id),
+          rule_id: 'email_confirmation',
+          created_by: String(user.id),
+          reference_id: email,
+        });
+      }
       notifications.show({
         title: 'Identidade confirmada',
         message: 'Autenticacao em 2 fatores concluida com sucesso.',
@@ -234,7 +261,7 @@ export default function Authentication() {
 
                 <Group justify="center" mt="md">
                   <Anchor size="sm" onClick={() => void handleResetLogin()}>
-                    Voltar e trocar conta
+                    Trocar conta
                   </Anchor>
                 </Group>
               </Box>

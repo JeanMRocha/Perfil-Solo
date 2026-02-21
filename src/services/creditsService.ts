@@ -1,5 +1,6 @@
 import {
   getInitialCreditsAfterSignup,
+  listRegisteredUsers,
   registerOrUpdateUserAccount,
 } from './usersRegistryService';
 import {
@@ -15,7 +16,8 @@ export type CreditTransactionType =
   | 'icon_purchase'
   | 'refund'
   | 'purchase_approved'
-  | 'ad_reward';
+  | 'ad_reward'
+  | 'engagement_reward';
 
 export interface CreditWallet {
   user_id: string;
@@ -122,6 +124,58 @@ export interface CreditAdRewardAvailability {
   config: CreditAdRewardConfig;
 }
 
+export type CreditEngagementRuleId =
+  | 'signup'
+  | 'email_confirmation'
+  | 'profile_address'
+  | 'property_created'
+  | 'talhao_created';
+
+export interface CreditEngagementRule {
+  id: CreditEngagementRuleId;
+  label: string;
+  description: string;
+  credits: number;
+  max_claims_per_user: number | null;
+  enabled: boolean;
+}
+
+export interface CreditEngagementRewardClaim {
+  id: string;
+  user_id: string;
+  rule_id: CreditEngagementRuleId;
+  credits_awarded: number;
+  created_at: string;
+  created_by?: string;
+  reference_id?: string;
+}
+
+export interface CreditEngagementRewardResult {
+  awarded: boolean;
+  reason: string;
+  rule: CreditEngagementRule;
+  claim?: CreditEngagementRewardClaim;
+  transaction?: CreditTransaction;
+  remaining_claims: number | null;
+}
+
+export interface CreditEngagementRuleUserPerformance {
+  rule_id: CreditEngagementRuleId;
+  count: number;
+  credits: number;
+  max_claims_per_user: number | null;
+  remaining_claims: number | null;
+}
+
+export interface CreditEngagementUserPerformance {
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  total_claims: number;
+  total_credits: number;
+  by_rule: Record<CreditEngagementRuleId, CreditEngagementRuleUserPerformance>;
+}
+
 const WALLETS_KEY = 'perfilsolo_credit_wallets_v1';
 const TRANSACTIONS_KEY = 'perfilsolo_credit_transactions_v1';
 const INITIAL_GRANTED_SET_KEY = 'perfilsolo_credit_initial_granted_v1';
@@ -130,14 +184,67 @@ const COUPONS_KEY = 'perfilsolo_credit_coupons_v1';
 const COUPON_REDEMPTIONS_KEY = 'perfilsolo_credit_coupon_redemptions_v1';
 const AD_REWARD_CONFIG_KEY = 'perfilsolo_credit_ad_reward_config_v1';
 const AD_REWARD_CLAIMS_KEY = 'perfilsolo_credit_ad_reward_claims_v1';
+const ENGAGEMENT_RULES_KEY = 'perfilsolo_credit_engagement_rules_v1';
+const ENGAGEMENT_CLAIMS_KEY = 'perfilsolo_credit_engagement_claims_v1';
 
 export const CREDITS_UPDATED_EVENT = 'perfilsolo-credits-updated';
 
 const DEFAULT_AD_REWARD_CONFIG: CreditAdRewardConfig = {
   enabled: true,
-  credits_per_view: 1,
+  credits_per_view: 5,
   daily_limit_per_user: 3,
   cooldown_minutes: 10,
+};
+
+const ENGAGEMENT_RULE_ORDER: CreditEngagementRuleId[] = [
+  'signup',
+  'email_confirmation',
+  'profile_address',
+  'property_created',
+  'talhao_created',
+];
+
+const DEFAULT_ENGAGEMENT_RULES: Record<CreditEngagementRuleId, CreditEngagementRule> = {
+  signup: {
+    id: 'signup',
+    label: 'Cadastro da conta',
+    description: 'Primeiro cadastro validado do usuario.',
+    credits: 10,
+    max_claims_per_user: 1,
+    enabled: true,
+  },
+  email_confirmation: {
+    id: 'email_confirmation',
+    label: 'Confirmacao de email',
+    description: 'Primeira confirmacao de identidade/email.',
+    credits: 20,
+    max_claims_per_user: 1,
+    enabled: true,
+  },
+  profile_address: {
+    id: 'profile_address',
+    label: 'Endereco preenchido',
+    description: 'Perfil com endereco principal completo.',
+    credits: 10,
+    max_claims_per_user: 1,
+    enabled: true,
+  },
+  property_created: {
+    id: 'property_created',
+    label: 'Propriedade cadastrada',
+    description: 'Recompensa por cada propriedade criada.',
+    credits: 10,
+    max_claims_per_user: 5,
+    enabled: true,
+  },
+  talhao_created: {
+    id: 'talhao_created',
+    label: 'Talhao cadastrado',
+    description: 'Recompensa por cada talhao criado.',
+    credits: 2,
+    max_claims_per_user: 100,
+    enabled: true,
+  },
 };
 
 export const CREDIT_PACKAGES: CreditPackage[] = [
@@ -447,6 +554,84 @@ function readAdRewardClaims(): CreditAdRewardClaim[] {
   }
 }
 
+function normalizeEngagementRuleId(input: unknown): CreditEngagementRuleId | null {
+  const raw = String(input ?? '').trim();
+  if (
+    raw !== 'signup' &&
+    raw !== 'email_confirmation' &&
+    raw !== 'profile_address' &&
+    raw !== 'property_created' &&
+    raw !== 'talhao_created'
+  ) {
+    return null;
+  }
+  return raw;
+}
+
+function normalizeEngagementRule(
+  input: Partial<CreditEngagementRule> | undefined,
+  fallback: CreditEngagementRule,
+): CreditEngagementRule {
+  return {
+    id: fallback.id,
+    label: String(input?.label ?? fallback.label).trim() || fallback.label,
+    description:
+      String(input?.description ?? fallback.description).trim() ||
+      fallback.description,
+    credits: Math.max(0, Math.round(parseNumber(input?.credits ?? fallback.credits))),
+    max_claims_per_user:
+      input?.max_claims_per_user == null
+        ? fallback.max_claims_per_user
+        : Math.max(0, Math.round(parseNumber(input.max_claims_per_user))) || null,
+    enabled: normalizeBoolean(input?.enabled, fallback.enabled),
+  };
+}
+
+function readEngagementRules(): Record<CreditEngagementRuleId, CreditEngagementRule> {
+  try {
+    const raw = storageGetRaw(ENGAGEMENT_RULES_KEY);
+    if (!raw) return { ...DEFAULT_ENGAGEMENT_RULES };
+    const parsed = JSON.parse(raw) as Partial<
+      Record<CreditEngagementRuleId, Partial<CreditEngagementRule>>
+    >;
+    const next = { ...DEFAULT_ENGAGEMENT_RULES };
+    ENGAGEMENT_RULE_ORDER.forEach((ruleId) => {
+      next[ruleId] = normalizeEngagementRule(parsed?.[ruleId], next[ruleId]);
+    });
+    return next;
+  } catch {
+    return { ...DEFAULT_ENGAGEMENT_RULES };
+  }
+}
+
+function readEngagementClaims(): CreditEngagementRewardClaim[] {
+  try {
+    const raw = storageGetRaw(ENGAGEMENT_CLAIMS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Partial<CreditEngagementRewardClaim>[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((row) => {
+        const ruleId = normalizeEngagementRuleId(row.rule_id);
+        if (!ruleId) return null;
+        const userId = normalizeUserId(String(row.user_id ?? ''));
+        if (!userId) return null;
+        return {
+          id: String(row.id ?? makeId('ceg')),
+          user_id: userId,
+          rule_id: ruleId,
+          credits_awarded: Math.max(0, Math.round(parseNumber(row.credits_awarded))),
+          created_at: String(row.created_at ?? nowIso()),
+          created_by: row.created_by ? String(row.created_by) : undefined,
+          reference_id: row.reference_id ? String(row.reference_id) : undefined,
+        } as CreditEngagementRewardClaim;
+      })
+      .filter((row): row is CreditEngagementRewardClaim => Boolean(row));
+  } catch {
+    return [];
+  }
+}
+
 function writeWallets(rows: CreditWallet[], changedUserId?: string): void {
   persistJsonOrThrow(WALLETS_KEY, rows);
   dispatchCreditsUpdated(changedUserId);
@@ -479,6 +664,21 @@ function writeAdRewardConfig(config: CreditAdRewardConfig): void {
 
 function writeAdRewardClaims(rows: CreditAdRewardClaim[], changedUserId?: string): void {
   persistJsonOrThrow(AD_REWARD_CLAIMS_KEY, rows);
+  dispatchCreditsUpdated(changedUserId);
+}
+
+function writeEngagementRules(
+  rules: Record<CreditEngagementRuleId, CreditEngagementRule>,
+): void {
+  persistJsonOrThrow(ENGAGEMENT_RULES_KEY, rules);
+  dispatchCreditsUpdated('');
+}
+
+function writeEngagementClaims(
+  rows: CreditEngagementRewardClaim[],
+  changedUserId?: string,
+): void {
+  persistJsonOrThrow(ENGAGEMENT_CLAIMS_KEY, rows);
   dispatchCreditsUpdated(changedUserId);
 }
 
@@ -615,6 +815,16 @@ function buildCreditNotificationPayload(
     };
   }
 
+  if (tx.type === 'engagement_reward') {
+    return {
+      title: 'Recompensa de progresso',
+      message: `Voce recebeu ${Math.abs(tx.amount)} ${creditUnitLabel(
+        tx.amount,
+      )}. Saldo atual: ${tx.balance_after}. ${tx.description}.`,
+      level: 'success',
+    };
+  }
+
   return null;
 }
 
@@ -717,6 +927,11 @@ export function registerAndEnsureUserCredits(input: {
   registerOrUpdateUserAccount({ id: userId, email, name: input.name });
   ensureWallet(userId);
   ensureInitialCreditsForUser(userId);
+  claimCreditEngagementReward({
+    user_id: userId,
+    rule_id: 'signup',
+    created_by: userId,
+  });
 }
 
 export function ensureInitialCreditsForUser(userId: string): void {
@@ -740,6 +955,246 @@ export function ensureInitialCreditsForUser(userId: string): void {
 
   granted.push(normalized);
   writeInitialGrantedSet(granted, normalized);
+}
+
+function countEngagementClaimsForRule(
+  claims: CreditEngagementRewardClaim[],
+  userId: string,
+  ruleId: CreditEngagementRuleId,
+): number {
+  return claims.filter((row) => row.user_id === userId && row.rule_id === ruleId).length;
+}
+
+export function listCreditEngagementRewardRules(): CreditEngagementRule[] {
+  const rules = readEngagementRules();
+  return ENGAGEMENT_RULE_ORDER.map((ruleId) => ({ ...rules[ruleId] }));
+}
+
+export function saveCreditEngagementRewardRules(
+  rows: CreditEngagementRule[],
+): CreditEngagementRule[] {
+  const current = readEngagementRules();
+  const next = { ...current };
+  const byId = new Map(
+    (rows ?? [])
+      .map((row) => {
+        const ruleId = normalizeEngagementRuleId(row?.id);
+        if (!ruleId) return null;
+        return [ruleId, row] as const;
+      })
+      .filter((entry): entry is readonly [CreditEngagementRuleId, CreditEngagementRule] =>
+        Boolean(entry),
+      ),
+  );
+
+  ENGAGEMENT_RULE_ORDER.forEach((ruleId) => {
+    next[ruleId] = normalizeEngagementRule(byId.get(ruleId), next[ruleId]);
+  });
+
+  writeEngagementRules(next);
+  return ENGAGEMENT_RULE_ORDER.map((ruleId) => ({ ...next[ruleId] }));
+}
+
+export function listCreditEngagementRewardClaims(
+  userId?: string,
+): CreditEngagementRewardClaim[] {
+  const needle = normalizeUserId(userId ?? '');
+  const rows = readEngagementClaims().sort((a, b) => b.created_at.localeCompare(a.created_at));
+  if (!needle) return rows;
+  return rows.filter((row) => row.user_id === needle);
+}
+
+export function claimCreditEngagementReward(input: {
+  user_id: string;
+  rule_id: CreditEngagementRuleId;
+  created_by?: string;
+  reference_id?: string;
+}): CreditEngagementRewardResult {
+  const userId = normalizeUserId(input.user_id);
+  const ruleId = normalizeEngagementRuleId(input.rule_id);
+  if (!userId || !ruleId) {
+    throw new Error('Dados invalidos para recompensa de engajamento.');
+  }
+
+  const rules = readEngagementRules();
+  const rule = rules[ruleId];
+  const claims = readEngagementClaims();
+  const claimedCount = countEngagementClaimsForRule(claims, userId, ruleId);
+  const maxClaims = rule.max_claims_per_user;
+  const remainingBefore =
+    maxClaims == null ? null : Math.max(0, maxClaims - claimedCount);
+
+  if (!rule.enabled) {
+    return {
+      awarded: false,
+      reason: 'Regra desativada pelo super usuario.',
+      rule: { ...rule },
+      remaining_claims: remainingBefore,
+    };
+  }
+
+  if (rule.credits <= 0) {
+    return {
+      awarded: false,
+      reason: 'Regra sem creditos configurados.',
+      rule: { ...rule },
+      remaining_claims: remainingBefore,
+    };
+  }
+
+  const referenceId = String(input.reference_id ?? '').trim();
+  if (referenceId) {
+    const duplicateByReference = claims.some(
+      (row) =>
+        row.user_id === userId &&
+        row.rule_id === ruleId &&
+        row.reference_id === referenceId,
+    );
+    if (duplicateByReference) {
+      return {
+        awarded: false,
+        reason: 'Referencia ja recompensada para este usuario.',
+        rule: { ...rule },
+        remaining_claims: remainingBefore,
+      };
+    }
+  }
+
+  if (maxClaims != null && claimedCount >= maxClaims) {
+    return {
+      awarded: false,
+      reason: 'Limite da regra atingido para este usuario.',
+      rule: { ...rule },
+      remaining_claims: 0,
+    };
+  }
+
+  const tx = applyDelta(
+    userId,
+    rule.credits,
+    'engagement_reward',
+    `Recompensa: ${rule.label}`,
+    { created_by: input.created_by, reference_id: referenceId || undefined },
+  );
+
+  const claim: CreditEngagementRewardClaim = {
+    id: makeId('ceg'),
+    user_id: userId,
+    rule_id: ruleId,
+    credits_awarded: rule.credits,
+    created_at: nowIso(),
+    created_by: input.created_by ? String(input.created_by) : undefined,
+    reference_id: referenceId || undefined,
+  };
+
+  claims.push(claim);
+  writeEngagementClaims(claims.slice(-50000), userId);
+
+  const remainingAfter =
+    maxClaims == null ? null : Math.max(0, maxClaims - (claimedCount + 1));
+
+  return {
+    awarded: true,
+    reason: 'Recompensa aplicada com sucesso.',
+    rule: { ...rule },
+    claim,
+    transaction: tx,
+    remaining_claims: remainingAfter,
+  };
+}
+
+function buildEmptyUserPerformanceByRule(
+  rules: Record<CreditEngagementRuleId, CreditEngagementRule>,
+): Record<CreditEngagementRuleId, CreditEngagementRuleUserPerformance> {
+  return {
+    signup: {
+      rule_id: 'signup',
+      count: 0,
+      credits: 0,
+      max_claims_per_user: rules.signup.max_claims_per_user,
+      remaining_claims: rules.signup.max_claims_per_user,
+    },
+    email_confirmation: {
+      rule_id: 'email_confirmation',
+      count: 0,
+      credits: 0,
+      max_claims_per_user: rules.email_confirmation.max_claims_per_user,
+      remaining_claims: rules.email_confirmation.max_claims_per_user,
+    },
+    profile_address: {
+      rule_id: 'profile_address',
+      count: 0,
+      credits: 0,
+      max_claims_per_user: rules.profile_address.max_claims_per_user,
+      remaining_claims: rules.profile_address.max_claims_per_user,
+    },
+    property_created: {
+      rule_id: 'property_created',
+      count: 0,
+      credits: 0,
+      max_claims_per_user: rules.property_created.max_claims_per_user,
+      remaining_claims: rules.property_created.max_claims_per_user,
+    },
+    talhao_created: {
+      rule_id: 'talhao_created',
+      count: 0,
+      credits: 0,
+      max_claims_per_user: rules.talhao_created.max_claims_per_user,
+      remaining_claims: rules.talhao_created.max_claims_per_user,
+    },
+  };
+}
+
+export function listCreditEngagementUsersPerformance(): CreditEngagementUserPerformance[] {
+  const rules = readEngagementRules();
+  const claims = readEngagementClaims();
+  const users = listRegisteredUsers();
+  const userById = new Map(users.map((row) => [row.id, row]));
+  const userIds = new Set<string>([
+    ...users.map((row) => row.id),
+    ...claims.map((row) => row.user_id),
+  ]);
+
+  const rows = [...userIds]
+    .filter(Boolean)
+    .map<CreditEngagementUserPerformance>((userId) => {
+      const userClaims = claims.filter((claim) => claim.user_id === userId);
+      const user = userById.get(userId);
+      const byRule = buildEmptyUserPerformanceByRule(rules);
+
+      for (const claim of userClaims) {
+        const bucket = byRule[claim.rule_id];
+        bucket.count += 1;
+        bucket.credits += Math.max(0, claim.credits_awarded);
+      }
+
+      ENGAGEMENT_RULE_ORDER.forEach((ruleId) => {
+        const bucket = byRule[ruleId];
+        const maxClaims = bucket.max_claims_per_user;
+        bucket.remaining_claims =
+          maxClaims == null ? null : Math.max(0, maxClaims - bucket.count);
+      });
+
+      return {
+        user_id: userId,
+        user_name: user?.name || user?.email || userId,
+        user_email: user?.email || '',
+        total_claims: userClaims.length,
+        total_credits: userClaims.reduce(
+          (sum, claim) => sum + Math.max(0, claim.credits_awarded),
+          0,
+        ),
+        by_rule: byRule,
+      };
+    })
+    .sort((a, b) => {
+      if (b.total_credits !== a.total_credits) {
+        return b.total_credits - a.total_credits;
+      }
+      return a.user_name.localeCompare(b.user_name);
+    });
+
+  return rows;
 }
 
 export function getUserCredits(userId: string): number {

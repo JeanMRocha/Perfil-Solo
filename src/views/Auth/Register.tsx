@@ -18,7 +18,6 @@ import { isLocalDataMode } from '@services/dataProvider';
 import {
   clearTwoFactorVerificationSession,
   isValidEmail,
-  requestIdentityChallengeCode,
 } from '@services/identityVerificationService';
 import { supabaseClient } from '@sb/supabaseClient';
 import ContactInfoModal from '../../components/modals/ContactInfoModal';
@@ -56,10 +55,6 @@ export default function Register() {
           email: normalizedEmail || localUser.email || '',
           name: name || String(localUser.user_metadata?.name ?? 'Usuario Local'),
         });
-        const challenge = requestIdentityChallengeCode({
-          email: normalizedEmail,
-          reason: 'login',
-        });
         await updateProfile({
           name: name || 'Usuario Local',
           email: normalizedEmail,
@@ -67,7 +62,7 @@ export default function Register() {
         });
         notifications.show({
           title: 'Conta local criada',
-          message: `Cadastro concluido. Codigo de verificacao enviado: ${challenge.debug_code}`,
+          message: 'Cadastro concluido com sucesso.',
           color: 'green',
         });
         navigate('/auth');
@@ -99,13 +94,9 @@ export default function Register() {
           });
         }
         clearTwoFactorVerificationSession(normalizedEmail);
-        const challenge = requestIdentityChallengeCode({
-          email: normalizedEmail,
-          reason: 'login',
-        });
         notifications.show({
           title: 'Conta criada',
-          message: `Cadastro concluido. Codigo de verificacao enviado: ${challenge.debug_code}`,
+          message: 'Cadastro concluido com sucesso.',
           color: 'green',
         });
         navigate('/auth');

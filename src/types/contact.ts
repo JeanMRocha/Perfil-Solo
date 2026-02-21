@@ -26,8 +26,10 @@ export interface ContactAddress {
 export interface ContactInfo {
   email?: string;
   phone?: string;
+  website?: string;
   emails?: ContactChannel[];
   phones?: ContactChannel[];
+  websites?: ContactChannel[];
   social_links?: ContactSocialLink[];
   addresses?: ContactAddress[];
   cep?: string;
@@ -65,5 +67,13 @@ export function getPrimaryPhone(contact?: ContactInfo | null): string | undefine
   const fromList = normalizeChannels(contact.phones)[0]?.value;
   if (fromList) return fromList;
   const fromField = normalizeText(contact.phone);
+  return fromField || undefined;
+}
+
+export function getPrimaryWebsite(contact?: ContactInfo | null): string | undefined {
+  if (!contact) return undefined;
+  const fromList = normalizeChannels(contact.websites)[0]?.value;
+  if (fromList) return fromList;
+  const fromField = normalizeText(contact.website);
   return fromField || undefined;
 }

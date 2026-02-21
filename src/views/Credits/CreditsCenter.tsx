@@ -51,10 +51,19 @@ function formatTransactionTypeLabel(type: CreditTransaction['type']): string {
   if (type === 'icon_purchase') return 'compra_interna';
   if (type === 'admin_grant') return 'credito_admin';
   if (type === 'admin_remove') return 'debito_admin';
+  if (type === 'engagement_reward') return 'conquista';
   return type;
 }
 
-export default function CreditsCenter() {
+interface CreditsCenterProps {
+  embedded?: boolean;
+  view?: 'creditos' | 'cupons';
+}
+
+export default function CreditsCenter({
+  embedded = false,
+  view,
+}: CreditsCenterProps) {
   const location = useLocation();
   const user = useStore($currUser);
   const [balance, setBalance] = useState(0);
@@ -78,8 +87,9 @@ export default function CreditsCenter() {
 
   const userId = user?.id ?? '';
   const userEmail = String(user?.email ?? '');
-  const isCouponsView =
-    location.pathname === '/cupons' || location.pathname.startsWith('/cupons/');
+  const isCouponsView = view
+    ? view === 'cupons'
+    : location.pathname === '/cupons' || location.pathname.startsWith('/cupons/');
 
   const selectedPackage = useMemo<CreditPackage | null>(() => {
     return CREDIT_PACKAGES.find((row) => row.id === selectedPackageId) ?? null;
@@ -277,10 +287,12 @@ export default function CreditsCenter() {
 
   return (
     <Stack>
-      <PageHeader
-        title={isCouponsView ? 'Cupons e Compra de Creditos' : 'Creditos e Historico'}
-        color="violet"
-      />
+      {!embedded ? (
+        <PageHeader
+          title={isCouponsView ? 'Cupons e Compra de Creditos' : 'Creditos e Historico'}
+          color="violet"
+        />
+      ) : null}
 
       <Card withBorder radius="md" p="lg">
         <Group justify="space-between" align="center">

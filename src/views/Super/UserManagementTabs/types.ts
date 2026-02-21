@@ -3,6 +3,9 @@ import type {
   CreditCoupon,
   CreditCouponRedemption,
   CreditCouponType,
+  CreditEngagementRule,
+  CreditEngagementRuleId,
+  CreditEngagementUserPerformance,
   CreditPurchaseRequest,
   CreditTransaction,
 } from '../../../services/creditsService';
@@ -88,10 +91,17 @@ export interface CouponsTabProps {
 export interface RulesTabProps {
   initialCreditsConfig: number | '';
   adConfig: CreditAdRewardConfig;
+  engagementRules: CreditEngagementRule[];
+  engagementPerformanceRows: CreditEngagementUserPerformance[];
   onInitialCreditsConfigChange: (value: number | '') => void;
   onSaveInitialCredits: () => void;
   onAdConfigChange: (value: CreditAdRewardConfig) => void;
   onSaveAdConfig: () => void;
+  onEngagementRuleChange: (
+    ruleId: CreditEngagementRuleId,
+    patch: Partial<Pick<CreditEngagementRule, 'credits' | 'max_claims_per_user' | 'enabled'>>,
+  ) => void;
+  onSaveEngagementRules: () => void;
 }
 
 export interface ReceiptsTabProps {

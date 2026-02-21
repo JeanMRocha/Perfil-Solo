@@ -1,13 +1,9 @@
 import { Box, Drawer, Group, NavLink, Stack, Switch, Text } from '@mantine/core';
 import {
   IconApi,
-  IconBook,
-  IconFlask,
-  IconGraph,
-  IconHome,
-  IconMap,
+  IconBell,
   IconPhotoUp,
-  IconSchool,
+  IconPalette,
   IconSettings,
   IconUser,
 } from '@tabler/icons-react';
@@ -54,14 +50,14 @@ export default function MainDrawer({
           </Box>
         </NavLink>
 
-        <NavLink label="Dashboard" leftSection={<IconHome size={16} />} onClick={() => onGo('/dashboard')} />
-        <NavLink label="Propriedades" leftSection={<IconMap size={16} />} onClick={() => onGo('/propriedades')} />
-        <NavLink label="Analises de Solo" leftSection={<IconFlask size={16} />} onClick={() => onGo('/analise-solo')} />
-        <NavLink label="Relatorios" leftSection={<IconGraph size={16} />} onClick={() => onGo('/relatorios')} />
-        <NavLink label="Clientes" leftSection={<IconUser size={16} />} onClick={() => onGo('/clientes')} />
-        <NavLink label="Aulas" leftSection={<IconSchool size={16} />} onClick={() => onGo('/aulas')} />
-        <NavLink label="Conhecimento" leftSection={<IconBook size={16} />} onClick={() => onGo('/conhecimento')} />
+        <NavLink label="Central do Usuario" leftSection={<IconUser size={16} />} onClick={() => onGo('/user?tab=perfil')} />
+        <NavLink label="Notificacoes" leftSection={<IconBell size={16} />} onClick={() => onGo('/notificacoes')} />
         <NavLink label="Modo API" leftSection={<IconApi size={16} />} onClick={() => onGo('/integracoes/api')} />
+        <NavLink
+          label="Aparencia"
+          leftSection={<IconPalette size={16} />}
+          onClick={() => onGo('/config/aparencia')}
+        />
         {isSuperMode ? (
           <>
             <NavLink label="Sistema" leftSection={<IconSettings size={16} />} onClick={() => onGo('/super/sistema')} />
