@@ -14,8 +14,6 @@ export interface Property {
     proprietario_principal?: PropertyOwnerRef | null;
     documentos?: PropertyDocuments;
     fiscal?: PropertyFiscalData;
-    maquinas?: PropertyMachine[];
-    galpoes?: PropertyGalpao[];
     created_at: string;
     updated_at: string;
 }
@@ -61,20 +59,6 @@ export interface PropertyNfeData {
     serie?: string;
     ultima_nf_emitida?: string;
     token?: string;
-}
-
-export interface PropertyMachine {
-    id: string;
-    nome: string;
-    tipo?: string;
-    valor?: number;
-}
-
-export interface PropertyGalpao {
-    id: string;
-    nome: string;
-    area_construida_m2?: number;
-    valor?: number;
 }
 
 export interface PropertyAreaAllocation {
@@ -189,6 +173,7 @@ export interface Talhao {
         data_inicio: string;
         data_fim: string;
         safra?: string;
+        fonte?: string;
     }[];
     created_at: string;
     updated_at: string;

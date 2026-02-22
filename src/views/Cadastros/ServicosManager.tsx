@@ -67,7 +67,7 @@ async function persistLabServices(
   services: LaboratoryService[],
 ) {
   if (!userId) {
-    throw new Error('Usuario nao identificado para persistir servicos.');
+    throw new Error('Usuário não identificado para persistir servicos.');
   }
   await upsertLaboratory({
     id: lab.id,
@@ -208,8 +208,8 @@ export default function ServicosManager({
   const handleDelete = async (row: FlatServiceRow) => {
     if (!currentUserId) {
       notifications.show({
-        title: 'Usuario nao identificado',
-        message: 'Nao foi possivel identificar o usuario para excluir servico.',
+        title: 'Usuário não identificado',
+        message: 'Não foi possível identificar o usuário para excluir servico.',
         color: 'red',
       });
       return;
@@ -236,8 +236,8 @@ export default function ServicosManager({
   const handleSave = async () => {
     if (!currentUserId) {
       notifications.show({
-        title: 'Usuario nao identificado',
-        message: 'Nao foi possivel identificar o usuario para salvar servico.',
+        title: 'Usuário não identificado',
+        message: 'Não foi possível identificar o usuário para salvar servico.',
         color: 'red',
       });
       return;
@@ -257,7 +257,7 @@ export default function ServicosManager({
     const servicePrice = Number(draft.preco);
     if (serviceName.length < 2) {
       notifications.show({
-        title: 'Nome invalido',
+        title: 'Nome inválido',
         message: 'Informe pelo menos 2 caracteres no nome do servico.',
         color: 'yellow',
       });
@@ -265,7 +265,7 @@ export default function ServicosManager({
     }
     if (!Number.isFinite(servicePrice) || servicePrice < 0) {
       notifications.show({
-        title: 'Preco invalido',
+        title: 'Preco inválido',
         message: 'Informe um preco valido para o servico.',
         color: 'yellow',
       });
@@ -351,7 +351,7 @@ export default function ServicosManager({
             }
           />
           <TextInput
-            label="Descricao"
+            label="Descrição"
             value={draft.descricao}
             onChange={(event) =>
               setDraft((prev) => ({ ...prev, descricao: event.currentTarget.value }))
@@ -377,7 +377,7 @@ export default function ServicosManager({
           <Group grow>
             <TextInput
               label="Buscar"
-              placeholder="Servico, descricao ou laboratorio"
+              placeholder="Servico, descrição ou laboratorio"
               value={searchValue}
               onChange={(event) => setSearchValue(event.currentTarget.value)}
             />

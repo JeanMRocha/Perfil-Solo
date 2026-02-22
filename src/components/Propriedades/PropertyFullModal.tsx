@@ -43,8 +43,6 @@ import type {
   Property,
   PropertyDocuments,
   PropertyFiscalData,
-  PropertyGalpao,
-  PropertyMachine,
   PropertyOwnerRef,
 } from '../../types/property';
 
@@ -65,20 +63,6 @@ type PropertyFullModalProps = {
   userId?: string | null;
   property?: Property | null;
   talhoesAreaHa?: number;
-};
-
-type PropertyMachineDraft = {
-  id: string;
-  nome: string;
-  tipo: string;
-  valor: string;
-};
-
-type PropertyGalpaoDraft = {
-  id: string;
-  nome: string;
-  area_construida_m2: string;
-  valor: string;
 };
 
 type PropertyAreaAllocationDraft = {
@@ -109,8 +93,6 @@ type PropertyFormDraft = {
   proprietario: PropertyOwnerRef | null;
   documentos: PropertyDocuments;
   fiscal: PropertyFiscalDraft;
-  maquinas: PropertyMachineDraft[];
-  galpoes: PropertyGalpaoDraft[];
   area_allocations: PropertyAreaAllocationDraft[];
 };
 
@@ -155,6 +137,34 @@ function parseOptionalNumber(value: string): number | undefined {
   if (!normalized) return undefined;
   const parsed = Number(normalized.replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function formatAreaHa(value: number): string {
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatPhoneForDisplay(value: string): string {
+  let digits = value.replace(/\D/g, '');
+  if (digits.length > 11 && digits.startsWith('55')) {
+    digits = digits.slice(2);
+  }
+  digits = digits.slice(0, 11);
+  if (!digits) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  const ddd = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  if (rest.length <= 4) return `(${ddd}) ${rest}`;
+  if (rest.length <= 8) {
+    const start = rest.slice(0, 4);
+    const end = rest.slice(4);
+    return end ? `(${ddd}) ${start}-${end}` : `(${ddd}) ${start}`;
+  }
+  const start = rest.slice(0, 5);
+  const end = rest.slice(5, 9);
+  return end ? `(${ddd}) ${start}-${end}` : `(${ddd}) ${start}`;
 }
 
 const SOCIAL_NETWORK_OPTIONS = [
@@ -211,13 +221,29 @@ function normalizeContact(contact: ContactInfo): ContactInfo | undefined {
     contactPoints,
     contact,
   );
-  const emails = normalizeContactChannels(normalizedByModule.emails);
-  const phones = normalizeContactChannels(normalizedByModule.phones);
+  const hasExplicitEmailsList = Array.isArray(contact.emails);
+  const hasExplicitPhonesList = Array.isArray(contact.phones);
+
+  // Prioriza sempre os canais editados no formulario (emails/phones).
+  // Evita que campos legados (email/phone) restaurem valores antigos apos exclusao.
+  const emailsFromDraft = normalizeContactChannels(contact.emails);
+  const phonesFromDraft = normalizeContactChannels(contact.phones);
+  const fallbackEmail = hasExplicitEmailsList ? '' : toText(normalizedByModule.email);
+  const fallbackPhone = hasExplicitPhonesList ? '' : toText(normalizedByModule.phone);
+  const emails =
+    emailsFromDraft.length > 0
+      ? emailsFromDraft
+      : mapContactChannelsDraft(undefined, fallbackEmail);
+  const phones =
+    phonesFromDraft.length > 0
+      ? phonesFromDraft
+      : mapContactChannelsDraft(undefined, fallbackPhone);
+
   const socialLinks = normalizeSocialLinks(normalizedByModule.social_links);
   const addresses = normalizeContactAddressDrafts(contact.addresses, createLocalId);
   const primaryAddress = addresses[0];
-  const primaryEmail = emails[0]?.value ?? toText(normalizedByModule.email);
-  const primaryPhone = phones[0]?.value ?? toText(normalizedByModule.phone);
+  const primaryEmail = emails[0]?.value ?? '';
+  const primaryPhone = phones[0]?.value ?? '';
   const website = toText(normalizedByModule.website);
 
   const normalized: ContactInfo = {
@@ -342,26 +368,6 @@ function normalizeFiscal(
   };
 }
 
-function mapMachinesDraft(input: PropertyMachine[] | undefined): PropertyMachineDraft[] {
-  if (!input || input.length === 0) return [];
-  return input.map((item) => ({
-    id: item.id || createLocalId('machine'),
-    nome: item.nome ?? '',
-    tipo: item.tipo ?? '',
-    valor: numberToText(item.valor),
-  }));
-}
-
-function mapGalpoesDraft(input: PropertyGalpao[] | undefined): PropertyGalpaoDraft[] {
-  if (!input || input.length === 0) return [];
-  return input.map((item) => ({
-    id: item.id || createLocalId('galpao'),
-    nome: item.nome ?? '',
-    area_construida_m2: numberToText(item.area_construida_m2),
-    valor: numberToText(item.valor),
-  }));
-}
-
 function mapAreaAllocationsDraft(
   input: PropertyAreaAllocation[] | undefined,
 ): PropertyAreaAllocationDraft[] {
@@ -427,8 +433,6 @@ function buildInitialDraft(property?: Property | null): PropertyFormDraft {
       ultima_nf_emitida: fiscalNfe?.ultima_nf_emitida ?? '',
       token: fiscalNfe?.token ?? '',
     },
-    maquinas: mapMachinesDraft(property?.maquinas),
-    galpoes: mapGalpoesDraft(property?.galpoes),
     area_allocations: mapAreaAllocationsDraft(property?.area_allocations),
   };
 }
@@ -526,7 +530,7 @@ export default function PropertyFullModal({
 
   const talhoesCategoryName = useMemo(
     () =>
-      areaCategories.find((row) => row.id === 'talhoes')?.name ?? 'Talhoes',
+      areaCategories.find((row) => row.id === 'talhoes')?.name ?? 'Talhões',
     [areaCategories],
   );
 
@@ -603,34 +607,9 @@ export default function PropertyFullModal({
 
   const draftNameError = useMemo(() => {
     if (!opened) return null;
-    if (draft.nome.trim().length < 3) return 'Use pelo menos 3 caracteres.';
+    if (draft.nome.trim().length === 0) return 'Informe o nome da propriedade.';
     return null;
   }, [draft.nome, opened]);
-
-  const addMachineRow = () => {
-    setDraft((prev) => ({
-      ...prev,
-      maquinas: [
-        ...prev.maquinas,
-        { id: createLocalId('machine'), nome: '', tipo: '', valor: '' },
-      ],
-    }));
-  };
-
-  const addGalpaoRow = () => {
-    setDraft((prev) => ({
-      ...prev,
-      galpoes: [
-        ...prev.galpoes,
-        {
-          id: createLocalId('galpao'),
-          nome: '',
-          area_construida_m2: '',
-          valor: '',
-        },
-      ],
-    }));
-  };
 
   const addAreaAllocation = () => {
     if (!selectedAreaCategory || parsedAreaDraftValue == null) return;
@@ -856,7 +835,7 @@ export default function PropertyFullModal({
       if (!result) {
         setCepErrorsByAddress((prev) => ({
           ...prev,
-          [addressId]: 'CEP nao encontrado.',
+          [addressId]: 'CEP não encontrado.',
         }));
         return;
       }
@@ -909,29 +888,11 @@ export default function PropertyFullModal({
 
   const handleSave = async () => {
     const nome = draft.nome.trim();
-    if (nome.length < 3) return;
+    if (nome.length === 0) return;
 
     const contact = normalizeContact(draft.contato);
     const documents = normalizeDocuments(draft.documentos);
     const fiscal = normalizeFiscal(draft.fiscal);
-
-    const maquinas: PropertyMachine[] = draft.maquinas
-      .map((item) => ({
-        id: item.id,
-        nome: item.nome.trim(),
-        tipo: toText(item.tipo),
-        valor: parseOptionalNumber(item.valor),
-      }))
-      .filter((item) => item.nome.length > 0);
-
-    const galpoes: PropertyGalpao[] = draft.galpoes
-      .map((item) => ({
-        id: item.id,
-        nome: item.nome.trim(),
-        area_construida_m2: parseOptionalNumber(item.area_construida_m2),
-        valor: parseOptionalNumber(item.valor),
-      }))
-      .filter((item) => item.nome.length > 0);
 
     const areaAllocationsGrouped = new Map<string, PropertyAreaAllocation>();
     for (const item of draft.area_allocations) {
@@ -964,12 +925,8 @@ export default function PropertyFullModal({
       a.category_name.localeCompare(b.category_name, 'pt-BR'),
     );
 
-    const totalAreaFromInput = parseOptionalNumber(draft.total_area);
-    const totalAreaFromAllocations =
-      areaAllocations.length > 0 || normalizedTalhoesArea > 0
-        ? areaAllocations.reduce((sum, row) => sum + row.area_ha, 0) +
-          normalizedTalhoesArea
-        : undefined;
+    const totalAreaFromTalhoes =
+      normalizedTalhoesArea > 0 ? normalizedTalhoesArea : undefined;
 
     await onSubmit({
       nome,
@@ -977,14 +934,12 @@ export default function PropertyFullModal({
       patch: {
         cidade: toText(draft.cidade) || undefined,
         estado: toText(draft.estado) || undefined,
-        total_area: totalAreaFromInput ?? totalAreaFromAllocations,
+        total_area: totalAreaFromTalhoes,
         area_allocations: areaAllocations.length > 0 ? areaAllocations : undefined,
         contato_detalhes: contact,
         proprietario_principal: draft.proprietario ?? null,
         documentos: documents,
         fiscal,
-        maquinas: maquinas.length > 0 ? maquinas : undefined,
-        galpoes: galpoes.length > 0 ? galpoes : undefined,
       },
     });
   };
@@ -995,24 +950,23 @@ export default function PropertyFullModal({
       onClose={onClose}
       centered
       size="xl"
+      padding="sm"
       title={mode === 'create' ? 'Cadastrar propriedade' : 'Editar propriedade'}
     >
-      <Stack gap="sm">
+      <Stack gap="xs">
         <Tabs defaultValue="gerais">
           <Tabs.List>
             <Tabs.Tab value="gerais">Gerais</Tabs.Tab>
-            <Tabs.Tab value="enderecos">Enderecos</Tabs.Tab>
+            <Tabs.Tab value="enderecos">Endereços</Tabs.Tab>
             <Tabs.Tab value="contatos">Contatos</Tabs.Tab>
-            <Tabs.Tab value="proprietario">Proprietario</Tabs.Tab>
+            <Tabs.Tab value="proprietario">Proprietário</Tabs.Tab>
             <Tabs.Tab value="documentos">Documentos</Tabs.Tab>
             <Tabs.Tab value="fiscal">Fiscal NFe</Tabs.Tab>
-            <Tabs.Tab value="areas">Resumo de Areas</Tabs.Tab>
-            <Tabs.Tab value="maquinas">Maquinas</Tabs.Tab>
-            <Tabs.Tab value="galpoes">Galpoes</Tabs.Tab>
+            <Tabs.Tab value="areas">Resumo de Áreas</Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel value="gerais" pt="sm">
-            <Stack gap="sm">
+          <Tabs.Panel value="gerais" pt="xs">
+            <Stack gap="xs">
               <TextInput
                 label="Nome da propriedade"
                 value={draft.nome}
@@ -1023,26 +977,20 @@ export default function PropertyFullModal({
                 error={draftNameError}
                 data-autofocus
               />
-              <NumberInput
-                label="Area total (ha)"
-                value={draft.total_area}
-                min={0}
-                decimalScale={2}
-                onChange={(value) =>
-                  setDraft((prev) => ({
-                    ...prev,
-                    total_area: value == null ? '' : String(value),
-                  }))
-                }
+              <TextInput
+                label="Área total (ha)"
+                value={formatAreaHa(normalizedTalhoesArea)}
+                readOnly
+                description="Calculada automaticamente pela soma dos talhões."
               />
             </Stack>
           </Tabs.Panel>
 
-          <Tabs.Panel value="enderecos" pt="sm">
-            <Stack gap="sm">
+          <Tabs.Panel value="enderecos" pt="xs">
+            <Stack gap="xs">
               <Group justify="space-between" align="center">
                 <Text fw={600} size="sm">
-                  Enderecos da propriedade
+                  Endereços da propriedade
                 </Text>
                 <Button
                   size="xs"
@@ -1050,28 +998,28 @@ export default function PropertyFullModal({
                   leftSection={<IconPlus size={14} />}
                   onClick={addAddressRow}
                 >
-                  Adicionar endereco
+                  Adicionar endereço
                 </Button>
               </Group>
 
               {(draft.contato.addresses ?? []).length === 0 ? (
                 <Text size="sm" c="dimmed">
-                  Nenhum endereco cadastrado.
+                  Nenhum endereço cadastrado.
                 </Text>
               ) : (
                 <Stack gap="xs">
                   {(draft.contato.addresses ?? []).map((item, index) => (
-                    <Card key={item.id} withBorder radius="md" p="sm">
+                    <Card key={item.id} withBorder radius="md" p="xs">
                       <Stack gap="xs">
                         <Group justify="space-between" align="center">
                           <Badge color={index === 0 ? 'green' : 'gray'} variant="light">
-                            {index === 0 ? 'Endereco principal' : `Endereco ${index + 1}`}
+                            {index === 0 ? 'Endereço principal' : `Endereço ${index + 1}`}
                           </Badge>
                           <ActionIcon
                             color="red"
                             variant="light"
                             onClick={() => removeAddressRow(item.id ?? '')}
-                            aria-label="Remover endereco"
+                            aria-label="Remover endereço"
                           >
                             <IconTrash size={14} />
                           </ActionIcon>
@@ -1079,7 +1027,7 @@ export default function PropertyFullModal({
 
                         <TextInput
                           label="Categoria / local"
-                          placeholder="Unidade, correspondencia, escritorio..."
+                          placeholder="Unidade, correspondência, escritório..."
                           value={item.label ?? ''}
                           onChange={(event) =>
                             updateAddressRow(
@@ -1164,7 +1112,7 @@ export default function PropertyFullModal({
 
                         <Group grow>
                           <TextInput
-                            label="Endereco"
+                            label="Endereço"
                             placeholder="Rua, avenida, estrada..."
                             value={item.address ?? ''}
                             onChange={(event) =>
@@ -1176,8 +1124,8 @@ export default function PropertyFullModal({
                             }
                           />
                           <TextInput
-                            label="Numero"
-                            placeholder="Sem numero"
+                            label="Número"
+                            placeholder="Sem número"
                             value={item.address_number ?? ''}
                             onChange={(event) =>
                               updateAddressRow(
@@ -1208,8 +1156,8 @@ export default function PropertyFullModal({
             </Stack>
           </Tabs.Panel>
 
-          <Tabs.Panel value="contatos" pt="sm">
-            <Stack gap="md">
+          <Tabs.Panel value="contatos" pt="xs">
+            <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <Text fw={600} size="sm">
                   Emails da propriedade
@@ -1323,6 +1271,14 @@ export default function PropertyFullModal({
                               event.currentTarget?.value ?? '',
                             )
                           }
+                          onBlur={(event) =>
+                            updateContactChannel(
+                              'phones',
+                              item.id ?? '',
+                              'value',
+                              formatPhoneForDisplay(event.currentTarget?.value ?? ''),
+                            )
+                          }
                           style={{ flex: 1 }}
                         />
                         <ActionIcon
@@ -1374,7 +1330,7 @@ export default function PropertyFullModal({
                         />
                         <TextInput
                           label="Link ou @perfil"
-                          placeholder="https://... ou @usuario"
+                          placeholder="https://... ou @usuário"
                           value={item.url ?? ''}
                           onChange={(event) =>
                             updateSocialLink(
@@ -1401,10 +1357,10 @@ export default function PropertyFullModal({
             </Stack>
           </Tabs.Panel>
 
-          <Tabs.Panel value="proprietario" pt="sm">
-            <Stack gap="sm">
+          <Tabs.Panel value="proprietario" pt="xs">
+            <Stack gap="xs">
               {draft.proprietario ? (
-                <Card withBorder radius="md" p="sm">
+                <Card withBorder radius="md" p="xs">
                   <Group justify="space-between" align="flex-start">
                     <Stack gap={2}>
                       <Group gap={6}>
@@ -1438,11 +1394,11 @@ export default function PropertyFullModal({
                 onChange={(event) => setOwnerQuery(event.currentTarget?.value ?? '')}
               />
 
-              <ScrollArea h={220}>
+              <ScrollArea h={180}>
                 <Stack gap="xs">
                   {!userId ? (
                     <Text size="sm" c="dimmed">
-                      Usuario nao identificado para carregar pessoas.
+                      Usuário não identificado para carregar pessoas.
                     </Text>
                   ) : loadingClients ? (
                     <Text size="sm" c="dimmed">
@@ -1489,8 +1445,8 @@ export default function PropertyFullModal({
             </Stack>
           </Tabs.Panel>
 
-          <Tabs.Panel value="documentos" pt="sm">
-            <Stack gap="sm">
+          <Tabs.Panel value="documentos" pt="xs">
+            <Stack gap="xs">
               <TextInput
                 label="CAR"
                 value={draft.documentos.car ?? ''}
@@ -1538,8 +1494,8 @@ export default function PropertyFullModal({
             </Stack>
           </Tabs.Panel>
 
-          <Tabs.Panel value="fiscal" pt="sm">
-            <Stack gap="sm">
+          <Tabs.Panel value="fiscal" pt="xs">
+            <Stack gap="xs">
               <Text fw={600} size="sm">
                 Cartao CNPJ e CNAEs
               </Text>
@@ -1557,7 +1513,7 @@ export default function PropertyFullModal({
                   }}
                 />
                 <TextInput
-                  label="Razao social"
+                  label="Razão social"
                   value={draft.fiscal.razao_social}
                   onChange={(event) => {
                     const nextValue = event.currentTarget?.value ?? '';
@@ -1733,7 +1689,7 @@ export default function PropertyFullModal({
 
               <Group grow>
                 <TextInput
-                  label="Codigo do municipio (IBGE)"
+                  label="Código do municipio (IBGE)"
                   value={draft.fiscal.codigo_municipio}
                   onChange={(event) => {
                     const nextValue = event.currentTarget?.value ?? '';
@@ -1761,7 +1717,7 @@ export default function PropertyFullModal({
 
               <Group grow>
                 <TextInput
-                  label="Ultimo numero NFe emitida"
+                  label="Último número NFe emitida"
                   value={draft.fiscal.ultima_nf_emitida}
                   onChange={(event) => {
                     const nextValue = event.currentTarget?.value ?? '';
@@ -1789,14 +1745,14 @@ export default function PropertyFullModal({
             </Stack>
           </Tabs.Panel>
 
-          <Tabs.Panel value="areas" pt="sm">
-            <Stack gap="sm">
+          <Tabs.Panel value="areas" pt="xs">
+            <Stack gap="xs">
               <Text size="sm" c="dimmed">
-                Lance as areas por categoria para o sistema consolidar subtotal por
+                Lance as áreas por categoria para o sistema consolidar subtotal por
                 categoria e o total geral da propriedade.
               </Text>
               <Text size="xs" c="dimmed">
-                A categoria Talhoes e calculada automaticamente com base nos talhoes
+                A categoria Talhões é calculada automaticamente com base nos talhões
                 cadastrados nesta propriedade.
               </Text>
 
@@ -1811,7 +1767,7 @@ export default function PropertyFullModal({
                   onChange={setAreaDraftCategoryId}
                 />
                 <NumberInput
-                  label="Area (ha)"
+                  label="Área (ha)"
                   min={0}
                   decimalScale={2}
                   value={areaDraftValue}
@@ -1830,7 +1786,7 @@ export default function PropertyFullModal({
 
               <Group gap="sm">
                 <Badge color="cyan" variant="light">
-                  {`Categorias com area: ${areaTotalByCategory.length}`}
+                  {`Categorias com área: ${areaTotalByCategory.length}`}
                 </Badge>
                 <Badge color="green" variant="light">
                   {`Total geral: ${areaTotalGeral.toLocaleString('pt-BR', {
@@ -1842,7 +1798,7 @@ export default function PropertyFullModal({
 
               {!hasAreaSummary ? (
                 <Text size="sm" c="dimmed">
-                  Nenhuma area cadastrada no resumo.
+                  Nenhuma área cadastrada no resumo.
                 </Text>
               ) : (
                 <Stack gap="xs">
@@ -1853,7 +1809,7 @@ export default function PropertyFullModal({
                         (item.category_id || item.category_name) === group.category_id,
                     );
                     return (
-                      <Card key={group.category_id} withBorder radius="md" p="sm">
+                      <Card key={group.category_id} withBorder radius="md" p="xs">
                         <Group justify="space-between" mb="xs">
                           <Text fw={700}>{group.category_name}</Text>
                           <Badge color="blue" variant="light">
@@ -1866,7 +1822,7 @@ export default function PropertyFullModal({
                         <Stack gap={6}>
                           {isAutomaticTalhoes ? (
                             <Text size="sm" c="dimmed">
-                              Total calculado automaticamente dos talhoes cadastrados.
+                              Total calculado automaticamente dos talhões cadastrados.
                             </Text>
                           ) : (
                             rows.map((item) => (
@@ -1900,186 +1856,6 @@ export default function PropertyFullModal({
             </Stack>
           </Tabs.Panel>
 
-          <Tabs.Panel value="maquinas" pt="sm">
-            <Stack gap="sm">
-              <Group justify="space-between">
-                <Text size="sm" c="dimmed">
-                  Cadastre maquinas com tipo e valor.
-                </Text>
-                <Button size="xs" leftSection={<IconPlus size={14} />} onClick={addMachineRow}>
-                  Adicionar maquina
-                </Button>
-              </Group>
-
-              {draft.maquinas.length === 0 ? (
-                <Text size="sm" c="dimmed">
-                  Nenhuma maquina adicionada.
-                </Text>
-              ) : (
-                <Stack gap="xs">
-                  {draft.maquinas.map((machine) => (
-                    <Card key={machine.id} withBorder radius="md" p="xs">
-                      <Group align="flex-end" wrap="nowrap">
-                        <TextInput
-                          label="Nome"
-                          value={machine.nome}
-                          onChange={(event) => {
-                            const nextValue = event.currentTarget?.value ?? '';
-                            setDraft((prev) => ({
-                              ...prev,
-                              maquinas: prev.maquinas.map((item) =>
-                                item.id === machine.id ? { ...item, nome: nextValue } : item,
-                              ),
-                            }));
-                          }}
-                          style={{ flex: 1 }}
-                        />
-                        <TextInput
-                          label="Tipo"
-                          value={machine.tipo}
-                          onChange={(event) => {
-                            const nextValue = event.currentTarget?.value ?? '';
-                            setDraft((prev) => ({
-                              ...prev,
-                              maquinas: prev.maquinas.map((item) =>
-                                item.id === machine.id ? { ...item, tipo: nextValue } : item,
-                              ),
-                            }));
-                          }}
-                          style={{ flex: 1 }}
-                        />
-                        <NumberInput
-                          label="Valor"
-                          min={0}
-                          decimalScale={2}
-                          value={machine.valor}
-                          onChange={(value) =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              maquinas: prev.maquinas.map((item) =>
-                                item.id === machine.id
-                                  ? { ...item, valor: value == null ? '' : String(value) }
-                                  : item,
-                              ),
-                            }))
-                          }
-                          style={{ width: 140 }}
-                        />
-                        <ActionIcon
-                          color="red"
-                          variant="light"
-                          onClick={() =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              maquinas: prev.maquinas.filter(
-                                (item) => item.id !== machine.id,
-                              ),
-                            }))
-                          }
-                        >
-                          <IconTrash size={14} />
-                        </ActionIcon>
-                      </Group>
-                    </Card>
-                  ))}
-                </Stack>
-              )}
-            </Stack>
-          </Tabs.Panel>
-
-          <Tabs.Panel value="galpoes" pt="sm">
-            <Stack gap="sm">
-              <Group justify="space-between">
-                <Text size="sm" c="dimmed">
-                  Cadastre galpoes com area construida e valor.
-                </Text>
-                <Button size="xs" leftSection={<IconPlus size={14} />} onClick={addGalpaoRow}>
-                  Adicionar galpao
-                </Button>
-              </Group>
-
-              {draft.galpoes.length === 0 ? (
-                <Text size="sm" c="dimmed">
-                  Nenhum galpao adicionado.
-                </Text>
-              ) : (
-                <Stack gap="xs">
-                  {draft.galpoes.map((galpao) => (
-                    <Card key={galpao.id} withBorder radius="md" p="xs">
-                      <Group align="flex-end" wrap="nowrap">
-                        <TextInput
-                          label="Nome"
-                          value={galpao.nome}
-                          onChange={(event) => {
-                            const nextValue = event.currentTarget?.value ?? '';
-                            setDraft((prev) => ({
-                              ...prev,
-                              galpoes: prev.galpoes.map((item) =>
-                                item.id === galpao.id ? { ...item, nome: nextValue } : item,
-                              ),
-                            }));
-                          }}
-                          style={{ flex: 1 }}
-                        />
-                        <NumberInput
-                          label="Area construida (m2)"
-                          min={0}
-                          decimalScale={2}
-                          value={galpao.area_construida_m2}
-                          onChange={(value) =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              galpoes: prev.galpoes.map((item) =>
-                                item.id === galpao.id
-                                  ? {
-                                      ...item,
-                                      area_construida_m2:
-                                        value == null ? '' : String(value),
-                                    }
-                                  : item,
-                              ),
-                            }))
-                          }
-                          style={{ width: 180 }}
-                        />
-                        <NumberInput
-                          label="Valor"
-                          min={0}
-                          decimalScale={2}
-                          value={galpao.valor}
-                          onChange={(value) =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              galpoes: prev.galpoes.map((item) =>
-                                item.id === galpao.id
-                                  ? { ...item, valor: value == null ? '' : String(value) }
-                                  : item,
-                              ),
-                            }))
-                          }
-                          style={{ width: 140 }}
-                        />
-                        <ActionIcon
-                          color="red"
-                          variant="light"
-                          onClick={() =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              galpoes: prev.galpoes.filter(
-                                (item) => item.id !== galpao.id,
-                              ),
-                            }))
-                          }
-                        >
-                          <IconTrash size={14} />
-                        </ActionIcon>
-                      </Group>
-                    </Card>
-                  ))}
-                </Stack>
-              )}
-            </Stack>
-          </Tabs.Panel>
         </Tabs>
 
         <Group justify="flex-end">

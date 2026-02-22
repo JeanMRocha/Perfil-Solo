@@ -1,5 +1,12 @@
 import { Avatar, Badge, Box, Drawer, Group, NavLink, Stack, Text } from '@mantine/core';
-import { IconGraph, IconLogout, IconSettings, IconTicket, IconUser } from '@tabler/icons-react';
+import {
+  IconGraph,
+  IconLockAccess,
+  IconLogout,
+  IconSettings,
+  IconTicket,
+  IconUser,
+} from '@tabler/icons-react';
 
 interface UserDrawerProps {
   opened: boolean;
@@ -27,7 +34,7 @@ export default function UserDrawer({
   onGo,
 }: UserDrawerProps) {
   return (
-    <Drawer opened={opened} onClose={onClose} position="right" title="Usuario logado">
+    <Drawer opened={opened} onClose={onClose} position="right" title="Usuário logado">
       <Stack gap="md">
         <Box>
           <Group gap="sm" align="center">
@@ -48,12 +55,13 @@ export default function UserDrawer({
 
         <Group gap="xs">
           <Badge color="cyan">Plano {planLabel}</Badge>
-          <Badge color="grape">Creditos {creditsLabel}</Badge>
+          <Badge color="grape">Créditos {creditsLabel}</Badge>
         </Group>
 
-        <NavLink label="Perfil" leftSection={<IconUser size={16} />} onClick={() => onGo('/user?tab=perfil')} />
-        <NavLink label="Configuracoes" leftSection={<IconSettings size={16} />} onClick={() => onGo('/user?tab=plano')} />
-        <NavLink label="Creditos" leftSection={<IconGraph size={16} />} onClick={() => onGo('/user?tab=creditos')} />
+        <NavLink label="Usuário" leftSection={<IconUser size={16} />} onClick={() => onGo('/user?tab=perfil')} />
+        <NavLink label="Segurança" leftSection={<IconLockAccess size={16} />} onClick={() => onGo('/user?tab=seguranca')} />
+        <NavLink label="Configurações" leftSection={<IconSettings size={16} />} onClick={() => onGo('/user?tab=plano')} />
+        <NavLink label="Créditos" leftSection={<IconGraph size={16} />} onClick={() => onGo('/user?tab=creditos')} />
         <NavLink label="Cupons" leftSection={<IconTicket size={16} />} onClick={() => onGo('/user?tab=cupons')} />
         <NavLink color="red" label="Sair" leftSection={<IconLogout size={16} />} onClick={() => onGo('/auth/logout')} />
       </Stack>

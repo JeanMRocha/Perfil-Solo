@@ -1,11 +1,21 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
+  Center,
   Card,
-  Divider,
+  Collapse,
   Group,
+  Loader,
   Modal,
   NumberInput,
   Select,
@@ -13,8 +23,27 @@ import {
   Table,
   Text,
   TextInput,
+  Tooltip,
 } from '@mantine/core';
-import { IconPlus } from '@tabler/icons-react';
+import {
+  IconBan,
+  IconCheck,
+  IconChevronDown,
+  IconChevronUp,
+  IconDeviceFloppy,
+  IconExternalLink,
+  IconHelpCircle,
+  IconMap2,
+  IconMapOff,
+  IconMinus,
+  IconPencil,
+  IconPlus,
+  IconPolygon,
+  IconSearch,
+  IconTrash,
+  IconVectorSpline,
+  IconX,
+} from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import {
   Stage,
@@ -25,41 +54,270 @@ import {
   Text as KonvaText,
 } from 'react-konva';
 import type { Talhao } from '../../types/property';
+import mapReferenceBg from '../../assets/map-reference-bg.svg';
 import {
-  listLocalCultureProfiles,
-  type LocalCultureProfile,
-} from '../../services/cultureProfilesService';
+  findSoilCatalogEntry,
+  listSoilCatalog,
+  type SoilCatalogEntry,
+} from '../../services/soilCatalogService';
 import {
   parseTalhaoGeometry,
+  deleteTalhaoForProperty,
   type MapPoint,
+  type TalhaoSoilClassificationSnapshot,
   updateTalhaoForProperty,
 } from '../../services/propertyMapService';
+import {
+  resolveGeoPointFromInput,
+  parseCoordinatesInput,
+  type GeoPoint,
+} from '../../services/mapBackgroundService';
+import {
+  GEO_BASE_LAYERS,
+  type GeoLayerId,
+} from '../../modules/geo/baseLayers';
+import type {
+  SoilClassificationRequest,
+  SoilResultResponse,
+} from '../../services/soilClassificationContractService';
+import {
+  RNC_CULTIVAR_SELECTED_EVENT,
+  type RncCultivarSelectionMessage,
+} from '../../services/rncCultivarService';
+import { lazyWithBoundary } from '../../router/lazyWithBoundary';
+import { CRS, latLng } from 'leaflet';
+
+const LazyGeoBackdropMap = lazyWithBoundary(
+  () =>
+    import('../../modules/geo/GeoBackdropMap').then((module) => ({
+      default: module.GeoBackdropMap,
+    })),
+  'GeoBackdropMap',
+);
+
+const LazySoilClassificationWorkspace = lazyWithBoundary(
+  () =>
+    import('../../modules/soilClassification').then((module) => ({
+      default: module.SoilClassificationWorkspace,
+    })),
+  'SoilClassificationWorkspace',
+);
 
 type DrawMode = 'none' | 'main' | 'zone';
-type CultureModalMode = 'create' | 'edit';
+type CultureModalMode = 'edit';
+type SelectedVertex =
+  | { kind: 'main'; pointIndex: number }
+  | { kind: 'zone'; zoneIndex: number; pointIndex: number };
 
 type CultureEntry = {
   cultura: string;
   cultivar?: string;
   data_inicio: string;
   data_fim: string;
+  fonte?: string;
+};
+
+const UNCLASSIFIED_SOIL_VALUE = '__nao_classificado__';
+const UNCLASSIFIED_SOIL_LABEL = 'Não classificado';
+const DEFAULT_SOIL_LINKED_COLOR = '#81C784';
+const SOIL_COLOR_BY_ORDER: Record<string, string> = {
+  argissolos: '#B45309',
+  cambissolos: '#A16207',
+  chernossolos: '#78350F',
+  espodossolos: '#475569',
+  gleissolos: '#0EA5A4',
+  latossolos: '#7C3AED',
+  luvissolos: '#D97706',
+  neossolos: '#6B7280',
+  nitossolos: '#16A34A',
+  organossolos: '#166534',
+  planossolos: '#2563EB',
+  plintossolos: '#B91C1C',
+  vertissolos: '#4F46E5',
 };
 
 function flattenPoints(points: MapPoint[]) {
   return points.flatMap((p) => [p.x, p.y]);
 }
 
-function centroid(points: MapPoint[]): MapPoint {
-  if (!points.length) return { x: 0, y: 0 };
-  const sum = points.reduce(
-    (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
-    { x: 0, y: 0 },
+function polygonBounds(points: MapPoint[]) {
+  if (!points.length) {
+    return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  }
+  return points.reduce(
+    (acc, point) => ({
+      minX: Math.min(acc.minX, point.x),
+      maxX: Math.max(acc.maxX, point.x),
+      minY: Math.min(acc.minY, point.y),
+      maxY: Math.max(acc.maxY, point.y),
+    }),
+    { minX: points[0].x, maxX: points[0].x, minY: points[0].y, maxY: points[0].y },
   );
-  return { x: sum.x / points.length, y: sum.y / points.length };
 }
 
-function safeDate(value?: string | null) {
-  return value ? value : '';
+function isPointOnSegment(point: MapPoint, start: MapPoint, end: MapPoint): boolean {
+  const cross =
+    (point.y - start.y) * (end.x - start.x) - (point.x - start.x) * (end.y - start.y);
+  if (Math.abs(cross) > 0.5) return false;
+
+  const dot =
+    (point.x - start.x) * (end.x - start.x) + (point.y - start.y) * (end.y - start.y);
+  if (dot < 0) return false;
+
+  const squaredLength =
+    (end.x - start.x) * (end.x - start.x) + (end.y - start.y) * (end.y - start.y);
+  return dot <= squaredLength;
+}
+
+function isPointInsidePolygon(point: MapPoint, polygon: MapPoint[]): boolean {
+  if (polygon.length < 3) return false;
+
+  for (let i = 0; i < polygon.length; i += 1) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    if (isPointOnSegment(point, a, b)) return true;
+  }
+
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+
+    const intersects =
+      yi > point.y !== yj > point.y &&
+      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function signedArea2(a: MapPoint, b: MapPoint, c: MapPoint): number {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+function isProperSegmentIntersection(
+  a1: MapPoint,
+  a2: MapPoint,
+  b1: MapPoint,
+  b2: MapPoint,
+): boolean {
+  const o1 = signedArea2(a1, a2, b1);
+  const o2 = signedArea2(a1, a2, b2);
+  const o3 = signedArea2(b1, b2, a1);
+  const o4 = signedArea2(b1, b2, a2);
+  return o1 * o2 < 0 && o3 * o4 < 0;
+}
+
+function isSegmentInsidePolygon(start: MapPoint, end: MapPoint, polygon: MapPoint[]): boolean {
+  if (polygon.length < 3) return false;
+  if (!isPointInsidePolygon(start, polygon) || !isPointInsidePolygon(end, polygon)) {
+    return false;
+  }
+  if (!isPointInsidePolygon(midpoint(start, end), polygon)) return false;
+
+  for (let i = 0; i < polygon.length; i += 1) {
+    const edgeA = polygon[i];
+    const edgeB = polygon[(i + 1) % polygon.length];
+    if (isProperSegmentIntersection(start, end, edgeA, edgeB)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isPolygonInsidePolygon(inner: MapPoint[], outer: MapPoint[]): boolean {
+  if (inner.length < 3 || outer.length < 3) return false;
+
+  if (!inner.every((point) => isPointInsidePolygon(point, outer))) return false;
+
+  for (let i = 0; i < inner.length; i += 1) {
+    const innerA = inner[i];
+    const innerB = inner[(i + 1) % inner.length];
+
+    // Em poligonos concavos, dois pontos internos podem formar aresta externa.
+    // Validamos um ponto no meio da aresta para garantir que o segmento permaneceu dentro.
+    if (!isSegmentInsidePolygon(innerA, innerB, outer)) return false;
+  }
+
+  return true;
+}
+
+function midpoint(start: MapPoint, end: MapPoint): MapPoint {
+  return {
+    x: (start.x + end.x) / 2,
+    y: (start.y + end.y) / 2,
+  };
+}
+
+function geoPointToCanvasPoint(
+  geoPoint: GeoPoint,
+  viewCenter: GeoPoint,
+  zoom: number,
+  canvasWidth: number,
+  canvasHeight: number,
+): MapPoint {
+  const centerProjected = CRS.EPSG3857.latLngToPoint(
+    latLng(viewCenter.lat, viewCenter.lon),
+    zoom,
+  );
+  const targetProjected = CRS.EPSG3857.latLngToPoint(
+    latLng(geoPoint.lat, geoPoint.lon),
+    zoom,
+  );
+
+  return {
+    x: targetProjected.x - centerProjected.x + canvasWidth / 2,
+    y: targetProjected.y - centerProjected.y + canvasHeight / 2,
+  };
+}
+
+function normalizeMonthYear(value?: string | null): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    if (year >= 1900 && month >= 1 && month <= 12) {
+      return `${isoMatch[1]}-${isoMatch[2]}`;
+    }
+  }
+
+  const brMatch = raw.match(/^(\d{2})\/(\d{4})$/);
+  if (brMatch) {
+    const month = Number(brMatch[1]);
+    const year = Number(brMatch[2]);
+    if (year >= 1900 && month >= 1 && month <= 12) {
+      return `${brMatch[2]}-${brMatch[1]}`;
+    }
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const year = parsed.getUTCFullYear();
+  const month = parsed.getUTCMonth() + 1;
+  if (year < 1900 || month < 1 || month > 12) return '';
+  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`;
+}
+
+function monthYearOrder(value?: string | null): number {
+  const normalized = normalizeMonthYear(value);
+  if (!normalized) return Number.NaN;
+  const [yearText, monthText] = normalized.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return Number.NaN;
+  return year * 12 + month;
+}
+
+function formatMonthYear(value?: string | null): string {
+  const normalized = normalizeMonthYear(value);
+  if (!normalized) return '-';
+  const [year, month] = normalized.split('-');
+  return `${month}/${year}`;
 }
 
 function normalizeKey(value?: string | null): string {
@@ -71,11 +329,36 @@ function normalizeKey(value?: string | null): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function isUnclassifiedSoilValue(value?: string | null): boolean {
+  const normalized = normalizeKey(value);
+  return (
+    normalized === normalizeKey(UNCLASSIFIED_SOIL_VALUE) ||
+    normalized === normalizeKey(UNCLASSIFIED_SOIL_LABEL)
+  );
+}
+
+function resolveSoilLinkedColor(
+  soilValue?: string | null,
+  fallback?: string | null,
+): string {
+  const normalized = normalizeKey(soilValue);
+  if (normalized && SOIL_COLOR_BY_ORDER[normalized]) return SOIL_COLOR_BY_ORDER[normalized];
+  return (fallback && fallback.trim()) || DEFAULT_SOIL_LINKED_COLOR;
+}
+
+function normalizeGeoLayerId(value?: string | null): GeoLayerId {
+  if (value === 'streets' || value === 'topographic' || value === 'satellite') {
+    return value;
+  }
+  return 'satellite';
+}
+
 interface TalhaoDetailModalProps {
   opened: boolean;
   talhao: Talhao | null;
   onClose: () => void;
   onSaved: (talhaoId: string) => Promise<void> | void;
+  onDeleted?: (talhaoId: string) => Promise<void> | void;
 }
 
 export default function TalhaoDetailModal({
@@ -83,21 +366,37 @@ export default function TalhaoDetailModal({
   talhao,
   onClose,
   onSaved,
+  onDeleted,
 }: TalhaoDetailModalProps) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const lastDrawWarningAt = useRef(0);
   const [stageWidth, setStageWidth] = useState(900);
   const [drawMode, setDrawMode] = useState<DrawMode>('none');
   const [currentPoints, setCurrentPoints] = useState<MapPoint[]>([]);
   const [mousePos, setMousePos] = useState<MapPoint | null>(null);
   const [mainPoints, setMainPoints] = useState<MapPoint[]>([]);
   const [zones, setZones] = useState<MapPoint[][]>([]);
+  const [selectedMainPolygon, setSelectedMainPolygon] = useState(false);
   const [selectedZoneIndex, setSelectedZoneIndex] = useState<number | null>(null);
+  const [selectedVertex, setSelectedVertex] = useState<SelectedVertex | null>(null);
+  const [mapSearchValue, setMapSearchValue] = useState('');
+  const [mapCenter, setMapCenter] = useState<GeoPoint | null>(null);
+  const [mapZoom, setMapZoom] = useState(16);
+  const [mapLayerId, setMapLayerId] = useState<GeoLayerId>('satellite');
+  const [mapInteractive, setMapInteractive] = useState(false);
+  const [mapSearchLoading, setMapSearchLoading] = useState(false);
+  const [pointSearchValue, setPointSearchValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const [emptyAreaGuardOpened, setEmptyAreaGuardOpened] = useState(false);
+  const [emptyAreaGuardReason, setEmptyAreaGuardReason] = useState<'close' | 'save'>(
+    'close',
+  );
+  const [deletingEmptyTalhao, setDeletingEmptyTalhao] = useState(false);
 
   const [nome, setNome] = useState('');
   const [areaHa, setAreaHa] = useState<number | ''>('');
   const [tipoSolo, setTipoSolo] = useState('');
-  const [cor, setCor] = useState('#81C784');
+  const [currentCulture, setCurrentCulture] = useState('');
   const [cultureDraft, setCultureDraft] = useState<CultureEntry>({
     cultura: '',
     cultivar: '',
@@ -105,16 +404,20 @@ export default function TalhaoDetailModal({
     data_fim: '',
   });
   const [cultures, setCultures] = useState<CultureEntry[]>([]);
-  const [availableCultures, setAvailableCultures] = useState<LocalCultureProfile[]>(
-    [],
-  );
-  const [manualCultivar, setManualCultivar] = useState(false);
+  const [availableSoils, setAvailableSoils] = useState<SoilCatalogEntry[]>([]);
   const [cultureModalOpened, setCultureModalOpened] = useState(false);
   const [cultureModalMode, setCultureModalMode] =
-    useState<CultureModalMode>('create');
+    useState<CultureModalMode>('edit');
   const [editingCultureIndex, setEditingCultureIndex] = useState<number | null>(
     null,
   );
+  const [soilClassifierOpened, setSoilClassifierOpened] = useState(false);
+  const [soilClassificationRequest, setSoilClassificationRequest] =
+    useState<SoilClassificationRequest | null>(null);
+  const [soilClassificationResult, setSoilClassificationResult] =
+    useState<SoilResultResponse | null>(null);
+  const [soilClassificationSnapshot, setSoilClassificationSnapshot] =
+    useState<TalhaoSoilClassificationSnapshot | null>(null);
 
   useEffect(() => {
     const element = canvasRef.current;
@@ -131,8 +434,13 @@ export default function TalhaoDetailModal({
   }, [opened]);
 
   useEffect(() => {
+    if (opened) return;
+    setSoilClassifierOpened(false);
+  }, [opened]);
+
+  useEffect(() => {
     if (!opened) return;
-    setAvailableCultures(listLocalCultureProfiles());
+    setAvailableSoils(listSoilCatalog());
   }, [opened]);
 
   useEffect(() => {
@@ -140,29 +448,56 @@ export default function TalhaoDetailModal({
     const geometry = parseTalhaoGeometry(talhao.coordenadas_svg);
     setMainPoints(geometry.points);
     setZones(geometry.exclusionZones);
+    setSelectedMainPolygon(false);
     setSelectedZoneIndex(null);
+    setSelectedVertex(null);
     setDrawMode('none');
     setCurrentPoints([]);
     setMousePos(null);
     setNome(talhao.nome ?? '');
     setAreaHa(talhao.area_ha == null ? '' : talhao.area_ha);
-    setTipoSolo(talhao.tipo_solo ?? '');
-    setCor(talhao.cor_identificacao ?? '#81C784');
-    setCultures(
-      Array.isArray(talhao.historico_culturas)
-        ? talhao.historico_culturas.map((item) => ({
-            cultura: item.cultura ?? '',
-            cultivar: item.cultivar ?? '',
-            data_inicio: safeDate(item.data_inicio ?? item.safra),
-            data_fim: safeDate(item.data_fim ?? item.safra),
-          }))
-        : [],
+    setTipoSolo(
+      !talhao.tipo_solo || isUnclassifiedSoilValue(talhao.tipo_solo)
+        ? UNCLASSIFIED_SOIL_VALUE
+        : talhao.tipo_solo,
     );
+    const parsedCultures = Array.isArray(talhao.historico_culturas)
+      ? talhao.historico_culturas.map((item) => ({
+          cultura: item.cultura ?? '',
+          cultivar: item.cultivar ?? '',
+          data_inicio: normalizeMonthYear(item.data_inicio ?? item.safra),
+          data_fim: normalizeMonthYear(item.data_fim ?? item.safra),
+          fonte: (item as any)?.fonte ?? undefined,
+        }))
+      : [];
+    setCultures(parsedCultures);
+    const persistedCurrentCulture =
+      typeof geometry.currentCulture === 'string' ? geometry.currentCulture.trim() : '';
+    setCurrentCulture(persistedCurrentCulture || parsedCultures[0]?.cultura || '');
     setCultureDraft({ cultura: '', cultivar: '', data_inicio: '', data_fim: '' });
-    setManualCultivar(false);
     setCultureModalOpened(false);
-    setCultureModalMode('create');
+    setCultureModalMode('edit');
     setEditingCultureIndex(null);
+    setSoilClassifierOpened(false);
+    setSoilClassificationSnapshot(geometry.soilClassification ?? null);
+    setSoilClassificationRequest(geometry.soilClassification?.request ?? null);
+    setSoilClassificationResult(geometry.soilClassification?.response ?? null);
+    setMapSearchValue('');
+    if (geometry.mapReference?.center) {
+      setMapCenter({
+        lat: geometry.mapReference.center.lat,
+        lon: geometry.mapReference.center.lon,
+      });
+      setMapZoom(Math.max(3, Math.min(19, Math.round(geometry.mapReference.zoom ?? 16))));
+      setMapLayerId(normalizeGeoLayerId(geometry.mapReference.layerId));
+    } else {
+      setMapCenter(null);
+      setMapZoom(16);
+      setMapLayerId('satellite');
+    }
+    setMapInteractive(false);
+    setMapSearchLoading(false);
+    setPointSearchValue('');
   }, [opened, talhao]);
 
   const statusLabel = useMemo(() => {
@@ -171,45 +506,149 @@ export default function TalhaoDetailModal({
     return 'Visualizacao';
   }, [drawMode]);
 
-  const cultureOptions = useMemo(() => {
+  const currentCultureOptions = useMemo(() => {
     const map = new Map<string, string>();
-    for (const row of availableCultures) {
-      const label = row.cultura?.trim();
+    for (const row of cultures) {
+      const label = row.cultura.trim();
       if (!label) continue;
       const key = normalizeKey(label);
       if (!key || map.has(key)) continue;
       map.set(key, label);
     }
-    return Array.from(map.values())
-      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-      .map((value) => ({ value, label: value }));
-  }, [availableCultures]);
-
-  const cultivarOptions = useMemo(() => {
-    const culturaKey = normalizeKey(cultureDraft.cultura);
-    if (!culturaKey) return [];
-
-    const map = new Map<string, string>();
-    for (const row of availableCultures) {
-      if (normalizeKey(row.cultura) !== culturaKey) continue;
-      const label = row.variedade?.trim();
-      if (!label) continue;
-      const key = normalizeKey(label);
-      if (!key || map.has(key)) continue;
-      map.set(key, label);
+    const selected = currentCulture.trim();
+    if (selected) {
+      const key = normalizeKey(selected);
+      if (key && !map.has(key)) {
+        map.set(key, selected);
+      }
     }
-
     return Array.from(map.values())
       .sort((a, b) => a.localeCompare(b, 'pt-BR'))
       .map((value) => ({ value, label: value }));
-  }, [availableCultures, cultureDraft.cultura]);
+  }, [cultures, currentCulture]);
+
+  const soilOptions = useMemo(() => {
+    const catalogOptions = availableSoils.map((soil) => ({
+      value: soil.nome,
+      label: soil.nome,
+    }));
+    const options = [
+      { value: UNCLASSIFIED_SOIL_VALUE, label: UNCLASSIFIED_SOIL_LABEL },
+      ...catalogOptions,
+    ];
+    const currentSoil = tipoSolo.trim();
+    if (!currentSoil) return options;
+
+    const hasCurrent = options.some(
+      (option) => normalizeKey(option.value) === normalizeKey(currentSoil),
+    );
+    if (hasCurrent) return options;
+
+    return [
+      { value: currentSoil, label: `${currentSoil} (personalizado)` },
+      ...options,
+    ];
+  }, [availableSoils, tipoSolo]);
+
+  const selectedSoil = useMemo(
+    () => (isUnclassifiedSoilValue(tipoSolo) ? null : findSoilCatalogEntry(tipoSolo)),
+    [tipoSolo],
+  );
+
+  const normalizedTipoSolo = useMemo(() => {
+    const raw = tipoSolo.trim();
+    if (!raw || isUnclassifiedSoilValue(raw)) return null;
+    return raw;
+  }, [tipoSolo]);
+
+  const resolvedTalhaoColor = useMemo(
+    () => resolveSoilLinkedColor(normalizedTipoSolo, talhao?.cor_identificacao),
+    [normalizedTipoSolo, talhao?.cor_identificacao],
+  );
+
+  const hasValidArea = useMemo(() => {
+    if (areaHa === '') return false;
+    const parsed = Number(areaHa);
+    return Number.isFinite(parsed) && parsed > 0;
+  }, [areaHa]);
+
+  const lastClassificationSummary = useMemo(() => {
+    const primary = soilClassificationResult?.result?.primary;
+    if (!primary) return null;
+    return `${primary.order} (${Math.round(primary.confidence)}%)`;
+  }, [soilClassificationResult]);
+
+  const openSoilClassifier = () => {
+    setSoilClassifierOpened(true);
+  };
+
+  const closeSoilClassifier = () => {
+    setSoilClassifierOpened(false);
+  };
+
+  const applyClassificationToTalhao = () => {
+    const primary = soilClassificationResult?.result.primary;
+    const currentRequest = soilClassificationRequest;
+    const currentResponse = soilClassificationResult;
+    if (!primary) {
+      notifications.show({
+        title: 'Classificacao pendente',
+        message: 'Execute a classificacao antes de aplicar no talhão.',
+        color: 'yellow',
+      });
+      return;
+    }
+    if (!currentRequest || !currentResponse) {
+      notifications.show({
+        title: 'Classificacao incompleta',
+        message: 'Não foi possível capturar os dados completos da classificacao.',
+        color: 'yellow',
+      });
+      return;
+    }
+    setSoilClassificationSnapshot({
+      request: currentRequest,
+      response: currentResponse,
+      applied_at: new Date().toISOString(),
+    });
+    setTipoSolo(primary.order);
+    setSoilClassifierOpened(false);
+    notifications.show({
+      title: 'Classe aplicada',
+      message: `Classe de solo definida como ${primary.order}.`,
+      color: 'green',
+    });
+  };
+
+  const showDrawWarning = (title: string, message: string) => {
+    const now = Date.now();
+    if (now - lastDrawWarningAt.current < 700) return;
+    lastDrawWarningAt.current = now;
+    notifications.show({
+      title,
+      message,
+      color: 'yellow',
+    });
+  };
 
   const handleStageClick = (event: any) => {
-    if (drawMode === 'none') return;
+    if (drawMode === 'none') {
+      setSelectedMainPolygon(false);
+      setSelectedZoneIndex(null);
+      setSelectedVertex(null);
+      return;
+    }
     if (event?.evt?.button === 2) return;
     const stage = event.target.getStage();
     const point = stage?.getPointerPosition();
     if (!point) return;
+    if (drawMode === 'zone' && !isPointInsidePolygon(point, mainPoints)) {
+      showDrawWarning(
+        'Ponto fora da area util',
+        'A zona de exclusao deve ficar dentro do limite principal do talhão.',
+      );
+      return;
+    }
     setCurrentPoints((prev) => [...prev, { x: point.x, y: point.y }]);
   };
 
@@ -222,6 +661,17 @@ export default function TalhaoDetailModal({
   };
 
   const startMainDrawing = () => {
+    if (mainPoints.length >= 3) {
+      notifications.show({
+        title: 'Area util ja definida',
+        message:
+          'Cada talhão aceita apenas uma area util. Edite os vertices existentes para ajustar.',
+        color: 'yellow',
+      });
+      return;
+    }
+    setSelectedMainPolygon(false);
+    setSelectedVertex(null);
     setDrawMode('main');
     setCurrentPoints([]);
     setMousePos(null);
@@ -231,17 +681,22 @@ export default function TalhaoDetailModal({
     if (mainPoints.length < 3) {
       notifications.show({
         title: 'Desenhe o limite primeiro',
-        message: 'Defina o limite do talhao antes de criar zonas de exclusao.',
+        message: 'Defina o limite do talhão antes de criar zonas de exclusao.',
         color: 'yellow',
       });
       return;
     }
+    setSelectedMainPolygon(false);
+    setSelectedVertex(null);
     setDrawMode('zone');
     setCurrentPoints([]);
     setMousePos(null);
   };
 
   const cancelDrawing = () => {
+    setSelectedMainPolygon(false);
+    setSelectedZoneIndex(null);
+    setSelectedVertex(null);
     setDrawMode('none');
     setCurrentPoints([]);
     setMousePos(null);
@@ -261,19 +716,30 @@ export default function TalhaoDetailModal({
       setMainPoints(currentPoints);
       notifications.show({
         title: 'Limite atualizado',
-        message: 'Desenho principal do talhao definido.',
+        message: 'Desenho principal do talhão definido.',
         color: 'green',
       });
     } else if (drawMode === 'zone') {
+      if (!isPolygonInsidePolygon(currentPoints, mainPoints)) {
+        notifications.show({
+          title: 'Zona fora da area util',
+          message:
+            'Todos os pontos da zona de exclusao precisam ficar dentro da area util do talhão.',
+          color: 'yellow',
+        });
+        return;
+      }
       setZones((prev) => [...prev, currentPoints]);
       notifications.show({
         title: 'Zona adicionada',
-        message: 'Zona de exclusao adicionada ao talhao.',
+        message: 'Zona de exclusao adicionada ao talhão.',
         color: 'green',
       });
     }
 
     setDrawMode('none');
+    setSelectedMainPolygon(false);
+    setSelectedVertex(null);
     setCurrentPoints([]);
     setMousePos(null);
   };
@@ -283,20 +749,24 @@ export default function TalhaoDetailModal({
     nextZones: MapPoint[][],
   ) => {
     if (!talhao) return;
+    const persistedGeometry = parseTalhaoGeometry(talhao.coordenadas_svg);
     try {
       await updateTalhaoForProperty({
         talhaoId: talhao.id,
-        nome: talhao.nome || 'Talhao',
+        nome: talhao.nome || 'Talhão',
         area_ha: talhao.area_ha,
         tipo_solo: talhao.tipo_solo,
-        color: talhao.cor_identificacao,
+        color: resolveSoilLinkedColor(talhao.tipo_solo, talhao.cor_identificacao),
         points: nextMainPoints,
         exclusionZones: nextZones,
+        soilClassification: soilClassificationSnapshot,
+        currentCulture: persistedGeometry.currentCulture ?? null,
         historico_culturas: cultures.map((item) => ({
           cultura: item.cultura,
           cultivar: item.cultivar,
           data_inicio: item.data_inicio,
           data_fim: item.data_fim,
+          fonte: item.fonte,
         })),
       });
       notifications.show({
@@ -308,7 +778,7 @@ export default function TalhaoDetailModal({
       notifications.show({
         title: 'Falha ao salvar desenho',
         message:
-          err?.message ?? 'Nao foi possivel salvar o desenho automaticamente.',
+          err?.message ?? 'Não foi possível salvar o desenho automaticamente.',
         color: 'red',
       });
     }
@@ -326,6 +796,16 @@ export default function TalhaoDetailModal({
       return;
     }
 
+    if (drawMode === 'zone' && !isPolygonInsidePolygon(currentPoints, mainPoints)) {
+      notifications.show({
+        title: 'Zona fora da area util',
+        message:
+          'Todos os pontos da zona de exclusao precisam ficar dentro da area util do talhão.',
+        color: 'yellow',
+      });
+      return;
+    }
+
     const nextMainPoints = drawMode === 'main' ? currentPoints : mainPoints;
     const nextZones = drawMode === 'zone' ? [...zones, currentPoints] : zones;
 
@@ -336,6 +816,8 @@ export default function TalhaoDetailModal({
     }
 
     setDrawMode('none');
+    setSelectedMainPolygon(false);
+    setSelectedVertex(null);
     setCurrentPoints([]);
     setMousePos(null);
 
@@ -343,31 +825,222 @@ export default function TalhaoDetailModal({
   };
 
   const removeSelectedZone = () => {
-    if (selectedZoneIndex == null) return;
-    setZones((prev) => prev.filter((_, idx) => idx !== selectedZoneIndex));
+    const targetIndex =
+      selectedZoneIndex != null ? selectedZoneIndex : zones.length === 1 ? 0 : null;
+
+    if (targetIndex == null) {
+      notifications.show({
+        title: 'Selecione a zona',
+        message: 'Escolha a zona de exclusao para remover.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    setZones((prev) => prev.filter((_, idx) => idx !== targetIndex));
+    setSelectedMainPolygon(false);
     setSelectedZoneIndex(null);
+    setSelectedVertex((prev) => {
+      if (!prev || prev.kind !== 'zone') return prev;
+      if (prev.zoneIndex === targetIndex) return null;
+      if (prev.zoneIndex > targetIndex) {
+        return { ...prev, zoneIndex: prev.zoneIndex - 1 };
+      }
+      return prev;
+    });
   };
 
-  const openCreateCultureModal = () => {
-    setCultureModalMode('create');
-    setEditingCultureIndex(null);
-    setCultureDraft({
-      cultura: '',
-      cultivar: '',
-      data_inicio: '',
-      data_fim: '',
+  const removeMainPolygon = () => {
+    const hadMain = mainPoints.length > 0 || currentPoints.length > 0;
+    const hadZones = zones.length > 0;
+    if (!hadMain && !hadZones) return;
+    setMainPoints([]);
+    setZones([]);
+    setSelectedMainPolygon(false);
+    setSelectedZoneIndex(null);
+    setSelectedVertex(null);
+    setDrawMode('none');
+    setCurrentPoints([]);
+    setMousePos(null);
+    notifications.show({
+      title: hadMain ? 'Limite removido' : 'Zonas removidas',
+      message:
+        hadMain && hadZones
+          ? 'O limite principal e as zonas de exclusao foram removidos.'
+          : hadMain
+            ? 'O limite principal foi removido.'
+            : 'As zonas de exclusao foram removidas.',
+      color: 'yellow',
     });
-    setManualCultivar(false);
-    setCultureModalOpened(true);
+  };
+
+  const clearSelectedVertex = () => {
+    setSelectedVertex(null);
+  };
+
+  const toggleMainPolygonSelection = () => {
+    if (selectedMainPolygon) {
+      setSelectedMainPolygon(false);
+      setSelectedVertex((prev) => (prev?.kind === 'main' ? null : prev));
+      return;
+    }
+    setSelectedMainPolygon(true);
+    setSelectedZoneIndex(null);
+    setSelectedVertex((prev) => (prev?.kind === 'zone' ? null : prev));
+  };
+
+  const toggleZoneSelection = (zoneIndex: number) => {
+    if (selectedZoneIndex === zoneIndex) {
+      setSelectedZoneIndex(null);
+      setSelectedVertex((prev) =>
+        prev?.kind === 'zone' && prev.zoneIndex === zoneIndex ? null : prev,
+      );
+      return;
+    }
+    setSelectedMainPolygon(false);
+    setSelectedZoneIndex(zoneIndex);
+    setSelectedVertex((prev) => (prev?.kind === 'main' ? null : prev));
+  };
+
+  const selectMainVertex = (pointIndex: number) => {
+    setSelectedMainPolygon(true);
+    setSelectedZoneIndex(null);
+    setSelectedVertex({ kind: 'main', pointIndex });
+  };
+
+  const selectZoneVertex = (zoneIndex: number, pointIndex: number) => {
+    setSelectedMainPolygon(false);
+    setSelectedZoneIndex(zoneIndex);
+    setSelectedVertex({ kind: 'zone', zoneIndex, pointIndex });
+  };
+
+  const removeSelectedVertex = () => {
+    if (!selectedVertex) {
+      notifications.show({
+        title: 'Selecione um ponto',
+        message: 'Clique em uma bolinha para excluir o vertice.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    if (selectedVertex.kind === 'main') {
+      if (mainPoints.length <= 3) {
+        notifications.show({
+          title: 'Minimo de 3 pontos',
+          message: 'O limite principal precisa ter ao menos 3 vertices.',
+          color: 'yellow',
+        });
+        return;
+      }
+      const nextMainPoints = mainPoints.filter(
+        (_, idx) => idx !== selectedVertex.pointIndex,
+      );
+      const hasZoneOutside = zones.some(
+        (zone) => zone.length >= 3 && !isPolygonInsidePolygon(zone, nextMainPoints),
+      );
+      if (hasZoneOutside) {
+        notifications.show({
+          title: 'Ajuste inválido',
+          message:
+            'Remover esse ponto deixaria zona de exclusao fora da area util.',
+          color: 'yellow',
+        });
+        return;
+      }
+      setMainPoints(nextMainPoints);
+      setSelectedVertex(null);
+      notifications.show({
+        title: 'Ponto removido',
+        message: 'Vertice removido do limite principal.',
+        color: 'green',
+      });
+      return;
+    }
+
+    const zone = zones[selectedVertex.zoneIndex];
+    if (!zone) {
+      setSelectedVertex(null);
+      return;
+    }
+    if (zone.length <= 3) {
+      notifications.show({
+        title: 'Minimo de 3 pontos',
+        message:
+          'A zona precisa ter ao menos 3 vertices. Use remover zona para excluir totalmente.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    const nextZone = zone.filter((_, idx) => idx !== selectedVertex.pointIndex);
+    if (!isPolygonInsidePolygon(nextZone, mainPoints)) {
+      notifications.show({
+        title: 'Ajuste inválido',
+        message: 'A zona precisa continuar dentro da area util.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    setZones((prev) =>
+      prev.map((item, idx) => (idx === selectedVertex.zoneIndex ? nextZone : item)),
+    );
+    setSelectedZoneIndex(selectedVertex.zoneIndex);
+    setSelectedVertex(null);
+    notifications.show({
+      title: 'Ponto removido',
+      message: 'Vertice removido da zona de exclusao.',
+      color: 'green',
+    });
+  };
+
+  const removeCurrentSelection = () => {
+    if (selectedVertex) {
+      removeSelectedVertex();
+      return;
+    }
+
+    if (selectedZoneIndex != null || zones.length === 1) {
+      removeSelectedZone();
+      return;
+    }
+
+    if (selectedMainPolygon) {
+      removeMainPolygon();
+      return;
+    }
+
+    notifications.show({
+      title: 'Selecione antes de excluir',
+      message: 'Clique em um ponto, zona ou limite para remover.',
+      color: 'yellow',
+    });
+  };
+
+  const openRncCultivarSelectorWindow = () => {
+    const url = new URL('/rnc/cultivares/selector', window.location.origin);
+    const popup = window.open(
+      url.toString(),
+      'perfilsolo-rnc-cultivar-selector',
+      'popup=yes,width=1320,height=860,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes',
+    );
+
+    if (!popup) {
+      notifications.show({
+        title: 'Popup bloqueado',
+        message: 'Permita popups para abrir o seletor oficial de cultivares do RNC.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    popup.focus();
   };
 
   const openEditCultureModal = (index: number) => {
     const row = cultures[index];
     if (!row) return;
-    const rowCultivarOptions = availableCultures
-      .filter((item) => normalizeKey(item.cultura) === normalizeKey(row.cultura))
-      .map((item) => (item.variedade ?? '').trim())
-      .filter((item) => item.length > 0);
 
     setCultureModalMode('edit');
     setEditingCultureIndex(index);
@@ -377,9 +1050,6 @@ export default function TalhaoDetailModal({
       data_inicio: row.data_inicio,
       data_fim: row.data_fim,
     });
-    setManualCultivar(
-      Boolean(row.cultivar) && !rowCultivarOptions.includes(row.cultivar ?? ''),
-    );
     setCultureModalOpened(true);
   };
 
@@ -388,24 +1058,34 @@ export default function TalhaoDetailModal({
   };
 
   const saveCultureDraft = () => {
+    if (cultureModalMode !== 'edit' || editingCultureIndex == null) {
+      notifications.show({
+        title: 'Cadastro manual bloqueado',
+        message: 'Use o seletor do RNC para incluir novas culturas no talhão.',
+        color: 'yellow',
+      });
+      setCultureModalOpened(false);
+      return;
+    }
+
     const cultura = cultureDraft.cultura.trim();
     const cultivar = cultureDraft.cultivar?.trim() || '';
-    const dataInicio = cultureDraft.data_inicio.trim();
-    const dataFim = cultureDraft.data_fim.trim();
+    const dataInicio = normalizeMonthYear(cultureDraft.data_inicio);
+    const dataFim = normalizeMonthYear(cultureDraft.data_fim);
 
     if (!cultura || !dataInicio || !dataFim) {
       notifications.show({
         title: 'Dados incompletos',
-        message: 'Informe cultura, data inicial e data final.',
+        message: 'Informe cultura, mês/ano inicial e mês/ano final.',
         color: 'yellow',
       });
       return;
     }
 
-    if (new Date(dataInicio).getTime() > new Date(dataFim).getTime()) {
+    if (monthYearOrder(dataInicio) > monthYearOrder(dataFim)) {
       notifications.show({
-        title: 'Periodo invalido',
-        message: 'A data final deve ser maior ou igual a data inicial.',
+        title: 'Periodo inválido',
+        message: 'O mês/ano final deve ser maior ou igual ao mês/ano inicial.',
         color: 'yellow',
       });
       return;
@@ -418,46 +1098,377 @@ export default function TalhaoDetailModal({
       data_fim: dataFim,
     };
 
-    if (cultureModalMode === 'edit' && editingCultureIndex != null) {
-      setCultures((prev) =>
-        prev.map((item, index) => (index === editingCultureIndex ? row : item)),
-      );
-    } else {
-      setCultures((prev) => [...prev, row]);
+    setCultures((prev) =>
+      prev.map((item, index) =>
+        index === editingCultureIndex
+          ? {
+              ...item,
+              ...row,
+            }
+          : item,
+      ),
+    );
+    if (!currentCulture.trim()) {
+      setCurrentCulture(row.cultura);
     }
 
     setCultureModalOpened(false);
   };
 
+  useEffect(() => {
+    if (!opened) return;
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const message = event.data as RncCultivarSelectionMessage | null;
+      if (!message || message.type !== RNC_CULTIVAR_SELECTED_EVENT) return;
+      const payload = message.payload;
+      if (!payload) return;
+
+      const cultura = String(payload.cultura ?? '').trim();
+      const cultivar = String(payload.cultivar ?? '').trim();
+      const dataInicio = normalizeMonthYear(payload.dataInicio);
+      const dataFim = normalizeMonthYear(payload.dataFim);
+      if (!cultura || !cultivar || !dataInicio || !dataFim) {
+        notifications.show({
+          title: 'Seleção incompleta',
+          message: 'A cultivar enviada pelo seletor do RNC está incompleta.',
+          color: 'yellow',
+        });
+        return;
+      }
+      if (monthYearOrder(dataInicio) > monthYearOrder(dataFim)) {
+        notifications.show({
+          title: 'Período inválido',
+          message: 'A seleção RNC retornou um período inválido.',
+          color: 'yellow',
+        });
+        return;
+      }
+
+      const incomingRow: CultureEntry = {
+        cultura,
+        cultivar,
+        data_inicio: dataInicio,
+        data_fim: dataFim,
+        fonte: payload.fonte,
+      };
+
+      setCultures((prev) => {
+        const existingIndex = prev.findIndex(
+          (item) =>
+            normalizeKey(item.cultura) === normalizeKey(incomingRow.cultura) &&
+            normalizeKey(item.cultivar ?? '') === normalizeKey(incomingRow.cultivar ?? ''),
+        );
+        if (existingIndex < 0) return [...prev, incomingRow];
+        return prev.map((item, index) => (index === existingIndex ? incomingRow : item));
+      });
+
+      if (!currentCulture.trim()) {
+        setCurrentCulture(cultura);
+      }
+
+      notifications.show({
+        title: 'Cultivar vinculada',
+        message: `${cultivar} (${cultura}) adicionada via RNC.`,
+        color: 'green',
+      });
+    };
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [opened, currentCulture]);
+
   const removeCulture = (index: number) => {
-    setCultures((prev) => prev.filter((_, idx) => idx !== index));
+    setCultures((prev) => {
+      const removed = prev[index];
+      const next = prev.filter((_, idx) => idx !== index);
+      if (
+        removed &&
+        normalizeKey(removed.cultura) === normalizeKey(currentCulture) &&
+        !next.some((item) => normalizeKey(item.cultura) === normalizeKey(currentCulture))
+      ) {
+        setCurrentCulture(next[0]?.cultura ?? '');
+      }
+      return next;
+    });
   };
 
-  const moveMainAnchor = (index: number, point: MapPoint) => {
-    setMainPoints((prev) =>
-      prev.map((item, idx) => (idx === index ? point : item)),
+  const moveMainAnchor = (index: number, point: MapPoint): boolean => {
+    const nextMainPoints = mainPoints.map((item, idx) => (idx === index ? point : item));
+    const hasZoneOutside = zones.some(
+      (zone) => zone.length >= 3 && !isPolygonInsidePolygon(zone, nextMainPoints),
     );
+    if (hasZoneOutside) {
+      showDrawWarning(
+        'Ajuste inválido',
+        'Esse movimento colocaria uma zona de exclusao fora da area util.',
+      );
+      return false;
+    }
+    setMainPoints(nextMainPoints);
+    return true;
   };
 
   const moveZoneAnchor = (
     zoneIndex: number,
     pointIndex: number,
     point: MapPoint,
-  ) => {
+  ): boolean => {
+    const zone = zones[zoneIndex];
+    if (!zone) return false;
+    const nextZone = zone.map((item, pIdx) => (pIdx === pointIndex ? point : item));
+    if (!isPolygonInsidePolygon(nextZone, mainPoints)) {
+      showDrawWarning(
+        'Ajuste inválido',
+        'A zona de exclusao precisa permanecer dentro da area util.',
+      );
+      return false;
+    }
     setZones((prev) =>
-      prev.map((zone, zIdx) => {
-        if (zIdx !== zoneIndex) return zone;
-        return zone.map((item, pIdx) => (pIdx === pointIndex ? point : item));
+      prev.map((item, idx) => (idx === zoneIndex ? nextZone : item)),
+    );
+    return true;
+  };
+
+  const moveCurrentAnchor = (index: number, point: MapPoint): boolean => {
+    const nextCurrent = currentPoints.map((item, idx) =>
+      idx === index ? point : item,
+    );
+    if (drawMode === 'zone' && !isPolygonInsidePolygon(nextCurrent, mainPoints)) {
+      showDrawWarning(
+        'Ajuste inválido',
+        'A zona de exclusao precisa permanecer dentro da area util.',
+      );
+      return false;
+    }
+    setCurrentPoints(nextCurrent);
+    return true;
+  };
+
+  const insertMainPointAfter = (index: number) => {
+    setMainPoints((prev) => {
+      if (prev.length < 2) return prev;
+      const nextIndex = (index + 1) % prev.length;
+      const nextPoint = midpoint(prev[index], prev[nextIndex]);
+      return [...prev.slice(0, index + 1), nextPoint, ...prev.slice(index + 1)];
+    });
+    setSelectedVertex(null);
+  };
+
+  const insertZonePointAfter = (zoneIndex: number, pointIndex: number) => {
+    setZones((prev) =>
+      prev.map((zone, idx) => {
+        if (idx !== zoneIndex || zone.length < 2) return zone;
+        const nextIndex = (pointIndex + 1) % zone.length;
+        const nextPoint = midpoint(zone[pointIndex], zone[nextIndex]);
+        if (!isPointInsidePolygon(nextPoint, mainPoints)) {
+          showDrawWarning(
+            'Ponto inválido',
+            'Não foi possível inserir ponto medio fora da area util.',
+          );
+          return zone;
+        }
+        return [
+          ...zone.slice(0, pointIndex + 1),
+          nextPoint,
+          ...zone.slice(pointIndex + 1),
+        ];
       }),
     );
+    setSelectedVertex(null);
   };
+
+  const applyRealMapBackground = async () => {
+    const query = mapSearchValue.trim();
+    if (!query) {
+      notifications.show({
+        title: 'Informe uma busca',
+        message: 'Digite um CEP (8 digitos) ou coordenadas (lat, lon).',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    try {
+      setMapSearchLoading(true);
+      const point = await resolveGeoPointFromInput(query);
+      if (!point) {
+        notifications.show({
+          title: 'Localização não encontrada',
+          message: 'Não foi possível localizar este CEP/coordenada.',
+          color: 'yellow',
+        });
+        return;
+      }
+
+      setMapCenter(point);
+      setMapZoom(16);
+      setMapLayerId('satellite');
+      setMapInteractive(false);
+      notifications.show({
+        title: 'Fundo real aplicado',
+        message: `Centro aproximado em ${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}.`,
+        color: 'green',
+      });
+    } catch (error: any) {
+      notifications.show({
+        title: 'Falha na busca',
+        message: error?.message ?? 'Não foi possível obter o mapa de referencia real.',
+        color: 'red',
+      });
+    } finally {
+      setMapSearchLoading(false);
+    }
+  };
+
+  const clearRealMapBackground = () => {
+    setMapCenter(null);
+    setMapZoom(16);
+    setMapLayerId('satellite');
+    setMapInteractive(false);
+  };
+
+  const handleRealMapViewChange = (next: { center: GeoPoint; zoom: number }) => {
+    setMapCenter(next.center);
+    setMapZoom(next.zoom);
+  };
+
+  const addPointFromCoordinates = () => {
+    const rawValue = pointSearchValue.trim();
+    if (!rawValue) {
+      notifications.show({
+        title: 'Informe coordenadas',
+        message: 'Digite latitude e longitude no formato: -23.55052, -46.63331.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    if (drawMode === 'none') {
+      notifications.show({
+        title: 'Inicie o desenho',
+        message: 'Ative o desenho do limite ou da zona para inserir pontos por coordenada.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    if (mapInteractive) {
+      notifications.show({
+        title: 'Desative navegacao',
+        message: 'Desative a navegacao do mapa para continuar desenhando.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    if (!mapCenter) {
+      notifications.show({
+        title: 'Fundo real obrigatorio',
+        message: 'Aplique um mapa real para converter coordenadas em pontos do croqui.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    const geoPoint = parseCoordinatesInput(rawValue);
+    if (!geoPoint) {
+      notifications.show({
+        title: 'Formato inválido',
+        message: 'Use o formato latitude, longitude. Ex.: -23.55052, -46.63331.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    const mappedPoint = geoPointToCanvasPoint(
+      geoPoint,
+      mapCenter,
+      mapZoom,
+      Math.max(1, stageWidth),
+      440,
+    );
+
+    if (
+      mappedPoint.x < 0 ||
+      mappedPoint.x > stageWidth ||
+      mappedPoint.y < 0 ||
+      mappedPoint.y > 440
+    ) {
+      notifications.show({
+        title: 'Ponto fora da visao atual',
+        message:
+          'Ajuste zoom/posicao do mapa para enquadrar o ponto e tente novamente.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    if (drawMode === 'zone') {
+      if (!isPointInsidePolygon(mappedPoint, mainPoints)) {
+        showDrawWarning(
+          'Ponto fora da area util',
+          'A zona de exclusao deve ficar dentro do limite principal do talhão.',
+        );
+        return;
+      }
+      if (currentPoints.length > 0) {
+        const lastPoint = currentPoints[currentPoints.length - 1];
+        if (!isSegmentInsidePolygon(lastPoint, mappedPoint, mainPoints)) {
+          showDrawWarning(
+            'Aresta fora da area util',
+            'Esse novo ponto criaria uma aresta fora da area util.',
+          );
+          return;
+        }
+      }
+    }
+
+    setCurrentPoints((prev) => [...prev, mappedPoint]);
+    setMousePos(mappedPoint);
+    setPointSearchValue('');
+  };
+
+  useEffect(() => {
+    if (!opened) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const hasSelection =
+        Boolean(selectedVertex) ||
+        selectedZoneIndex != null ||
+        selectedMainPolygon ||
+        zones.length === 1;
+      if (!hasSelection) return;
+
+      const active = document.activeElement as HTMLElement | null;
+      const tag = active?.tagName ?? '';
+      const isTyping =
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        active?.isContentEditable === true;
+      if (isTyping) return;
+
+      event.preventDefault();
+      removeCurrentSelection();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    opened,
+    selectedVertex,
+    selectedZoneIndex,
+    selectedMainPolygon,
+    zones,
+    mainPoints,
+  ]);
 
   const save = async () => {
     if (!talhao) return;
     if (!nome.trim()) {
       notifications.show({
         title: 'Nome obrigatorio',
-        message: 'Informe o nome do talhao.',
+        message: 'Informe o nome do talhão.',
         color: 'yellow',
       });
       return;
@@ -466,7 +1477,25 @@ export default function TalhaoDetailModal({
     if (mainPoints.length < 3) {
       notifications.show({
         title: 'Limite obrigatorio',
-        message: 'Cada talhao precisa ter um desenho principal.',
+        message: 'Cada talhão precisa ter um desenho principal.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    if (!hasValidArea) {
+      setEmptyAreaGuardReason('save');
+      setEmptyAreaGuardOpened(true);
+      return;
+    }
+
+    const invalidZoneIndex = zones.findIndex(
+      (zone) => zone.length >= 3 && !isPolygonInsidePolygon(zone, mainPoints),
+    );
+    if (invalidZoneIndex >= 0) {
+      notifications.show({
+        title: 'Zona de exclusao inválida',
+        message: `A zona ${invalidZoneIndex + 1} esta fora da area util. Ajuste antes de salvar.`,
         color: 'yellow',
       });
       return;
@@ -478,29 +1507,38 @@ export default function TalhaoDetailModal({
         talhaoId: talhao.id,
         nome: nome.trim(),
         area_ha: areaHa === '' ? undefined : Number(areaHa),
-        tipo_solo: tipoSolo.trim() || undefined,
-        color: cor,
+        tipo_solo: normalizedTipoSolo,
+        color: resolvedTalhaoColor,
         points: mainPoints,
         exclusionZones: zones,
+        mapReference: mapCenter
+          ? {
+              center: mapCenter,
+              zoom: mapZoom,
+              layerId: mapLayerId,
+            }
+          : null,
+        soilClassification: soilClassificationSnapshot,
+        currentCulture: currentCulture.trim() || null,
         historico_culturas: cultures.map((item) => ({
           cultura: item.cultura,
           cultivar: item.cultivar,
           data_inicio: item.data_inicio,
           data_fim: item.data_fim,
+          fonte: item.fonte,
         })),
       });
 
       await onSaved(talhao.id);
       notifications.show({
-        title: 'Talhao atualizado',
-        message: 'Detalhamento do talhao salvo com sucesso.',
+        title: 'Talhão atualizado',
+        message: 'Detalhamento do talhão salvo com sucesso.',
         color: 'green',
       });
-      onClose();
     } catch (err: any) {
       notifications.show({
-        title: 'Falha ao salvar talhao',
-        message: err?.message ?? 'Nao foi possivel salvar o detalhamento.',
+        title: 'Falha ao salvar talhão',
+        message: err?.message ?? 'Não foi possível salvar o detalhamento.',
         color: 'red',
       });
     } finally {
@@ -508,66 +1546,210 @@ export default function TalhaoDetailModal({
     }
   };
 
+  const handleRequestClose = () => {
+    if (!talhao) {
+      onClose();
+      return;
+    }
+    if (!hasValidArea) {
+      setEmptyAreaGuardReason('close');
+      setEmptyAreaGuardOpened(true);
+      return;
+    }
+    onClose();
+  };
+
+  const deleteEmptyTalhao = async () => {
+    if (!talhao || deletingEmptyTalhao) return;
+    try {
+      setDeletingEmptyTalhao(true);
+      await deleteTalhaoForProperty(talhao.id);
+      await onDeleted?.(talhao.id);
+      notifications.show({
+        title: 'Talhão vazio excluido',
+        message: 'Talhão sem área removido com sucesso.',
+        color: 'green',
+      });
+      setEmptyAreaGuardOpened(false);
+      onClose();
+    } catch (err: any) {
+      notifications.show({
+        title: 'Falha ao excluir talhão vazio',
+        message: err?.message ?? 'Não foi possível excluir o talhão vazio.',
+        color: 'red',
+      });
+    } finally {
+      setDeletingEmptyTalhao(false);
+    }
+  };
+
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={talhao ? `Detalhamento do talhao: ${talhao.nome}` : 'Detalhamento do talhao'}
-      size="95%"
-      centered
-    >
-      {!talhao ? (
-        <Text c="dimmed">Selecione um talhao para detalhar.</Text>
-      ) : (
-        <GridLayout
-          nome={nome}
-          setNome={setNome}
-          areaHa={areaHa}
-          setAreaHa={setAreaHa}
-          tipoSolo={tipoSolo}
-          setTipoSolo={setTipoSolo}
-          cor={cor}
-          setCor={setCor}
-          cultures={cultures}
-          cultureDraft={cultureDraft}
-          setCultureDraft={setCultureDraft}
-          cultureOptions={cultureOptions}
-          cultivarOptions={cultivarOptions}
-          manualCultivar={manualCultivar}
-          setManualCultivar={setManualCultivar}
-          cultureModalOpened={cultureModalOpened}
-          closeCultureModal={closeCultureModal}
-          saveCultureDraft={saveCultureDraft}
-          cultureModalMode={cultureModalMode}
-          openCreateCultureModal={openCreateCultureModal}
-          openEditCultureModal={openEditCultureModal}
-          removeCulture={removeCulture}
-          drawMode={drawMode}
-          statusLabel={statusLabel}
-          startMainDrawing={startMainDrawing}
-          startZoneDrawing={startZoneDrawing}
-          cancelDrawing={cancelDrawing}
-          finishDrawing={finishDrawing}
-          zones={zones}
-          selectedZoneIndex={selectedZoneIndex}
-          setSelectedZoneIndex={setSelectedZoneIndex}
-          removeSelectedZone={removeSelectedZone}
-          canvasRef={canvasRef}
-          stageWidth={stageWidth}
-          mainPoints={mainPoints}
-          currentPoints={currentPoints}
-          mousePos={mousePos}
-          handleStageClick={handleStageClick}
-          handleMouseMove={handleMouseMove}
-          handleCloseWithRightClick={handleCloseWithRightClick}
-          moveMainAnchor={moveMainAnchor}
-          moveZoneAnchor={moveZoneAnchor}
-          save={save}
-          saving={saving}
-          onClose={onClose}
-        />
-      )}
-    </Modal>
+    <>
+      <Modal
+        opened={opened}
+        onClose={handleRequestClose}
+        title={talhao ? `Detalhamento do talhao: ${talhao.nome}` : 'Detalhamento do talhão'}
+        size="clamp(340px, 95vw, 1280px)"
+        padding="sm"
+        centered
+      >
+        {!talhao ? (
+          <Text c="dimmed">Selecione um talhao para detalhar.</Text>
+        ) : (
+          <GridLayout
+            nome={nome}
+            setNome={setNome}
+            areaHa={areaHa}
+            setAreaHa={setAreaHa}
+            tipoSolo={tipoSolo}
+            setTipoSolo={setTipoSolo}
+            soilOptions={soilOptions}
+            selectedSoilDescription={selectedSoil?.descricao ?? null}
+            openSoilClassifier={openSoilClassifier}
+            lastClassificationSummary={lastClassificationSummary}
+            currentCulture={currentCulture}
+            setCurrentCulture={setCurrentCulture}
+            currentCultureOptions={currentCultureOptions}
+            cultures={cultures}
+            cultureDraft={cultureDraft}
+            setCultureDraft={setCultureDraft}
+            cultureModalOpened={cultureModalOpened}
+            closeCultureModal={closeCultureModal}
+            saveCultureDraft={saveCultureDraft}
+            openRncCultivarSelectorWindow={openRncCultivarSelectorWindow}
+            openEditCultureModal={openEditCultureModal}
+            removeCulture={removeCulture}
+            drawMode={drawMode}
+            statusLabel={statusLabel}
+            startMainDrawing={startMainDrawing}
+            startZoneDrawing={startZoneDrawing}
+            cancelDrawing={cancelDrawing}
+            finishDrawing={finishDrawing}
+            zones={zones}
+            selectedMainPolygon={selectedMainPolygon}
+            selectedZoneIndex={selectedZoneIndex}
+            setSelectedZoneIndex={setSelectedZoneIndex}
+            toggleMainPolygonSelection={toggleMainPolygonSelection}
+            toggleZoneSelection={toggleZoneSelection}
+            removeSelectedZone={removeSelectedZone}
+            removeMainPolygon={removeMainPolygon}
+            selectedVertex={selectedVertex}
+            selectMainVertex={selectMainVertex}
+            selectZoneVertex={selectZoneVertex}
+            clearSelectedVertex={clearSelectedVertex}
+            removeSelectedVertex={removeSelectedVertex}
+            removeCurrentSelection={removeCurrentSelection}
+            canvasRef={canvasRef}
+            stageWidth={stageWidth}
+            mainPoints={mainPoints}
+            currentPoints={currentPoints}
+            mousePos={mousePos}
+            handleStageClick={handleStageClick}
+            handleMouseMove={handleMouseMove}
+            handleCloseWithRightClick={handleCloseWithRightClick}
+            moveMainAnchor={moveMainAnchor}
+            moveZoneAnchor={moveZoneAnchor}
+            moveCurrentAnchor={moveCurrentAnchor}
+            insertMainPointAfter={insertMainPointAfter}
+            insertZonePointAfter={insertZonePointAfter}
+            mapSearchValue={mapSearchValue}
+            setMapSearchValue={setMapSearchValue}
+            mapSearchLoading={mapSearchLoading}
+            pointSearchValue={pointSearchValue}
+            setPointSearchValue={setPointSearchValue}
+            addPointFromCoordinates={addPointFromCoordinates}
+            applyRealMapBackground={applyRealMapBackground}
+            clearRealMapBackground={clearRealMapBackground}
+            mapCenter={mapCenter}
+            mapZoom={mapZoom}
+            mapLayerId={mapLayerId}
+            setMapLayerId={setMapLayerId}
+            mapInteractive={mapInteractive}
+            setMapInteractive={setMapInteractive}
+            onRealMapViewChange={handleRealMapViewChange}
+            mapHasRealBackground={Boolean(mapCenter)}
+            save={save}
+            saving={saving}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        opened={emptyAreaGuardOpened}
+        onClose={() => setEmptyAreaGuardOpened(false)}
+        centered
+        closeOnClickOutside={false}
+        closeOnEscape={false}
+        title="Talhão sem área"
+      >
+        <Stack gap="sm">
+          <Text size="sm">
+            {emptyAreaGuardReason === 'save'
+              ? 'Este talhão ainda não possui área. Não é possível salvar sem informar área.'
+              : 'Este talhão ainda não possui área.'}
+          </Text>
+          <Text size="sm" c="dimmed">
+            Você pode voltar para edição e preencher a área, ou excluir o talhão vazio.
+          </Text>
+          <Group justify="flex-end" mt="xs">
+            <Button
+              variant="light"
+              color="gray"
+              onClick={() => setEmptyAreaGuardOpened(false)}
+              disabled={deletingEmptyTalhao}
+            >
+              Cancelar e voltar edição
+            </Button>
+            <Button
+              color="red"
+              onClick={() => void deleteEmptyTalhao()}
+              loading={deletingEmptyTalhao}
+            >
+              Excluir talhão vazio
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={soilClassifierOpened}
+        onClose={closeSoilClassifier}
+        title="Classificador SiBCS do talhão"
+        size="clamp(340px, 96vw, 1380px)"
+        centered
+        padding="sm"
+      >
+        <Stack gap="sm">
+          <Text size="sm" c="dimmed">
+            Execute a classificacao, revise a confianca e aplique a ordem no campo de classe de solo do talhao.
+          </Text>
+          {soilClassifierOpened ? (
+            <Suspense
+              fallback={
+                <Center h={180}>
+                  <Loader size="sm" />
+                </Center>
+              }
+            >
+              <LazySoilClassificationWorkspace
+                key={`${talhao?.id ?? 'talhao'}-${soilClassificationSnapshot?.applied_at ?? 'novo'}`}
+                initialRequest={soilClassificationRequest ?? undefined}
+                onRequestChange={setSoilClassificationRequest}
+                onResult={setSoilClassificationResult}
+              />
+            </Suspense>
+          ) : null}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeSoilClassifier}>
+              Fechar
+            </Button>
+            <Button onClick={applyClassificationToTalhao} disabled={!soilClassificationResult}>
+              Aplicar classificacao no talhao
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
   );
 }
 
@@ -578,20 +1760,20 @@ function GridLayout(props: {
   setAreaHa: (value: number | '') => void;
   tipoSolo: string;
   setTipoSolo: (value: string) => void;
-  cor: string;
-  setCor: (value: string) => void;
+  soilOptions: Array<{ value: string; label: string }>;
+  selectedSoilDescription: string | null;
+  openSoilClassifier: () => void;
+  lastClassificationSummary: string | null;
+  currentCulture: string;
+  setCurrentCulture: (value: string) => void;
+  currentCultureOptions: Array<{ value: string; label: string }>;
   cultures: CultureEntry[];
   cultureDraft: CultureEntry;
   setCultureDraft: (value: CultureEntry) => void;
-  cultureOptions: Array<{ value: string; label: string }>;
-  cultivarOptions: Array<{ value: string; label: string }>;
-  manualCultivar: boolean;
-  setManualCultivar: (value: boolean) => void;
   cultureModalOpened: boolean;
   closeCultureModal: () => void;
   saveCultureDraft: () => void;
-  cultureModalMode: CultureModalMode;
-  openCreateCultureModal: () => void;
+  openRncCultivarSelectorWindow: () => void;
   openEditCultureModal: (index: number) => void;
   removeCulture: (index: number) => void;
   drawMode: DrawMode;
@@ -601,9 +1783,19 @@ function GridLayout(props: {
   cancelDrawing: () => void;
   finishDrawing: () => void;
   zones: MapPoint[][];
+  selectedMainPolygon: boolean;
   selectedZoneIndex: number | null;
   setSelectedZoneIndex: (index: number | null) => void;
+  toggleMainPolygonSelection: () => void;
+  toggleZoneSelection: (zoneIndex: number) => void;
   removeSelectedZone: () => void;
+  removeMainPolygon: () => void;
+  selectedVertex: SelectedVertex | null;
+  selectMainVertex: (pointIndex: number) => void;
+  selectZoneVertex: (zoneIndex: number, pointIndex: number) => void;
+  clearSelectedVertex: () => void;
+  removeSelectedVertex: () => void;
+  removeCurrentSelection: () => void;
   canvasRef: RefObject<HTMLDivElement | null>;
   stageWidth: number;
   mainPoints: MapPoint[];
@@ -612,29 +1804,143 @@ function GridLayout(props: {
   handleStageClick: (event: any) => void;
   handleMouseMove: (event: any) => void;
   handleCloseWithRightClick: (event: any) => void;
-  moveMainAnchor: (index: number, point: MapPoint) => void;
+  moveMainAnchor: (index: number, point: MapPoint) => boolean;
   moveZoneAnchor: (
     zoneIndex: number,
     pointIndex: number,
     point: MapPoint,
-  ) => void;
+  ) => boolean;
+  moveCurrentAnchor: (index: number, point: MapPoint) => boolean;
+  insertMainPointAfter: (index: number) => void;
+  insertZonePointAfter: (zoneIndex: number, pointIndex: number) => void;
+  mapSearchValue: string;
+  setMapSearchValue: (value: string) => void;
+  mapSearchLoading: boolean;
+  pointSearchValue: string;
+  setPointSearchValue: (value: string) => void;
+  addPointFromCoordinates: () => void;
+  applyRealMapBackground: () => Promise<void>;
+  clearRealMapBackground: () => void;
+  mapCenter: GeoPoint | null;
+  mapZoom: number;
+  mapLayerId: GeoLayerId;
+  setMapLayerId: (value: GeoLayerId) => void;
+  mapInteractive: boolean;
+  setMapInteractive: (value: boolean) => void;
+  onRealMapViewChange: (next: { center: GeoPoint; zoom: number }) => void;
+  mapHasRealBackground: boolean;
   save: () => Promise<void>;
   saving: boolean;
-  onClose: () => void;
 }) {
+  const previewPathPoints =
+    props.currentPoints.length > 0
+      ? [
+          ...props.currentPoints,
+          props.mousePos ?? props.currentPoints[props.currentPoints.length - 1],
+        ]
+      : [];
+
+  const previewSegments =
+    previewPathPoints.length >= 2
+      ? previewPathPoints.slice(0, -1).map((start, index) => {
+          const end = previewPathPoints[index + 1];
+          const invalidZoneSegment =
+            props.drawMode === 'zone' &&
+            props.mainPoints.length >= 3 &&
+            !isSegmentInsidePolygon(start, end, props.mainPoints);
+          return {
+            key: `preview-segment-${index}`,
+            start,
+            end,
+            invalid: invalidZoneSegment,
+          };
+        })
+      : [];
+
+  const hasInvalidPreviewSegment = previewSegments.some((segment) => segment.invalid);
+  const mainBounds = props.mainPoints.length > 0 ? polygonBounds(props.mainPoints) : null;
+  const talhaoLabel = props.nome.trim() || 'Talhão';
+  const isDrawingMode = props.drawMode !== 'none';
+  const canInteractExistingShapes = !isDrawingMode;
+  const canDeleteSelection =
+    Boolean(props.selectedVertex) ||
+    props.selectedZoneIndex != null ||
+    props.selectedMainPolygon ||
+    props.zones.length === 1;
+  const deleteSelectionLabel = props.selectedVertex
+    ? 'Excluir ponto selecionado (Del)'
+    : props.selectedZoneIndex != null || props.zones.length === 1
+      ? 'Remover zona selecionada (Del)'
+      : props.selectedMainPolygon
+        ? 'Remover limite selecionado (Del)'
+        : 'Selecione ponto, zona ou limite para excluir';
+  const mapLayerOptions = GEO_BASE_LAYERS.map((layer) => ({
+    value: layer.id,
+    label: layer.label,
+  }));
+  const [cultureSectionOpened, setCultureSectionOpened] = useState(false);
+
+  const currentCultureRow = useMemo(
+    () =>
+      props.cultures.find(
+        (row) => normalizeKey(row.cultura) === normalizeKey(props.currentCulture),
+      ) ?? null,
+    [props.cultures, props.currentCulture],
+  );
+
+  const historyCultureRows = useMemo(() => {
+    const currentKey = normalizeKey(props.currentCulture);
+    return props.cultures
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => {
+        if (!currentKey) return true;
+        return normalizeKey(row.cultura) !== currentKey;
+      });
+  }, [props.cultures, props.currentCulture]);
+
   return (
-    <Stack gap="md">
-      <Group grow>
+    <Stack gap="sm">
+      <Group
+        justify="space-between"
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 2,
+          paddingBottom: 4,
+          background: 'var(--mantine-color-body)',
+        }}
+      >
+        <Text size="sm" c="dimmed">
+          Acoes do detalhamento
+        </Text>
+        <Group gap="xs">
+          <Tooltip label="Salvar detalhamento">
+            <ActionIcon
+              aria-label="Salvar detalhamento"
+              color="green"
+              size="lg"
+              onClick={() => void props.save()}
+              loading={props.saving}
+            >
+              <IconDeviceFloppy size={18} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+      </Group>
+
+      <Group align="flex-end" wrap="wrap" gap="xs">
         <TextInput
-          label="Nome do talhao"
+          label="Nome do talhão"
           value={props.nome}
           onChange={(event) => props.setNome(event.currentTarget.value)}
+          style={{ flex: '1 1 clamp(220px, 30vw, 320px)' }}
         />
         <NumberInput
           label="Area (ha)"
           value={props.areaHa}
           min={0}
           decimalScale={2}
+          style={{ flex: '0 0 clamp(96px, 9vw, 136px)' }}
           onChange={(value) => {
             if (value == null || value === '') {
               props.setAreaHa('');
@@ -643,292 +1949,614 @@ function GridLayout(props: {
             props.setAreaHa(Number(value));
           }}
         />
-        <TextInput
-          label="Tipo de solo"
-          value={props.tipoSolo}
-          onChange={(event) => props.setTipoSolo(event.currentTarget.value)}
-        />
-        <TextInput
-          label="Cor"
-          value={props.cor}
-          onChange={(event) => props.setCor(event.currentTarget.value)}
-        />
+        <Box style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flex: '1 1 clamp(220px, 28vw, 300px)' }}>
+          <Select
+            label="Classe de solo (SiBCS)"
+            placeholder="Selecione a classe"
+            searchable
+            clearable
+            nothingFoundMessage="Nenhuma classe encontrada"
+            data={props.soilOptions}
+            value={props.tipoSolo.trim() ? props.tipoSolo : UNCLASSIFIED_SOIL_VALUE}
+            onChange={(value) => props.setTipoSolo(value ?? UNCLASSIFIED_SOIL_VALUE)}
+            style={{ flex: 1 }}
+          />
+          <Tooltip label="Classificar SiBCS">
+            <ActionIcon
+              aria-label="Classificar SiBCS"
+              variant="light"
+              color="green"
+              size="lg"
+              onClick={props.openSoilClassifier}
+              mb={1}
+            >
+              <IconSearch size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Box>
       </Group>
+      <Group justify="space-between" align="center" mt={-4}>
+        <Group gap={8}>
+          {props.lastClassificationSummary ? (
+            <Badge variant="light" color="teal">
+              Ultima: {props.lastClassificationSummary}
+            </Badge>
+          ) : null}
+        </Group>
+      </Group>
+      {props.selectedSoilDescription ? (
+        <Text size="xs" c="dimmed" mt={-6}>
+          {props.selectedSoilDescription}
+        </Text>
+      ) : null}
 
-      <Card withBorder p="sm">
+      <Card withBorder p="xs">
         <Group justify="space-between" mb="xs">
-          <Text fw={700}>Cultura relacionada ao talhao</Text>
-          <Badge color="grape">{props.cultures.length} registros</Badge>
-        </Group>
-        <Group justify="flex-end" mb="sm">
-          <Button onClick={props.openCreateCultureModal}>Adicionar cultura/safra</Button>
+          <Group gap={8}>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size="sm"
+              aria-label={
+                cultureSectionOpened ? 'Recolher seção de culturas' : 'Expandir seção de culturas'
+              }
+              onClick={() => setCultureSectionOpened((prev) => !prev)}
+            >
+              {cultureSectionOpened ? (
+                <IconChevronUp size={15} />
+              ) : (
+                <IconChevronDown size={15} />
+              )}
+            </ActionIcon>
+            <Text fw={700}>Culturas do talhão</Text>
+            <Badge color="grape">{props.cultures.length} registros</Badge>
+          </Group>
+          <Tooltip label="Selecionar cultivar oficial no RNC">
+            <ActionIcon
+              aria-label="Selecionar cultivar no RNC"
+              color="green"
+              size="lg"
+              onClick={props.openRncCultivarSelectorWindow}
+            >
+              <IconExternalLink size={18} />
+            </ActionIcon>
+          </Tooltip>
         </Group>
 
-        {props.cultures.length > 0 ? (
-          <Table striped highlightOnHover withTableBorder mt="sm">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Cultura</Table.Th>
-                <Table.Th>Cultivar</Table.Th>
-                <Table.Th>Data inicial</Table.Th>
-                <Table.Th>Data final</Table.Th>
-                <Table.Th>Acoes</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {props.cultures.map((item, index) => (
-                <Table.Tr
-                  key={`${item.cultura}-${item.data_inicio}-${item.data_fim}-${index}`}
-                >
-                  <Table.Td>{item.cultura}</Table.Td>
-                  <Table.Td>{item.cultivar || '-'}</Table.Td>
-                  <Table.Td>{item.data_inicio}</Table.Td>
-                  <Table.Td>{item.data_fim}</Table.Td>
-                  <Table.Td>
-                    <Group gap={6}>
-                      <Button
-                        size="xs"
-                        variant="light"
-                        onClick={() => props.openEditCultureModal(index)}
-                      >
-                        Editar
-                      </Button>
-                      <Button
-                        size="xs"
-                        color="red"
-                        variant="light"
-                        onClick={() => props.removeCulture(index)}
-                      >
-                        Remover
-                      </Button>
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        ) : (
-          <Text size="sm" c="dimmed" mt="sm">
-            Nenhuma cultura informada para este talhao.
-          </Text>
-        )}
+        <Collapse in={cultureSectionOpened}>
+          <Group align="stretch" gap="xs" wrap="wrap" grow>
+            <Card withBorder p="xs" style={{ flex: '1 1 clamp(220px, 28vw, 360px)' }}>
+              <Stack gap={6}>
+                <Text fw={600} size="sm">
+                  Cultura atual
+                </Text>
+                <Select
+                  placeholder="Selecione a cultura atual"
+                  searchable
+                  clearable
+                  nothingFoundMessage="Nenhuma cultura encontrada"
+                  data={props.currentCultureOptions}
+                  value={props.currentCulture || null}
+                  onChange={(value) => props.setCurrentCulture(value ?? '')}
+                />
+                {currentCultureRow ? (
+                  <Text size="xs" c="dimmed">
+                    {`Cultivar: ${currentCultureRow.cultivar || '-'} | Periodo: ${formatMonthYear(currentCultureRow.data_inicio)} a ${formatMonthYear(currentCultureRow.data_fim)}`}
+                  </Text>
+                ) : (
+                  <Text size="xs" c="dimmed">
+                    Sem cultura atual selecionada.
+                  </Text>
+                )}
+              </Stack>
+            </Card>
+
+            <Card withBorder p="xs" style={{ flex: '1 1 clamp(280px, 45vw, 620px)' }}>
+              <Stack gap={6}>
+                <Text fw={600} size="sm">
+                  Histórico de culturas
+                </Text>
+                {historyCultureRows.length > 0 ? (
+                  <Table striped highlightOnHover withTableBorder>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Cultura</Table.Th>
+                        <Table.Th>Cultivar</Table.Th>
+                        <Table.Th>Período</Table.Th>
+                        <Table.Th>Fonte</Table.Th>
+                        <Table.Th>Ações</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {historyCultureRows.map(({ row, index }) => (
+                        <Table.Tr
+                          key={`${row.cultura}-${row.data_inicio}-${row.data_fim}-${index}`}
+                        >
+                          <Table.Td>{row.cultura}</Table.Td>
+                          <Table.Td>{row.cultivar || '-'}</Table.Td>
+                          <Table.Td>
+                            {`${formatMonthYear(row.data_inicio)} a ${formatMonthYear(row.data_fim)}`}
+                          </Table.Td>
+                          <Table.Td>{row.fonte || 'Manual legado'}</Table.Td>
+                          <Table.Td>
+                            <Group gap={6}>
+                              <Tooltip label="Editar cultura/safra">
+                                <ActionIcon
+                                  size="sm"
+                                  variant="light"
+                                  color="blue"
+                                  aria-label="Editar cultura/safra"
+                                  onClick={() => props.openEditCultureModal(index)}
+                                >
+                                  <IconPencil size={14} />
+                                </ActionIcon>
+                              </Tooltip>
+                              <Tooltip label="Remover cultura/safra">
+                                <ActionIcon
+                                  size="sm"
+                                  color="red"
+                                  variant="light"
+                                  aria-label="Remover cultura/safra"
+                                  onClick={() => props.removeCulture(index)}
+                                >
+                                  <IconTrash size={14} />
+                                </ActionIcon>
+                              </Tooltip>
+                            </Group>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                ) : (
+                  <Text size="sm" c="dimmed">
+                    Nenhum histórico anterior para este talhão.
+                  </Text>
+                )}
+              </Stack>
+            </Card>
+          </Group>
+        </Collapse>
       </Card>
 
       <Modal
         opened={props.cultureModalOpened}
         onClose={props.closeCultureModal}
-        title={
-          props.cultureModalMode === 'create'
-            ? 'Adicionar cultura e safra'
-            : 'Editar cultura e safra'
-        }
+        title="Editar período da cultura"
         centered
       >
         <Stack>
-          <Select
-            label="Cultura"
-            placeholder="Selecione a cultura"
-            data={props.cultureOptions}
-            searchable
-            nothingFoundMessage="Nenhuma cultura cadastrada"
-            value={props.cultureDraft.cultura || null}
-            onChange={(value) =>
-              props.setCultureDraft({
-                ...props.cultureDraft,
-                cultura: value ?? '',
-                cultivar: '',
-              })
-            }
+          <TextInput
+            label="Cultura (RNC)"
+            value={props.cultureDraft.cultura}
+            readOnly
           />
 
-          <Group align="end" wrap="nowrap">
-            {props.manualCultivar ? (
-              <TextInput
-                style={{ flex: 1 }}
-                label="Cultivar (manual)"
-                placeholder="Digite o cultivar"
-                value={props.cultureDraft.cultivar ?? ''}
-                onChange={(event) =>
-                  props.setCultureDraft({
-                    ...props.cultureDraft,
-                    cultivar: event.currentTarget.value,
-                  })
-                }
-              />
-            ) : (
-              <Select
-                style={{ flex: 1 }}
-                label="Cultivar"
-                placeholder={
-                  props.cultureDraft.cultura
-                    ? 'Selecione o cultivar'
-                    : 'Selecione a cultura primeiro'
-                }
-                data={props.cultivarOptions}
-                searchable
-                clearable
-                nothingFoundMessage="Nenhum cultivar cadastrado"
-                disabled={!props.cultureDraft.cultura}
-                value={props.cultureDraft.cultivar || null}
-                onChange={(value) =>
-                  props.setCultureDraft({
-                    ...props.cultureDraft,
-                    cultivar: value ?? '',
-                  })
-                }
-              />
-            )}
-            <ActionIcon
-              variant="light"
-              color={props.manualCultivar ? 'green' : 'blue'}
-              size="lg"
-              onClick={() => {
-                props.setManualCultivar(!props.manualCultivar);
-                if (!props.manualCultivar) {
-                  props.setCultureDraft({
-                    ...props.cultureDraft,
-                    cultivar: '',
-                  });
-                }
-              }}
-              title={
-                props.manualCultivar
-                  ? 'Usar lista de cultivares'
-                  : 'Informar cultivar manualmente'
-              }
-            >
-              <IconPlus size={16} />
-            </ActionIcon>
-          </Group>
+          <TextInput
+            label="Cultivar (RNC)"
+            value={props.cultureDraft.cultivar ?? ''}
+            readOnly
+          />
 
           <Group grow>
             <TextInput
-              type="date"
-              label="Data inicial"
+              type="month"
+              label="Mês/ano inicial"
               value={props.cultureDraft.data_inicio}
               onChange={(event) =>
                 props.setCultureDraft({
                   ...props.cultureDraft,
-                  data_inicio: event.currentTarget.value,
+                  data_inicio: normalizeMonthYear(event.currentTarget.value),
                 })
               }
             />
             <TextInput
-              type="date"
-              label="Data final"
+              type="month"
+              label="Mês/ano final"
               value={props.cultureDraft.data_fim}
               onChange={(event) =>
                 props.setCultureDraft({
                   ...props.cultureDraft,
-                  data_fim: event.currentTarget.value,
+                  data_fim: normalizeMonthYear(event.currentTarget.value),
                 })
               }
             />
           </Group>
 
           <Group justify="flex-end">
-            <Button variant="light" color="gray" onClick={props.closeCultureModal}>
-              Cancelar
-            </Button>
-            <Button onClick={props.saveCultureDraft}>Salvar periodo</Button>
+            <Tooltip label="Cancelar">
+              <ActionIcon
+                variant="light"
+                color="gray"
+                size="lg"
+                aria-label="Cancelar"
+                onClick={props.closeCultureModal}
+              >
+                <IconX size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Salvar periodo">
+              <ActionIcon
+                color="green"
+                size="lg"
+                aria-label="Salvar periodo"
+                onClick={props.saveCultureDraft}
+              >
+                <IconDeviceFloppy size={16} />
+              </ActionIcon>
+            </Tooltip>
           </Group>
         </Stack>
       </Modal>
 
-      <Card withBorder p="sm">
+      <Card withBorder p="xs">
         <Group justify="space-between" mb="xs">
-          <Text fw={700}>Mapa do talhao</Text>
+          <Group gap={6} align="center">
+            <Text fw={700}>Croqui do talhao</Text>
+            <Tooltip label="Croqui visual de referencia, sem proporcao/escala real do terreno.">
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                aria-label="Ajuda sobre escala do croqui do talhão"
+              >
+                <IconHelpCircle size={15} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
           <Badge color={props.drawMode === 'none' ? 'blue' : 'orange'}>
             {props.statusLabel}
           </Badge>
         </Group>
 
-        <Group mb="sm">
-          <Button
-            variant="light"
-            onClick={props.startMainDrawing}
-            disabled={props.drawMode !== 'none'}
+        <Group
+          mb="sm"
+          gap={6}
+          wrap="nowrap"
+          style={{ overflowX: 'auto', paddingBottom: 2 }}
+        >
+          <TextInput
+            style={{ flex: 1, minWidth: 226 }}
+            size="sm"
+            aria-label="Referencia real por CEP ou coordenadas"
+            placeholder="CEP ou coordenadas"
+            value={props.mapSearchValue}
+            onChange={(event) => props.setMapSearchValue(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void props.applyRealMapBackground();
+              }
+            }}
+          />
+          <Tooltip label="Aplicar fundo real">
+            <ActionIcon
+              color="blue"
+              size="md"
+              aria-label="Aplicar fundo real"
+              loading={props.mapSearchLoading}
+              onClick={() => void props.applyRealMapBackground()}
+            >
+              <IconSearch size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <TextInput
+            size="sm"
+            style={{ width: 188, minWidth: 188 }}
+            aria-label="Adicionar ponto por coordenadas"
+            placeholder="Lat, Lon do ponto"
+            value={props.pointSearchValue}
+            onChange={(event) => props.setPointSearchValue(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                props.addPointFromCoordinates();
+              }
+            }}
+          />
+          <Tooltip label="Inserir ponto por coordenada">
+            <ActionIcon
+              size="md"
+              color="teal"
+              aria-label="Inserir ponto por coordenada"
+              onClick={props.addPointFromCoordinates}
+            >
+              <IconPlus size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Select
+            size="sm"
+            placeholder="Camada"
+            aria-label="Selecionar camada do mapa"
+            style={{ width: 129, minWidth: 129 }}
+            data={mapLayerOptions}
+            value={props.mapLayerId}
+            onChange={(value) => {
+              if (!value) return;
+              props.setMapLayerId(value as GeoLayerId);
+            }}
+            disabled={!props.mapHasRealBackground}
+          />
+          <Tooltip
+            label={
+              props.mapInteractive
+                ? 'Desativar navegacao do mapa'
+                : 'Ativar navegacao do mapa (pan/zoom)'
+            }
           >
-            Desenhar limite do talhao
-          </Button>
-          <Button
-            variant="light"
-            color="red"
-            onClick={props.startZoneDrawing}
-            disabled={props.drawMode !== 'none'}
-          >
-            Adicionar zona de exclusao
-          </Button>
-          <Button
-            variant="light"
-            color="gray"
-            onClick={props.cancelDrawing}
-            disabled={props.drawMode === 'none'}
-          >
-            Cancelar desenho
-          </Button>
-          <Button onClick={props.finishDrawing} disabled={props.drawMode === 'none'}>
-            Concluir desenho
-          </Button>
-          <Button
-            color="red"
-            variant="light"
-            onClick={props.removeSelectedZone}
-            disabled={props.selectedZoneIndex == null}
-          >
-            Remover zona selecionada
-          </Button>
+            <ActionIcon
+              size="md"
+              color={props.mapInteractive ? 'teal' : 'gray'}
+              variant={props.mapInteractive ? 'filled' : 'light'}
+              aria-label="Alternar navegacao do mapa"
+              onClick={() => props.setMapInteractive(!props.mapInteractive)}
+              disabled={!props.mapHasRealBackground || props.drawMode !== 'none'}
+            >
+              <IconMap2 size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Voltar para fundo ilustrativo">
+            <ActionIcon
+              color="gray"
+              variant="light"
+              size="md"
+              aria-label="Voltar para fundo ilustrativo"
+              onClick={props.clearRealMapBackground}
+              disabled={!props.mapHasRealBackground}
+            >
+              <IconMapOff size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Desenhar limite do talhão">
+            <ActionIcon
+              variant="light"
+              size="md"
+              aria-label="Desenhar limite do talhão"
+              onClick={props.startMainDrawing}
+              disabled={
+                props.drawMode !== 'none' || props.mainPoints.length >= 3 || props.mapInteractive
+              }
+            >
+              <IconPolygon size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Adicionar zona de exclusao">
+            <ActionIcon
+              variant="light"
+              color="red"
+              size="md"
+              aria-label="Adicionar zona de exclusao"
+              onClick={props.startZoneDrawing}
+              disabled={props.drawMode !== 'none' || props.mapInteractive}
+            >
+              <IconVectorSpline size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Cancelar desenho">
+            <ActionIcon
+              variant="light"
+              color="gray"
+              size="md"
+              aria-label="Cancelar desenho"
+              onClick={props.cancelDrawing}
+              disabled={props.drawMode === 'none' || props.mapInteractive}
+            >
+              <IconBan size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Concluir desenho">
+            <ActionIcon
+              size="md"
+              color="green"
+              aria-label="Concluir desenho"
+              onClick={props.finishDrawing}
+              disabled={props.drawMode === 'none' || props.mapInteractive}
+            >
+              <IconCheck size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label={deleteSelectionLabel}>
+            <ActionIcon
+              color="red"
+              variant="light"
+              size="md"
+              aria-label="Excluir selecao atual"
+              onClick={props.removeCurrentSelection}
+              disabled={!canDeleteSelection}
+            >
+              <IconTrash size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Excluir ponto selecionado (Del)">
+            <ActionIcon
+              color="orange"
+              variant="light"
+              size="md"
+              aria-label="Excluir ponto selecionado"
+              onClick={props.removeSelectedVertex}
+              disabled={!props.selectedVertex}
+            >
+              <IconMinus size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Remover limite do talhão">
+            <ActionIcon
+              color="orange"
+              variant="light"
+              size="md"
+              aria-label="Remover limite do talhão"
+              onClick={props.removeMainPolygon}
+              disabled={
+                props.mainPoints.length === 0 &&
+                props.currentPoints.length === 0 &&
+                props.zones.length === 0
+              }
+            >
+              <IconX size={16} />
+            </ActionIcon>
+          </Tooltip>
         </Group>
 
         <div
           ref={props.canvasRef}
           style={{
             width: '100%',
-            background: '#f1f5f9',
+            height: 440,
+            position: 'relative',
+            overflow: 'hidden',
+            backgroundColor: '#e8efe1',
+            backgroundImage: props.mapCenter ? undefined : `url(${mapReferenceBg})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
             border: '1px solid #cbd5e1',
             borderRadius: 8,
           }}
         >
-          <Stage
-            width={props.stageWidth}
-            height={440}
-            onMouseDown={props.handleStageClick}
-            onMouseMove={props.handleMouseMove}
-            onContextMenu={props.handleCloseWithRightClick}
+          {props.mapCenter ? (
+            <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+              <Suspense
+                fallback={
+                  <Center h="100%">
+                    <Loader size="sm" />
+                  </Center>
+                }
+              >
+                <LazyGeoBackdropMap
+                  center={props.mapCenter}
+                  zoom={props.mapZoom}
+                  layerId={props.mapLayerId}
+                  interactive={props.mapInteractive}
+                  onViewChange={props.onRealMapViewChange}
+                />
+              </Suspense>
+            </div>
+          ) : null}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 1,
+              pointerEvents: props.mapInteractive ? 'none' : 'auto',
+            }}
           >
-            <Layer>
+            <Stage
+              width={props.stageWidth}
+              height={440}
+              onMouseDown={props.handleStageClick}
+              onMouseMove={props.handleMouseMove}
+              onContextMenu={props.handleCloseWithRightClick}
+            >
+              <Layer>
               {props.mainPoints.length >= 3 ? (
                 <>
                   <Line
                     points={flattenPoints(props.mainPoints)}
                     closed
-                    fill="rgba(34,197,94,0.35)"
-                    stroke="#15803d"
-                    strokeWidth={2}
+                    listening={canInteractExistingShapes}
+                    fill={
+                      props.selectedMainPolygon
+                        ? 'rgba(34,197,94,0.46)'
+                        : 'rgba(34,197,94,0.35)'
+                    }
+                    stroke={props.selectedMainPolygon ? '#065f46' : '#15803d'}
+                    strokeWidth={props.selectedMainPolygon ? 2.5 : 2}
+                    onMouseDown={(event) => {
+                      event.cancelBubble = true;
+                      props.toggleMainPolygonSelection();
+                    }}
+                    onTouchStart={(event) => {
+                      event.cancelBubble = true;
+                      props.toggleMainPolygonSelection();
+                    }}
                   />
                   <KonvaText
-                    x={centroid(props.mainPoints).x - 42}
-                    y={centroid(props.mainPoints).y - 8}
-                    text="Talhao"
+                    x={mainBounds ? (mainBounds.minX + mainBounds.maxX) / 2 - 120 : 0}
+                    y={mainBounds ? Math.max(8, mainBounds.minY - 26) : 8}
+                    width={240}
+                    align="center"
+                    text={talhaoLabel}
                     fontSize={13}
                     fontStyle="bold"
                     fill="#14532d"
+                    listening={false}
                   />
+                  {props.drawMode === 'none'
+                    ? props.mainPoints.map((point, index) => {
+                        const next = props.mainPoints[(index + 1) % props.mainPoints.length];
+                        const middle = midpoint(point, next);
+                        return (
+                          <KonvaGroup key={`main-insert-${index}`}>
+                            <Line
+                              points={[point.x, point.y, next.x, next.y]}
+                              stroke="rgba(14,165,233,0.001)"
+                              strokeWidth={20}
+                              lineCap="round"
+                              onMouseDown={(event) => {
+                                event.cancelBubble = true;
+                                props.insertMainPointAfter(index);
+                              }}
+                              onTouchStart={(event) => {
+                                event.cancelBubble = true;
+                                props.insertMainPointAfter(index);
+                              }}
+                            />
+                            <Circle
+                              x={middle.x}
+                              y={middle.y}
+                              radius={4.5}
+                              fill="rgba(14,165,233,0.75)"
+                              stroke="#ffffff"
+                              strokeWidth={1}
+                              hitStrokeWidth={18}
+                              onMouseDown={(event) => {
+                                event.cancelBubble = true;
+                                props.insertMainPointAfter(index);
+                              }}
+                              onTouchStart={(event) => {
+                                event.cancelBubble = true;
+                                props.insertMainPointAfter(index);
+                              }}
+                            />
+                          </KonvaGroup>
+                        );
+                      })
+                    : null}
                   {props.mainPoints.map((point, index) => (
-                    <Circle
-                      key={`main-anchor-${index}`}
-                      x={point.x}
-                      y={point.y}
-                      radius={5}
-                      fill="#0f172a"
-                      stroke="#ffffff"
-                      strokeWidth={1.5}
-                      draggable={props.drawMode === 'none'}
-                      onDragMove={(event) => {
-                        const { x, y } = event.target.position();
-                        props.moveMainAnchor(index, { x, y });
-                      }}
-                    />
+                    (() => {
+                      const isSelected =
+                        props.selectedVertex?.kind === 'main' &&
+                        props.selectedVertex.pointIndex === index;
+                      return (
+                        <Circle
+                          key={`main-anchor-${index}`}
+                          x={point.x}
+                          y={point.y}
+                          radius={7}
+                          fill={isSelected ? '#0369a1' : '#0f172a'}
+                          stroke={isSelected ? '#67e8f9' : '#ffffff'}
+                          strokeWidth={isSelected ? 2.3 : 1.5}
+                          hitStrokeWidth={24}
+                          listening={canInteractExistingShapes}
+                          draggable={canInteractExistingShapes}
+                          onMouseDown={(event) => {
+                            event.cancelBubble = true;
+                            props.selectMainVertex(index);
+                          }}
+                          onTouchStart={(event) => {
+                            event.cancelBubble = true;
+                            props.selectMainVertex(index);
+                          }}
+                          onClick={() => props.selectMainVertex(index)}
+                          onDragMove={(event) => {
+                            const { x, y } = event.target.position();
+                            const moved = props.moveMainAnchor(index, { x, y });
+                            if (!moved) {
+                              event.target.position({ x: point.x, y: point.y });
+                            }
+                          }}
+                        />
+                      );
+                    })()
                   ))}
                 </>
               ) : null}
@@ -938,6 +2566,7 @@ function GridLayout(props: {
                   <Line
                     points={flattenPoints(zone)}
                     closed
+                    listening={canInteractExistingShapes}
                     fill={
                       props.selectedZoneIndex === index
                         ? 'rgba(244,63,94,0.5)'
@@ -945,54 +2574,145 @@ function GridLayout(props: {
                     }
                     stroke={props.selectedZoneIndex === index ? '#9f1239' : '#b91c1c'}
                     strokeWidth={2}
-                    onClick={() => props.setSelectedZoneIndex(index)}
+                    onMouseDown={(event) => {
+                      event.cancelBubble = true;
+                      props.toggleZoneSelection(index);
+                      props.clearSelectedVertex();
+                    }}
+                    onTouchStart={(event) => {
+                      event.cancelBubble = true;
+                      props.toggleZoneSelection(index);
+                      props.clearSelectedVertex();
+                    }}
                   />
+                  {props.drawMode === 'none'
+                    ? zone.map((point, pointIndex) => {
+                        const next = zone[(pointIndex + 1) % zone.length];
+                        const middle = midpoint(point, next);
+                        return (
+                          <KonvaGroup key={`zone-insert-${index}-${pointIndex}`}>
+                            <Line
+                              points={[point.x, point.y, next.x, next.y]}
+                              stroke="rgba(244,63,94,0.001)"
+                              strokeWidth={20}
+                              lineCap="round"
+                              onMouseDown={(event) => {
+                                event.cancelBubble = true;
+                                props.setSelectedZoneIndex(index);
+                                props.insertZonePointAfter(index, pointIndex);
+                              }}
+                              onTouchStart={(event) => {
+                                event.cancelBubble = true;
+                                props.setSelectedZoneIndex(index);
+                                props.insertZonePointAfter(index, pointIndex);
+                              }}
+                            />
+                            <Circle
+                              x={middle.x}
+                              y={middle.y}
+                              radius={4.2}
+                              fill="rgba(244,63,94,0.75)"
+                              stroke="#ffffff"
+                              strokeWidth={1}
+                              hitStrokeWidth={18}
+                              onMouseDown={(event) => {
+                                event.cancelBubble = true;
+                                props.setSelectedZoneIndex(index);
+                                props.insertZonePointAfter(index, pointIndex);
+                              }}
+                              onTouchStart={(event) => {
+                                event.cancelBubble = true;
+                                props.setSelectedZoneIndex(index);
+                                props.insertZonePointAfter(index, pointIndex);
+                              }}
+                            />
+                          </KonvaGroup>
+                        );
+                      })
+                    : null}
                   {zone.map((point, pointIndex) => (
-                    <Circle
-                      key={`zone-anchor-${index}-${pointIndex}`}
-                      x={point.x}
-                      y={point.y}
-                      radius={4}
-                      fill="#7f1d1d"
-                      stroke="#ffffff"
-                      strokeWidth={1.2}
-                      draggable={props.drawMode === 'none'}
-                      onDragMove={(event) => {
-                        const { x, y } = event.target.position();
-                        props.moveZoneAnchor(index, pointIndex, { x, y });
-                      }}
-                      onClick={() => props.setSelectedZoneIndex(index)}
-                    />
+                    (() => {
+                      const isSelected =
+                        props.selectedVertex?.kind === 'zone' &&
+                        props.selectedVertex.zoneIndex === index &&
+                        props.selectedVertex.pointIndex === pointIndex;
+                      return (
+                        <Circle
+                          key={`zone-anchor-${index}-${pointIndex}`}
+                          x={point.x}
+                          y={point.y}
+                          radius={6}
+                          fill={isSelected ? '#be123c' : '#7f1d1d'}
+                          stroke={isSelected ? '#fecdd3' : '#ffffff'}
+                          strokeWidth={isSelected ? 2.2 : 1.2}
+                          hitStrokeWidth={22}
+                          listening={canInteractExistingShapes}
+                          draggable={canInteractExistingShapes}
+                          onMouseDown={(event) => {
+                            event.cancelBubble = true;
+                            props.selectZoneVertex(index, pointIndex);
+                          }}
+                          onTouchStart={(event) => {
+                            event.cancelBubble = true;
+                            props.selectZoneVertex(index, pointIndex);
+                          }}
+                          onDragMove={(event) => {
+                            const { x, y } = event.target.position();
+                            const moved = props.moveZoneAnchor(index, pointIndex, { x, y });
+                            if (!moved) {
+                              event.target.position({ x: point.x, y: point.y });
+                            }
+                          }}
+                          onClick={() => props.selectZoneVertex(index, pointIndex)}
+                        />
+                      );
+                    })()
                   ))}
                 </KonvaGroup>
               ))}
 
               {props.currentPoints.length > 0 ? (
                 <>
-                  <Line
-                    points={flattenPoints([
-                      ...props.currentPoints,
-                      props.mousePos ?? props.currentPoints[props.currentPoints.length - 1],
-                    ])}
-                    stroke="#0f172a"
-                    strokeWidth={2}
-                    dash={[6, 4]}
-                  />
+                  {previewSegments.map((segment) => (
+                    <Line
+                      key={segment.key}
+                      points={[segment.start.x, segment.start.y, segment.end.x, segment.end.y]}
+                      stroke={segment.invalid ? '#dc2626' : '#0f172a'}
+                      strokeWidth={segment.invalid ? 2.6 : 2}
+                      dash={segment.invalid ? [4, 3] : [6, 4]}
+                    />
+                  ))}
                   {props.currentPoints.map((point, index) => (
                     <Circle
                       key={`current-anchor-${index}`}
                       x={point.x}
                       y={point.y}
-                      radius={4}
+                      radius={7}
                       fill="#111827"
                       stroke="#ffffff"
                       strokeWidth={1.2}
+                      hitStrokeWidth={22}
+                      draggable
+                      onMouseDown={(event) => {
+                        event.cancelBubble = true;
+                      }}
+                      onTouchStart={(event) => {
+                        event.cancelBubble = true;
+                      }}
+                      onDragMove={(event) => {
+                        const { x, y } = event.target.position();
+                        const moved = props.moveCurrentAnchor(index, { x, y });
+                        if (!moved) {
+                          event.target.position({ x: point.x, y: point.y });
+                        }
+                      }}
                     />
                   ))}
                 </>
               ) : null}
-            </Layer>
-          </Stage>
+              </Layer>
+            </Stage>
+          </div>
         </div>
 
         <Group justify="space-between" mt="sm">
@@ -1002,20 +2722,15 @@ function GridLayout(props: {
           <Badge color="red">{props.zones.length} zonas</Badge>
         </Group>
         <Text size="sm" c="dimmed" mt={4}>
-          Arraste as bolinhas para editar os vertices e clique em "Salvar detalhamento".
+          Arraste as bolinhas para editar vertices. Clique na bolinha para selecionar e use Excluir ponto (Del).
         </Text>
+        {props.drawMode === 'zone' && props.currentPoints.length > 1 && hasInvalidPreviewSegment ? (
+          <Text size="sm" c="red.6" mt={2}>
+            Existe aresta fora da area util. Ajuste os pontos ate todas as arestas ficarem validas.
+          </Text>
+        ) : null}
       </Card>
 
-      <Divider />
-
-      <Group justify="flex-end">
-        <Button variant="light" color="gray" onClick={props.onClose}>
-          Fechar
-        </Button>
-        <Button onClick={() => void props.save()} loading={props.saving}>
-          Salvar detalhamento
-        </Button>
-      </Group>
     </Stack>
   );
 }

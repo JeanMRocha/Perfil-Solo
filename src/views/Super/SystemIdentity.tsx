@@ -118,7 +118,7 @@ export default function SystemIdentity() {
 
     if (!isAcceptedLogoFile(file)) {
       notifications.show({
-        title: 'Formato nao suportado',
+        title: 'Formato não suportado',
         message: 'Use PNG, JPG, WEBP ou SVG para a logo do sistema.',
         color: 'yellow',
       });
@@ -133,7 +133,7 @@ export default function SystemIdentity() {
     reader.onerror = () => {
       notifications.show({
         title: 'Falha no upload',
-        message: 'Nao foi possivel ler o arquivo da logo selecionada.',
+        message: 'Não foi possível ler o arquivo da logo selecionada.',
         color: 'red',
       });
     };
@@ -157,7 +157,7 @@ export default function SystemIdentity() {
     } catch {
       notifications.show({
         title: 'Falha ao salvar',
-        message: 'Nao foi possivel atualizar a identidade do sistema.',
+        message: 'Não foi possível atualizar a identidade do sistema.',
         color: 'red',
       });
     } finally {
@@ -188,7 +188,7 @@ export default function SystemIdentity() {
     } catch (error: any) {
       notifications.show({
         title: 'Falha ao criar categoria',
-        message: String(error?.message ?? 'Nao foi possivel criar a categoria.'),
+        message: String(error?.message ?? 'Não foi possível criar a categoria.'),
         color: 'red',
       });
     }
@@ -212,7 +212,7 @@ export default function SystemIdentity() {
     } catch (error: any) {
       notifications.show({
         title: 'Falha ao renomear',
-        message: String(error?.message ?? 'Nao foi possivel renomear a categoria.'),
+        message: String(error?.message ?? 'Não foi possível renomear a categoria.'),
         color: 'red',
       });
     }
@@ -229,7 +229,7 @@ export default function SystemIdentity() {
     } catch (error: any) {
       notifications.show({
         title: 'Falha ao atualizar categoria',
-        message: String(error?.message ?? 'Nao foi possivel atualizar a categoria.'),
+        message: String(error?.message ?? 'Não foi possível atualizar a categoria.'),
         color: 'red',
       });
     }
@@ -250,7 +250,7 @@ export default function SystemIdentity() {
     } catch (error: any) {
       notifications.show({
         title: 'Falha ao remover categoria',
-        message: String(error?.message ?? 'Nao foi possivel remover a categoria.'),
+        message: String(error?.message ?? 'Não foi possível remover a categoria.'),
         color: 'red',
       });
     }

@@ -2,6 +2,7 @@ import {
   ActionIcon,
   Badge,
   Box,
+  Button,
   Group,
   Indicator,
   Popover,
@@ -9,7 +10,7 @@ import {
   Stack,
   Text,
 } from '@mantine/core';
-import { IconBell, IconSettings } from '@tabler/icons-react';
+import { IconAlertTriangle, IconBell, IconSettings } from '@tabler/icons-react';
 import type { AppNotification } from '../../../services/notificationsService';
 
 interface NotificationPopoverProps {
@@ -18,11 +19,15 @@ interface NotificationPopoverProps {
   notificationsLoading: boolean;
   notificationRows: AppNotification[];
   notificationExpandedId: string | null;
+  billingGraceActive: boolean;
+  billingRestrictedToFirstProperty: boolean;
+  billingGraceDeadline: string | null;
   themeMode: 'light' | 'dark';
   actionIconStyles: Record<string, any>;
   onOpenedChange: (opened: boolean) => void;
   onToggle: () => void;
   onOpenCenter: () => void;
+  onOpenBilling: () => void;
   onRowClick: (row: AppNotification) => void;
   onExpandedIdChange: (value: string | null) => void;
   isNotificationExpired: (row: AppNotification) => boolean;
@@ -36,17 +41,37 @@ export default function NotificationPopover({
   notificationsLoading,
   notificationRows,
   notificationExpandedId,
+  billingGraceActive,
+  billingRestrictedToFirstProperty,
+  billingGraceDeadline,
   themeMode,
   actionIconStyles,
   onOpenedChange,
   onToggle,
   onOpenCenter,
+  onOpenBilling,
   onRowClick,
   onExpandedIdChange,
   isNotificationExpired,
   notificationLevelColor,
   formatNotificationDate,
 }: NotificationPopoverProps) {
+  const hasBillingPaymentAlert = billingGraceActive || billingRestrictedToFirstProperty;
+  const paymentAlertColor = billingRestrictedToFirstProperty ? 'red' : 'orange';
+  const paymentAlertTitle = billingRestrictedToFirstProperty
+    ? 'Falha de pagamento'
+    : 'Pendencia de pagamento';
+  const parsedGraceDate = billingGraceDeadline ? new Date(billingGraceDeadline) : null;
+  const paymentAlertDeadline =
+    parsedGraceDate && !Number.isNaN(parsedGraceDate.getTime())
+      ? parsedGraceDate.toLocaleDateString('pt-BR')
+      : null;
+  const paymentAlertMessage = billingRestrictedToFirstProperty
+    ? 'Pagamento não regularizado. Somente a primeira propriedade permanece acessivel.'
+    : paymentAlertDeadline
+      ? `Regularize ate ${paymentAlertDeadline} para evitar bloqueio das demais propriedades.`
+      : 'Regularize o pagamento para manter acesso completo as propriedades.';
+
   return (
     <Popover
       opened={opened}
@@ -101,6 +126,37 @@ export default function NotificationPopover({
               </ActionIcon>
             </Group>
           </Group>
+
+          {hasBillingPaymentAlert ? (
+            <Box
+              style={{
+                border: `1px solid ${themeMode === 'dark' ? '#7f1d1d' : '#f59e0b'}`,
+                borderRadius: 8,
+                padding: 10,
+                background:
+                  themeMode === 'dark'
+                    ? 'rgba(127, 29, 29, 0.22)'
+                    : 'rgba(254, 243, 199, 0.7)',
+              }}
+            >
+              <Group justify="space-between" align="start" gap="xs" wrap="nowrap">
+                <Box style={{ minWidth: 0 }}>
+                  <Group gap={6} wrap="nowrap">
+                    <IconAlertTriangle size={14} />
+                    <Text size="sm" fw={700}>
+                      {paymentAlertTitle}
+                    </Text>
+                  </Group>
+                  <Text size="xs" c="dimmed">
+                    {paymentAlertMessage}
+                  </Text>
+                </Box>
+                <Button size="xs" color={paymentAlertColor} variant="light" onClick={onOpenBilling}>
+                  Regularizar
+                </Button>
+              </Group>
+            </Box>
+          ) : null}
 
           {notificationsLoading ? (
             <Text size="sm" c="dimmed">

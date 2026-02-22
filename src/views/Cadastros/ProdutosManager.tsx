@@ -241,7 +241,7 @@ export default function ProdutosManager({
     const productName = draft.nome.trim();
     if (productName.length < 2) {
       notifications.show({
-        title: 'Nome invalido',
+        title: 'Nome inválido',
         message: 'Informe pelo menos 2 caracteres no nome do produto.',
         color: 'yellow',
       });
@@ -377,7 +377,7 @@ export default function ProdutosManager({
             />
           </Group>
           <TextInput
-            label="Observacoes"
+            label="Observações"
             value={draft.observacoes}
             onChange={(event) =>
               setDraft((prev) => ({ ...prev, observacoes: event.currentTarget.value }))

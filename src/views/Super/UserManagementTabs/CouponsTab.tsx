@@ -42,7 +42,7 @@ export default function CouponsTab({
           <Title order={5}>Cupons de desconto</Title>
           <Group grow align="end">
             <TextInput
-              label="Codigo do cupom"
+              label="Código do cupom"
               value={couponCode}
               onChange={(event) => onCouponCodeChange(event.currentTarget.value)}
               placeholder="EX: SOLO10"
@@ -79,7 +79,7 @@ export default function CouponsTab({
             />
           </Group>
           <Textarea
-            label="Observacoes"
+            label="Observações"
             value={couponNotes}
             onChange={(event) => onCouponNotesChange(event.currentTarget.value)}
             minRows={2}

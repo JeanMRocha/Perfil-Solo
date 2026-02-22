@@ -188,8 +188,8 @@ export default function LaboratoriosSettings({
   const handleSave = async () => {
     if (!currentUserId) {
       notifications.show({
-        title: 'Usuario nao identificado',
-        message: 'Nao foi possivel identificar o usuario para salvar laboratorio.',
+        title: 'Usuário não identificado',
+        message: 'Não foi possível identificar o usuário para salvar laboratorio.',
         color: 'red',
       });
       return;
@@ -198,7 +198,7 @@ export default function LaboratoriosSettings({
     const nome = draft.nome.trim();
     if (nome.length < 3) {
       notifications.show({
-        title: 'Nome invalido',
+        title: 'Nome inválido',
         message: 'Informe pelo menos 3 caracteres para o laboratorio.',
         color: 'yellow',
       });
@@ -227,7 +227,7 @@ export default function LaboratoriosSettings({
     } catch (err: any) {
       notifications.show({
         title: 'Falha ao salvar',
-        message: err?.message ?? 'Nao foi possivel salvar laboratorio.',
+        message: err?.message ?? 'Não foi possível salvar laboratorio.',
         color: 'red',
       });
     } finally {
@@ -292,7 +292,7 @@ export default function LaboratoriosSettings({
           </SimpleGrid>
 
           <TextInput
-            label="Endereco"
+            label="Endereço"
             value={draft.endereco}
             onChange={(event) =>
               setDraft((prev) => ({ ...prev, endereco: event.currentTarget.value }))
@@ -351,7 +351,7 @@ export default function LaboratoriosSettings({
                         style={{ width: 140 }}
                       />
                       <TextInput
-                        label="Descricao"
+                        label="Descrição"
                         value={service.descricao}
                         onChange={(event) =>
                           updateService(service.id, {

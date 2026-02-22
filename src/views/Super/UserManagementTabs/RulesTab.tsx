@@ -41,7 +41,7 @@ export default function RulesTab({
           </div>
           <Group align="end">
             <NumberInput
-              label="Creditos iniciais"
+              label="Créditos iniciais"
               min={0}
               value={initialCreditsConfig}
               onChange={(value) =>
@@ -90,7 +90,7 @@ export default function RulesTab({
                   />
 
                   <NumberInput
-                    label="Creditos"
+                    label="Créditos"
                     min={0}
                     value={rule.credits}
                     onChange={(value) =>
@@ -101,7 +101,7 @@ export default function RulesTab({
                   />
 
                   <NumberInput
-                    label="Limite por usuario"
+                    label="Limite por usuário"
                     min={0}
                     value={rule.max_claims_per_user ?? 0}
                     onChange={(value) =>
@@ -143,7 +143,7 @@ export default function RulesTab({
               }
             />
             <NumberInput
-              label="Creditos por propaganda"
+              label="Créditos por propaganda"
               min={1}
               value={adConfig.credits_per_view}
               onChange={(value) =>
@@ -155,7 +155,7 @@ export default function RulesTab({
               }
             />
             <NumberInput
-              label="Limite diario por usuario"
+              label="Limite diario por usuário"
               min={1}
               value={adConfig.daily_limit_per_user}
               onChange={(value) =>

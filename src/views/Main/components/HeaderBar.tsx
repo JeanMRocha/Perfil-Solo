@@ -11,10 +11,15 @@ import {
   Title,
   UnstyledButton,
 } from '@mantine/core';
-import { IconMap2, IconMenu2, IconUser } from '@tabler/icons-react';
-import type { ComponentType } from 'react';
+import { useViewportSize } from '@mantine/hooks';
+import { IconAlertTriangle, IconMap2, IconMenu2, IconUser } from '@tabler/icons-react';
+import type { ComponentType, CSSProperties } from 'react';
 import HeaderCreditsSummary from '@components/layout/HeaderCreditsSummary';
 import type { AppNotification } from '../../../services/notificationsService';
+import type {
+  BillingQuoteLine,
+} from '../../../services/billingPlanService';
+import type { BillingPlanId } from '../../../modules/billing';
 import { getBrandPalette } from '../../../mantine/brand';
 import NotificationPopover from './NotificationPopover';
 
@@ -33,12 +38,17 @@ interface HeaderBarProps {
   avatarSource: string;
   avatarEmoji: string;
   planLabel: string;
+  billingPlanId: BillingPlanId;
   creditsNumber: number;
   purchasedCredits: number;
   earnedCredits: number;
   spentCredits: number;
+  usageLines: BillingQuoteLine[];
+  usageLoading: boolean;
+  xpTotal: number;
+  xpLevel: number;
+  canUseSuperMode: boolean;
   isSuperMode: boolean;
-  menuTextVisible: boolean;
   brandDisplayName: string;
   brandLogoUrl: string;
   topMenuItems: HeaderMenuItem[];
@@ -50,6 +60,7 @@ interface HeaderBarProps {
   onNavigate: (path: string) => void;
   onOpenUserCenter: () => void;
   onOpenBilling: () => void;
+  onOpenJourney: () => void;
   onToggleMainMenu: () => void;
   onModeToggle: (checked: boolean) => void;
   notificationsOpened: boolean;
@@ -57,6 +68,9 @@ interface HeaderBarProps {
   notificationsLoading: boolean;
   notificationRows: AppNotification[];
   notificationExpandedId: string | null;
+  billingGraceActive: boolean;
+  billingRestrictedToFirstProperty: boolean;
+  billingGraceDeadline: string | null;
   onNotificationsOpenedChange: (opened: boolean) => void;
   onToggleNotifications: () => void;
   onOpenNotificationsCenter: () => void;
@@ -76,12 +90,17 @@ export default function HeaderBar({
   avatarSource,
   avatarEmoji,
   planLabel,
+  billingPlanId,
   creditsNumber,
   purchasedCredits,
   earnedCredits,
   spentCredits,
+  usageLines,
+  usageLoading,
+  xpTotal,
+  xpLevel,
+  canUseSuperMode,
   isSuperMode,
-  menuTextVisible,
   brandDisplayName,
   brandLogoUrl,
   topMenuItems,
@@ -93,6 +112,7 @@ export default function HeaderBar({
   onNavigate,
   onOpenUserCenter,
   onOpenBilling,
+  onOpenJourney,
   onToggleMainMenu,
   onModeToggle,
   notificationsOpened,
@@ -100,6 +120,9 @@ export default function HeaderBar({
   notificationsLoading,
   notificationRows,
   notificationExpandedId,
+  billingGraceActive,
+  billingRestrictedToFirstProperty,
+  billingGraceDeadline,
   onNotificationsOpenedChange,
   onToggleNotifications,
   onOpenNotificationsCenter,
@@ -109,11 +132,94 @@ export default function HeaderBar({
   notificationLevelColor,
   formatNotificationDate,
 }: HeaderBarProps) {
+  const { width: viewportWidth } = useViewportSize();
   const brandLogoSize = Math.max(30, headerHeight - 8);
   const brandFallbackIconSize = Math.max(14, Math.round(brandLogoSize * 0.42));
   const userAvatarSize = 34;
   const userAvatarGlyphSize = 20;
   const brandPalette = getBrandPalette(themeMode);
+  const compactMenu = viewportWidth < 1320;
+  const ultraCompactMenu = viewportWidth < 960;
+  const menuRowPaddingX = ultraCompactMenu ? 'xs' : 'md';
+  const menuRowGap = ultraCompactMenu ? 6 : 8;
+  const compactPillWidth = ultraCompactMenu ? 36 : 42;
+  const compactPillInlineStyle = {
+    minWidth: compactPillWidth,
+    width: compactPillWidth,
+    paddingInline: 0,
+    overflow: 'hidden' as const,
+    flex: '0 0 auto' as const,
+  };
+
+  const expandedPillInlineStyle = (label: string) => {
+    const widthBase = ultraCompactMenu ? 56 : compactMenu ? 60 : 64;
+    const perChar = ultraCompactMenu ? 5.5 : 6.2;
+    const expandedWidth = Math.max(
+      compactPillWidth + 40,
+      Math.min(180, Math.round(widthBase + label.length * perChar)),
+    );
+    return {
+      width: expandedWidth,
+      minWidth: expandedWidth,
+      overflow: 'hidden' as const,
+      paddingInline: compactMenu ? 10 : 12,
+      flex: '0 0 auto' as const,
+    };
+  };
+
+  const buttonContentStyle = (showLabel: boolean): CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: showLabel ? 6 : 0,
+    minWidth: 0,
+  });
+
+  const buttonLabelStyle = (showLabel: boolean): CSSProperties => ({
+    display: 'inline-block',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    maxWidth: showLabel ? 128 : 0,
+    opacity: showLabel ? 1 : 0,
+    transform: showLabel ? 'translateX(0)' : 'translateX(-6px)',
+    transition:
+      'max-width 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+  });
+
+  const resolveMenuButtonStyle = (showLabel: boolean, label: string) =>
+    showLabel ? expandedPillInlineStyle(label) : compactPillInlineStyle;
+
+  const resolveMenuIconSize = ultraCompactMenu ? 15 : 16;
+  const inactiveSuperMenuVariant = themeMode === 'light' ? 'outline' : 'light';
+  const inactiveSuperMenuColor = 'gray';
+  const inactiveMainMenuVariant = themeMode === 'light' ? 'default' : 'light';
+  const inactiveMainMenuColor = themeMode === 'light' ? 'dark' : 'gray';
+  const activeMainMenuColor = themeMode === 'light' ? '#12823b' : 'green';
+  const hasBillingPaymentAlert = billingGraceActive || billingRestrictedToFirstProperty;
+  const paymentAlertLabel = billingRestrictedToFirstProperty
+    ? 'Falha de pagamento'
+    : 'Pagamento pendente';
+  const paymentAlertColor = billingRestrictedToFirstProperty ? 'red' : 'orange';
+  const parsedGraceDate = billingGraceDeadline ? new Date(billingGraceDeadline) : null;
+  const paymentAlertDeadline =
+    parsedGraceDate && !Number.isNaN(parsedGraceDate.getTime())
+      ? parsedGraceDate.toLocaleDateString('pt-BR')
+      : null;
+  const paymentAlertTitle = billingRestrictedToFirstProperty
+    ? 'Pagamento em atraso: apenas a primeira propriedade segue ativa.'
+    : paymentAlertDeadline
+      ? `Regularize ate ${paymentAlertDeadline} para manter acesso completo as propriedades.`
+      : 'Regularize o pagamento para evitar bloqueios de acesso.';
+  const renderButtonContent = (
+    Icon: ComponentType<{ size?: number }>,
+    label: string,
+    showLabel: boolean,
+  ) => (
+    <span style={buttonContentStyle(showLabel)}>
+      <Icon size={resolveMenuIconSize} />
+      <span style={buttonLabelStyle(showLabel)}>{label}</span>
+    </span>
+  );
 
   return (
     <Box h="100%">
@@ -130,7 +236,7 @@ export default function HeaderBar({
             <UnstyledButton
               onClick={onOpenUserCenter}
               styles={userTriggerStyles}
-              title="Abrir central do usuario"
+              title="Abrir central do usuário"
             >
               <Group gap="sm" wrap="nowrap">
                 <Avatar size={userAvatarSize} radius="xl" src={avatarSource}>
@@ -146,9 +252,11 @@ export default function HeaderBar({
                   <Text fw={700} c={headerText} truncate="end">
                     {userName}
                   </Text>
-                  <Text size="xs" c={brandPalette.header.textMuted} truncate="end">
-                    {companyName}
-                  </Text>
+                  {companyName ? (
+                    <Text size="xs" c={brandPalette.header.textMuted} truncate="end">
+                      {companyName}
+                    </Text>
+                  ) : null}
                 </Box>
               </Group>
             </UnstyledButton>
@@ -159,28 +267,52 @@ export default function HeaderBar({
               notificationsLoading={notificationsLoading}
               notificationRows={notificationRows}
               notificationExpandedId={notificationExpandedId}
+              billingGraceActive={billingGraceActive}
+              billingRestrictedToFirstProperty={billingRestrictedToFirstProperty}
+              billingGraceDeadline={billingGraceDeadline}
               themeMode={themeMode}
               actionIconStyles={headerActionIconStyles}
               onOpenedChange={onNotificationsOpenedChange}
               onToggle={onToggleNotifications}
               onOpenCenter={onOpenNotificationsCenter}
+              onOpenBilling={onOpenBilling}
               onRowClick={onNotificationRowClick}
               onExpandedIdChange={onNotificationExpandedIdChange}
               isNotificationExpired={isNotificationExpired}
               notificationLevelColor={notificationLevelColor}
               formatNotificationDate={formatNotificationDate}
             />
+            {hasBillingPaymentAlert ? (
+              <Button
+                size="xs"
+                radius="xl"
+                variant={themeMode === 'dark' ? 'light' : 'outline'}
+                color={paymentAlertColor}
+                leftSection={<IconAlertTriangle size={14} />}
+                title={paymentAlertTitle}
+                onClick={onOpenBilling}
+                style={{ marginTop: 4 }}
+              >
+                {paymentAlertLabel}
+              </Button>
+            ) : null}
           </Group>
 
           <Group gap="sm" wrap="nowrap" style={{ marginLeft: 'auto' }}>
             <HeaderCreditsSummary
               planLabel={planLabel}
+              billingPlanId={billingPlanId}
               creditsNumber={creditsNumber}
               purchasedCredits={purchasedCredits}
               earnedCredits={earnedCredits}
               spentCredits={spentCredits}
+              usageLines={usageLines}
+              usageLoading={usageLoading}
+              xpTotal={xpTotal}
+              xpLevel={xpLevel}
               isDark={themeMode === 'dark'}
               onOpenBilling={onOpenBilling}
+              onOpenJourney={onOpenJourney}
             />
             <ActionIcon
               variant="light"
@@ -234,49 +366,62 @@ export default function HeaderBar({
             >
               {isSuperMode ? 'SUPER' : 'NORMAL'}
             </Text>
-            <Switch
-              size="sm"
-              color="teal"
-              checked={isSuperMode}
-              onChange={(event) => onModeToggle(event.currentTarget.checked)}
-              aria-label="Alternar perfil de usuario"
-            />
+            {canUseSuperMode ? (
+              <Switch
+                size="sm"
+                color="teal"
+                checked={isSuperMode}
+                onChange={(event) => onModeToggle(event.currentTarget.checked)}
+                aria-label="Alternar perfil de usuário"
+              />
+            ) : null}
           </Group>
         </Group>
       </Box>
 
       {isSuperMode ? (
         <Box
-          px="md"
+          px={menuRowPaddingX}
           h={headerHeight}
           style={{
             borderBottom: `1px solid ${brandPalette.header.border}`,
             background: brandPalette.menu.superRowBackground,
+            boxShadow:
+              themeMode === 'light'
+                ? 'inset 0 -1px 0 rgba(148, 163, 184, 0.35)'
+                : 'none',
           }}
         >
-          <ScrollArea h="100%" type="never" scrollbars="x">
-            <Group h="100%" gap="xs" wrap="nowrap">
+          <ScrollArea
+            h="100%"
+            w="100%"
+            type="auto"
+            scrollbars="x"
+            offsetScrollbars="x"
+            scrollbarSize={6}
+          >
+            <Group h="100%" gap={menuRowGap} wrap="nowrap" style={{ minWidth: 'max-content' }}>
               <Badge color="yellow" variant="light">
                 Admin
               </Badge>
               {superMenuItems.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.path);
+                const showLabel = active;
                 return (
                   <Button
                     key={item.path}
                     size="xs"
                     radius="xl"
                     styles={menuPillButtonStyles}
-                    leftSection={menuTextVisible ? <Icon size={16} /> : undefined}
-                    variant={active ? 'filled' : 'light'}
-                    color={active ? 'yellow' : 'gray'}
+                    variant={active ? 'filled' : inactiveSuperMenuVariant}
+                    color={active ? 'yellow' : inactiveSuperMenuColor}
                     title={item.label}
                     aria-label={item.label}
-                    style={menuTextVisible ? undefined : { minWidth: 42, paddingInline: 12 }}
+                    style={resolveMenuButtonStyle(showLabel, item.label)}
                     onClick={() => onNavigate(item.path)}
                   >
-                    {menuTextVisible ? item.label : <Icon size={16} />}
+                    {renderButtonContent(Icon, item.label, showLabel)}
                   </Button>
                 );
               })}
@@ -286,33 +431,44 @@ export default function HeaderBar({
       ) : null}
 
       <Box
-        px="md"
+        px={menuRowPaddingX}
         h={headerHeight}
         style={{
           borderBottom: `1px solid ${brandPalette.header.border}`,
           background: brandPalette.menu.mainRowBackground,
+          boxShadow:
+            themeMode === 'light'
+              ? 'inset 0 -1px 0 rgba(22, 101, 52, 0.2)'
+              : 'none',
         }}
       >
-        <ScrollArea h="100%" type="never" scrollbars="x">
-          <Group h="100%" gap="xs" wrap="nowrap">
+        <ScrollArea
+          h="100%"
+          w="100%"
+          type="auto"
+          scrollbars="x"
+          offsetScrollbars="x"
+          scrollbarSize={6}
+        >
+          <Group h="100%" gap={menuRowGap} wrap="nowrap" style={{ minWidth: 'max-content' }}>
             {topMenuItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.path);
+              const showLabel = active;
               return (
                 <Button
                   key={item.path}
                   size="xs"
                   radius="xl"
                   styles={menuPillButtonStyles}
-                  leftSection={menuTextVisible ? <Icon size={16} /> : undefined}
-                  variant={active ? 'filled' : 'light'}
-                  color={active ? 'green' : 'gray'}
+                  variant={active ? 'filled' : inactiveMainMenuVariant}
+                  color={active ? activeMainMenuColor : inactiveMainMenuColor}
                   title={item.label}
                   aria-label={item.label}
-                  style={menuTextVisible ? undefined : { minWidth: 42, paddingInline: 12 }}
+                  style={resolveMenuButtonStyle(showLabel, item.label)}
                   onClick={() => onNavigate(item.path)}
                 >
-                  {menuTextVisible ? item.label : <Icon size={16} />}
+                  {renderButtonContent(Icon, item.label, showLabel)}
                 </Button>
               );
             })}

@@ -1,0 +1,55 @@
+<svg width="620" height="300" viewBox="0 0 620 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grassLeft" x1="70" y1="90" x2="120" y2="245" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3E8F45"/>
+      <stop offset="1" stop-color="#275F2D"/>
+    </linearGradient>
+    <linearGradient id="grassRight" x1="500" y1="86" x2="558" y2="245" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B8741"/>
+      <stop offset="1" stop-color="#245629"/>
+    </linearGradient>
+    <linearGradient id="soil" x1="300" y1="64" x2="300" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A36A3E"/>
+      <stop offset="0.55" stop-color="#83512F"/>
+      <stop offset="1" stop-color="#5F3A22"/>
+    </linearGradient>
+    <linearGradient id="soilEdge" x1="300" y1="64" x2="300" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D69A66" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="#3B2416" stop-opacity="0.8"/>
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="308" cy="254" rx="246" ry="30" fill="#0F172A" opacity="0.22"/>
+
+  <path d="M126 68H493L560 236H60L126 68Z" fill="url(#grassLeft)" opacity="0.25"/>
+  <path d="M493 68L560 236H538L476 73L493 68Z" fill="url(#grassRight)"/>
+  <path d="M126 68L60 236H82L142 73L126 68Z" fill="url(#grassLeft)"/>
+
+  <g>
+    <path d="M146 76H474L532 228H88L146 76Z" fill="url(#soil)"/>
+    <path d="M146 76H474L532 228H88L146 76Z" stroke="url(#soilEdge)" stroke-width="7"/>
+
+    <path d="M167 92H453L499 212H121L167 92Z" fill="#6E4228" opacity="0.28"/>
+
+    <g stroke="#472B1A" stroke-width="4" stroke-linecap="round" opacity="0.86">
+      <path d="M106 224C138 205 165 186 188 164C210 143 231 118 250 86"/>
+      <path d="M140 224C170 206 196 189 219 169C241 150 261 124 279 88"/>
+      <path d="M173 224C201 208 226 192 248 173C269 155 288 130 304 90"/>
+      <path d="M207 224C233 209 257 195 278 178C298 162 315 137 330 92"/>
+      <path d="M241 224C265 211 288 198 307 182C326 167 343 143 357 95"/>
+      <path d="M274 224C297 213 319 201 337 187C356 173 372 150 385 98"/>
+      <path d="M307 224C329 214 350 204 367 192C385 179 401 157 414 102"/>
+      <path d="M340 224C361 215 381 206 398 195C415 183 430 163 442 106"/>
+      <path d="M373 224C393 216 412 208 428 198C445 187 459 169 470 111"/>
+      <path d="M406 224C425 217 444 210 459 201C474 191 487 175 497 116"/>
+    </g>
+
+    <g stroke="#C48758" stroke-width="2" opacity="0.3">
+      <path d="M156 106H464"/>
+      <path d="M144 132H476"/>
+      <path d="M132 158H488"/>
+      <path d="M120 184H500"/>
+      <path d="M108 210H512"/>
+    </g>
+  </g>
+</svg>

@@ -1,60 +1,61 @@
-// src/services/PlanService.ts
-import { PlanType, UserProfile } from '../types/auth';
+import { type BillingPlanId, resolveBillingPlanId } from '../modules/billing';
+import { type PlanType, type UserProfile } from '../types/auth';
 
 export interface PlanLimits {
-    analysisLimit: number;
-    pdfImportLimit: number;
-    hasMarketplaceAccess: boolean;
-    hasGessagem: boolean;
-    hasAdubacao: boolean;
+  analysisLimit: number;
+  pdfImportLimit: number;
+  propertiesLimit: number;
+  talhoesLimit: number;
+  hasMarketplaceAccess: boolean;
+  hasGessagem: boolean;
+  hasAdubacao: boolean;
 }
 
-const PLAN_CONFIG: Record<PlanType, PlanLimits> = {
-    free: {
-        analysisLimit: 5,
-        pdfImportLimit: 2,
-        hasMarketplaceAccess: true,
-        hasGessagem: false,
-        hasAdubacao: false,
-    },
-    pro: {
-        analysisLimit: 50,
-        pdfImportLimit: 20,
-        hasMarketplaceAccess: true,
-        hasGessagem: true,
-        hasAdubacao: true,
-    },
-    enterprise: {
-        analysisLimit: Infinity,
-        pdfImportLimit: Infinity,
-        hasMarketplaceAccess: true,
-        hasGessagem: true,
-        hasAdubacao: true,
-    }
+const PLAN_CONFIG_BY_BILLING_ID: Record<BillingPlanId, PlanLimits> = {
+  free: {
+    analysisLimit: 50,
+    pdfImportLimit: 5,
+    propertiesLimit: 1,
+    talhoesLimit: 5,
+    hasMarketplaceAccess: true,
+    hasGessagem: false,
+    hasAdubacao: false,
+  },
+  premium: {
+    analysisLimit: 500,
+    pdfImportLimit: 50,
+    propertiesLimit: 5,
+    talhoesLimit: 50,
+    hasMarketplaceAccess: true,
+    hasGessagem: true,
+    hasAdubacao: true,
+  },
 };
 
-/**
- * PlanService
- * Responsável por verificar se um usuário tem permissão para realizar uma ação
- * baseada em seu plano e uso atual.
- */
+function toBillingPlanId(plan: PlanType | string | undefined | null): BillingPlanId {
+  return resolveBillingPlanId(plan ?? 'free');
+}
+
 export class PlanService {
+  static getLimits(plan: PlanType): PlanLimits {
+    const billingPlan = toBillingPlanId(plan);
+    return PLAN_CONFIG_BY_BILLING_ID[billingPlan] ?? PLAN_CONFIG_BY_BILLING_ID.free;
+  }
 
-    static getLimits(plan: PlanType): PlanLimits {
-        return PLAN_CONFIG[plan] || PLAN_CONFIG.free;
-    }
+  static canImportPdf(profile: UserProfile): boolean {
+    const sourcePlan = profile.plan_id ?? profile.subscription?.plan_id ?? 'free';
+    const limits = this.getLimits(sourcePlan);
+    return (profile.plan_usage?.pdf_imports_count || 0) < limits.pdfImportLimit;
+  }
 
-    static canImportPdf(profile: UserProfile): boolean {
-        const plan = profile.plan_id ?? profile.subscription?.plan_id ?? 'free';
-        const limits = this.getLimits(plan);
-        return (profile.plan_usage?.pdf_imports_count || 0) < limits.pdfImportLimit;
-    }
-
-    static hasModuleAccess(plan: PlanType, module: 'calagem' | 'gessagem' | 'adubacao'): boolean {
-        const limits = this.getLimits(plan);
-        if (module === 'calagem') return true; // Calagem sempre livre
-        if (module === 'gessagem') return limits.hasGessagem;
-        if (module === 'adubacao') return limits.hasAdubacao;
-        return false;
-    }
+  static hasModuleAccess(
+    plan: PlanType,
+    module: 'calagem' | 'gessagem' | 'adubacao',
+  ): boolean {
+    const limits = this.getLimits(plan);
+    if (module === 'calagem') return true;
+    if (module === 'gessagem') return limits.hasGessagem;
+    if (module === 'adubacao') return limits.hasAdubacao;
+    return false;
+  }
 }

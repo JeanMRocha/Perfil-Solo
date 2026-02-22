@@ -15,7 +15,7 @@ export default function UsersTab({
       <Stack gap="sm">
         <Group grow align="end">
           <TextInput
-            label="Buscar usuario"
+            label="Buscar usuário"
             placeholder="Nome ou email"
             value={userSearch}
             onChange={(event) => onUserSearchChange(event.currentTarget.value)}

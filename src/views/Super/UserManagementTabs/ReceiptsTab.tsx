@@ -20,10 +20,10 @@ export default function ReceiptsTab({
       <Stack gap="sm">
         <Group grow align="end">
           <Select
-            label="Usuario"
+            label="Usuário"
             value={receiptUserFilter}
             data={[
-              { value: 'all', label: 'Todos os usuarios' },
+              { value: 'all', label: 'Todos os usuários' },
               ...users.map((row) => ({
                 value: row.id,
                 label: row.name ? `${row.name} (${row.email})` : row.email,
@@ -37,7 +37,7 @@ export default function ReceiptsTab({
             value={receiptTypeFilter}
             data={[
               { value: 'all', label: 'Todos' },
-              { value: 'avatar_icon', label: 'Icone de avatar' },
+              { value: 'avatar_icon', label: 'Ícone de avatar' },
             ]}
             onChange={(value) =>
               onReceiptTypeFilterChange((value as ReceiptTypeFilter) ?? 'all')

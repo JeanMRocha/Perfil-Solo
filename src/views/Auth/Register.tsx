@@ -40,7 +40,7 @@ export default function Register() {
       const normalizedEmail = String(email ?? '').trim().toLowerCase();
       if (!isValidEmail(normalizedEmail)) {
         notifications.show({
-          title: 'Email invalido',
+          title: 'Email inválido',
           message: 'Informe um email valido para cadastrar.',
           color: 'red',
         });
@@ -53,10 +53,10 @@ export default function Register() {
         registerAndEnsureUserCredits({
           id: localUser.id,
           email: normalizedEmail || localUser.email || '',
-          name: name || String(localUser.user_metadata?.name ?? 'Usuario Local'),
+          name: name || String(localUser.user_metadata?.name ?? 'Usuário Local'),
         });
         await updateProfile({
-          name: name || 'Usuario Local',
+          name: name || 'Usuário Local',
           email: normalizedEmail,
           contact,
         });
@@ -109,13 +109,13 @@ export default function Register() {
         navigate('/auth');
       }
     } catch (err: any) {
-      const message = String(err?.message ?? 'Nao foi possivel cadastrar.');
+      const message = String(err?.message ?? 'Não foi possível cadastrar.');
       const isNetwork = message.toLowerCase().includes('failed to fetch');
 
       notifications.show({
         title: isNetwork ? 'Falha de rede com Supabase' : 'Falha no cadastro',
         message: isNetwork
-          ? 'Nao foi possivel conectar ao Supabase. Verifique URL do projeto e DNS.'
+          ? 'Não foi possível conectar ao Supabase. Verifique URL do projeto e DNS.'
           : message,
         color: 'red',
       });
@@ -153,7 +153,7 @@ export default function Register() {
 
         <TextInput
           label="E-mail"
-          placeholder="usuario@email.com"
+          placeholder="usuário@email.com"
           value={email}
           onChange={(e) => setEmail(e.currentTarget.value)}
           required
@@ -161,7 +161,7 @@ export default function Register() {
 
         <PasswordInput
           label="Senha"
-          placeholder={isLocalDataMode ? 'Nao utilizada no modo local' : 'Minimo 6 caracteres'}
+          placeholder={isLocalDataMode ? 'Não utilizada no modo local' : 'Minimo 6 caracteres'}
           value={password}
           onChange={(e) => setPassword(e.currentTarget.value)}
           required={!isLocalDataMode}

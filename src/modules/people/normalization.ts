@@ -27,9 +27,9 @@ const PERSON_TYPE_META_BY_ID: Record<PersonTypeIdentifier, PersonTypeMeta> = {
   },
   user_profile: {
     id: 'user_profile',
-    label: 'Perfil do usuario',
+    label: 'Perfil do usuário',
     color: 'teal',
-    description: 'Identidade vinculada ao usuario logado.',
+    description: 'Identidade vinculada ao usuário logado.',
   },
   employee: {
     id: 'employee',

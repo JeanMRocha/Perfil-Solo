@@ -49,6 +49,8 @@ function formatSignedAmount(value: number): string {
 
 function formatTransactionTypeLabel(type: CreditTransaction['type']): string {
   if (type === 'icon_purchase') return 'compra_interna';
+  if (type === 'store_purchase') return 'loja_app';
+  if (type === 'referral_reward') return 'indicacao_bonus';
   if (type === 'admin_grant') return 'credito_admin';
   if (type === 'admin_remove') return 'debito_admin';
   if (type === 'engagement_reward') return 'conquista';
@@ -117,7 +119,7 @@ export default function CreditsCenter({
     registerAndEnsureUserCredits({
       id: userId,
       email: userEmail,
-      name: String(user?.user_metadata?.name ?? userEmail.split('@')[0] ?? 'Usuario'),
+      name: String(user?.user_metadata?.name ?? userEmail.split('@')[0] ?? 'Usuário'),
     });
     setBalance(getUserCredits(userId));
     setTransactions(listCreditTransactionsForUser(userId).slice(0, 30));
@@ -163,7 +165,7 @@ export default function CreditsCenter({
   const applyCoupon = () => {
     if (!selectedPackage) {
       notifications.show({
-        title: 'Pacote nao selecionado',
+        title: 'Pacote não selecionado',
         message: 'Escolha um pacote antes de aplicar cupom.',
         color: 'yellow',
       });
@@ -178,7 +180,7 @@ export default function CreditsCenter({
     if (!validation.valid) {
       setCouponValidation(null);
       notifications.show({
-        title: 'Cupom invalido',
+        title: 'Cupom inválido',
         message: validation.message,
         color: 'red',
       });
@@ -202,8 +204,8 @@ export default function CreditsCenter({
     if (!userId || !userEmail) return;
     if (!selectedPackage) {
       notifications.show({
-        title: 'Pacote nao selecionado',
-        message: 'Selecione um pacote de creditos para continuar.',
+        title: 'Pacote não selecionado',
+        message: 'Selecione um pacote de créditos para continuar.',
         color: 'yellow',
       });
       return;
@@ -211,7 +213,7 @@ export default function CreditsCenter({
 
     if (authEmail.trim().toLowerCase() !== userEmail.trim().toLowerCase()) {
       notifications.show({
-        title: 'Autenticacao invalida',
+        title: 'Autenticacao inválida',
         message: 'Confirme o email da conta logada para solicitar a compra.',
         color: 'red',
       });
@@ -224,7 +226,7 @@ export default function CreditsCenter({
         if (!authPassword) {
           notifications.show({
             title: 'Senha obrigatoria',
-            message: 'Informe a senha para confirmar a solicitacao.',
+            message: 'Informe a senha para confirmar a solicitação.',
             color: 'yellow',
           });
           return;
@@ -246,16 +248,16 @@ export default function CreditsCenter({
 
       setAuthPassword('');
       notifications.show({
-        title: 'Solicitacao enviada',
+        title: 'Solicitação enviada',
         message:
-          'Pedido autenticado e pendente para aprovacao do super usuario.',
+          'Pedido autenticado e pendente para aprovacao do super usuário.',
         color: 'blue',
       });
       refresh();
     } catch (error: any) {
       notifications.show({
-        title: 'Falha na solicitacao',
-        message: String(error?.message ?? 'Nao foi possivel autenticar a compra.'),
+        title: 'Falha na solicitação',
+        message: String(error?.message ?? 'Não foi possível autenticar a compra.'),
         color: 'red',
       });
     } finally {
@@ -269,15 +271,15 @@ export default function CreditsCenter({
       setRewarding(true);
       claimAdRewardCredits(userId, userId);
       notifications.show({
-        title: 'Credito liberado',
-        message: 'Voce recebeu 1 credito por assistir propaganda.',
+        title: 'Crédito liberado',
+        message: 'Voce recebeu 1 crédito por assistir propaganda.',
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
       notifications.show({
         title: 'Recompensa indisponivel',
-        message: String(error?.message ?? 'Nao foi possivel liberar a recompensa.'),
+        message: String(error?.message ?? 'Não foi possível liberar a recompensa.'),
         color: 'yellow',
       });
     } finally {
@@ -289,10 +291,41 @@ export default function CreditsCenter({
     <Stack>
       {!embedded ? (
         <PageHeader
-          title={isCouponsView ? 'Cupons e Compra de Creditos' : 'Creditos e Historico'}
+          title={isCouponsView ? 'Cupons e Compra de Créditos' : 'Créditos e Histórico'}
           color="violet"
         />
       ) : null}
+
+      <Card
+        withBorder
+        radius="md"
+        p="sm"
+        style={{
+          position: 'sticky',
+          top: 8,
+          zIndex: 20,
+          borderColor: 'var(--mantine-color-violet-4)',
+          background: 'var(--mantine-color-violet-0)',
+        }}
+      >
+        <Group justify="space-between" gap="xs">
+          <Text size="sm" fw={700}>
+            Regra de moedas do sistema
+          </Text>
+          <Badge color="violet" variant="light">
+            1 via
+          </Badge>
+        </Group>
+        <Text size="sm" mt={4}>
+          Funcionalidades (planos e adicionais) = dinheiro (BRL).
+        </Text>
+        <Text size="sm">
+          Creditos = itens cosmeticos no app.
+        </Text>
+        <Text size="xs" c="dimmed">
+          Conversao permitida somente de dinheiro para creditos.
+        </Text>
+      </Card>
 
       <Card withBorder radius="md" p="lg">
         <Group justify="space-between" align="center">
@@ -312,9 +345,10 @@ export default function CreditsCenter({
         <>
           <Card withBorder radius="md" p="lg">
             <Stack gap="sm">
-              <Text fw={700}>Loja de creditos com cupom</Text>
+              <Text fw={700}>Carteira de creditos para itens cosmeticos</Text>
               <Text size="sm" c="dimmed">
                 Selecione pacote, aplique cupom e envie a solicitacao autenticada.
+                Creditos servem para compras cosmeticas no app.
               </Text>
               <Select
                 label="Pacote"
@@ -361,10 +395,10 @@ export default function CreditsCenter({
 
           <Card withBorder radius="md" p="lg">
             <Stack gap="sm">
-              <Text fw={700}>Autenticacao para compra de creditos</Text>
+              <Text fw={700}>Autenticacao para compra de creditos cosmeticos</Text>
               <Text size="sm" c="dimmed">
-                Hoje as compras sao aprovadas manualmente pelo super usuario. Stripe sera
-                integrado depois.
+                Funcionalidades (planos e adicionais) sao cobradas em dinheiro.
+                Creditos sao apenas para cosmeticos e nao podem ser convertidos de volta em dinheiro.
               </Text>
               <Group grow align="end">
                 <TextInput
@@ -456,7 +490,7 @@ export default function CreditsCenter({
             <Stack gap="sm">
               <Text fw={700}>Ganhar credito assistindo propaganda</Text>
               <Text size="sm" c="dimmed">
-                Funcionalidade estilo loja mobile. A administracao e feita pelo super usuario.
+                Recompensa para carteira cosmetica. A administracao e feita pelo super usuario.
               </Text>
               <Text size="xs" c="dimmed">
                 Cupons agora ficam em menu separado no menu do usuario.
@@ -591,7 +625,7 @@ export default function CreditsCenter({
 
       <Card withBorder radius="md" p="lg">
         <Text fw={700} mb="sm">
-          Comprovantes de compras internas com creditos
+          Comprovantes de compras cosmeticas com creditos
         </Text>
         <Table striped highlightOnHover>
           <Table.Thead>

@@ -64,9 +64,9 @@ function centroid(points: MapPoint[]): MapPoint {
 }
 
 function formatDate(dateLike: string | null) {
-  if (!dateLike) return 'Sem analise';
+  if (!dateLike) return 'Sem análise';
   const date = new Date(dateLike);
-  if (Number.isNaN(date.getTime())) return 'Sem analise';
+  if (Number.isNaN(date.getTime())) return 'Sem análise';
   return date.toLocaleDateString();
 }
 
@@ -121,7 +121,7 @@ export default function GameMap() {
       } catch (err: any) {
         notifications.show({
           title: 'Falha ao carregar propriedades',
-          message: err?.message ?? 'Nao foi possivel buscar propriedades.',
+          message: err?.message ?? 'Não foi possível buscar propriedades.',
           color: 'red',
         });
       } finally {
@@ -170,8 +170,8 @@ export default function GameMap() {
         setTalhoes(mapped);
       } catch (err: any) {
         notifications.show({
-          title: 'Falha ao carregar talhoes',
-          message: err?.message ?? 'Nao foi possivel buscar os talhoes.',
+          title: 'Falha ao carregar talhões',
+          message: err?.message ?? 'Não foi possível buscar os talhões.',
           color: 'red',
         });
       } finally {
@@ -226,7 +226,7 @@ export default function GameMap() {
     } catch (err: any) {
       notifications.show({
         title: 'Falha ao criar propriedade',
-        message: err?.message ?? 'Nao foi possivel criar a propriedade.',
+        message: err?.message ?? 'Não foi possível criar a propriedade.',
         color: 'red',
       });
     } finally {
@@ -238,7 +238,7 @@ export default function GameMap() {
     if (currentPoints.length < 3) {
       notifications.show({
         title: 'Desenho incompleto',
-        message: 'Desenhe pelo menos 3 pontos para formar um talhao.',
+        message: 'Desenhe pelo menos 3 pontos para formar um talhão.',
         color: 'yellow',
       });
       return;
@@ -246,8 +246,8 @@ export default function GameMap() {
 
     if (!selectedPropertyId) {
       notifications.show({
-        title: 'Propriedade nao selecionada',
-        message: 'Selecione uma propriedade antes de salvar o talhao.',
+        title: 'Propriedade não selecionada',
+        message: 'Selecione uma propriedade antes de salvar o talhão.',
         color: 'red',
       });
       return;
@@ -274,14 +274,14 @@ export default function GameMap() {
       setMode('view');
 
       notifications.show({
-        title: 'Talhao salvo',
+        title: 'Talhão salvo',
         message: `${created.nome} persistido no banco com sucesso.`,
         color: 'green',
       });
     } catch (err: any) {
       notifications.show({
-        title: 'Falha ao salvar talhao',
-        message: err?.message ?? 'Nao foi possivel persistir o desenho.',
+        title: 'Falha ao salvar talhão',
+        message: err?.message ?? 'Não foi possível persistir o desenho.',
         color: 'red',
       });
     } finally {
@@ -449,7 +449,7 @@ export default function GameMap() {
           Talhoes: {talhoes.length} | Ultima atualizacao de status por talhao:{' '}
           {talhoes.find((t) => t.lastAnalysisAt)?.lastAnalysisAt
             ? formatDate(talhoes.find((t) => t.lastAnalysisAt)?.lastAnalysisAt ?? null)
-            : 'Sem analise'}
+            : 'Sem análise'}
         </Text>
       </Group>
     </Card>

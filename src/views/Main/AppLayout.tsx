@@ -5,11 +5,9 @@ import {
   Text,
 } from '@mantine/core';
 import {
-  IconApiApp,
   IconBook2,
   IconBriefcase2,
   IconBuildingFactory2,
-  IconCodeDots,
   IconFileAnalytics,
   IconHome,
   IconMapPin2,
@@ -18,6 +16,7 @@ import {
   IconPhotoUp,
   IconSchool,
   IconSettings,
+  IconShoppingBag,
   IconTestPipe2,
   IconUser,
   IconUsersGroup,
@@ -47,6 +46,15 @@ import {
   type CreditTransaction,
 } from '../../services/creditsService';
 import {
+  BILLING_UPDATED_EVENT,
+  calculateBillingQuote,
+  getBillingSubscriptionForUser,
+  getPropertyAccessPolicyForUser,
+  getBillingUsageForUser,
+  type BillingQuoteLine,
+} from '../../services/billingPlanService';
+import type { BillingPlanId } from '../../modules/billing';
+import {
   APP_NOTIFICATIONS_UPDATED_EVENT,
   ensureTemporaryProgressNotifications,
   getUnreadNotificationsCount,
@@ -61,14 +69,18 @@ import {
 } from '../../services/systemConfigService';
 import {
   getUserAppMode,
-  getUserMenuTextVisible,
   subscribeUserPreferences,
   updateUserAppMode,
-  updateUserMenuTextVisible,
   type AppUserMode,
 } from '../../services/userPreferencesService';
 import { subscribeBrandTheme } from '../../services/brandThemeService';
-import { trackGamificationEvent } from '../../services/gamificationService';
+import {
+  GAMIFICATION_UPDATED_EVENT,
+  getGamificationState,
+  trackGamificationEvent,
+  type GamificationState,
+} from '../../services/gamificationService';
+import { isOwnerSuperUser } from '../../services/superAccessService';
 import { getBrandPalette } from '../../mantine/brand';
 import HeaderBar from './components/HeaderBar';
 import MainDrawer from './components/MainDrawer';
@@ -86,8 +98,15 @@ function resolveUserName(profile: UserProfile | null, user: any): string {
     user?.user_metadata?.name ??
     user?.user_metadata?.full_name ??
     user?.email ??
-    'Usuario';
+    'Usuário';
   return String(candidate);
+}
+
+function truncateHeaderSubtitle(input: string, maxChars = 34): string {
+  const value = String(input ?? '').trim();
+  if (!value) return '';
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`;
 }
 
 const HEADER_HEIGHT = 60;
@@ -103,6 +122,8 @@ const EMPTY_CREDITS_BREAKDOWN: CreditsBreakdown = {
   earned: 0,
   spent: 0,
 };
+
+const EMPTY_BILLING_USAGE_LINES: BillingQuoteLine[] = [];
 
 function normalizeCredits(input: unknown): number {
   const parsed = Number(input);
@@ -194,13 +215,20 @@ export default function AppLayout() {
   );
   const [avatarSrc, setAvatarSrc] = useState('');
   const [avatarEmoji, setAvatarEmoji] = useState('');
+  const [billingPlanId, setBillingPlanId] = useState<BillingPlanId>('free');
+  const [billingUsageLines, setBillingUsageLines] = useState<BillingQuoteLine[]>(
+    EMPTY_BILLING_USAGE_LINES,
+  );
+  const [billingUsageLoading, setBillingUsageLoading] = useState(false);
+  const [billingGraceActive, setBillingGraceActive] = useState(false);
+  const [billingRestrictedToFirstProperty, setBillingRestrictedToFirstProperty] = useState(false);
+  const [billingGraceDeadline, setBillingGraceDeadline] = useState<string | null>(null);
+  const [gamificationState, setGamificationState] = useState<GamificationState | null>(null);
   const [appMode, setAppMode] = useState<AppUserMode>(() => getUserAppMode());
   const [brand, setBrand] = useState<SystemBrandConfig>(() => getSystemBrand());
-  const [menuTextVisible, setMenuTextVisible] = useState<boolean>(() =>
-    getUserMenuTextVisible(),
-  );
   const [, setBrandThemeVersion] = useState(0);
   const currentUserId = String(user?.id ?? '').trim();
+  const canUseSuperMode = isOwnerSuperUser(user);
 
   useEffect(() => {
     let alive = true;
@@ -375,6 +403,86 @@ export default function AppLayout() {
   }, [user?.id, user?.email, user?.user_metadata?.name, profile?.name, profile?.producer?.nome_exibicao]);
 
   useEffect(() => {
+    let alive = true;
+
+    const refreshBillingUsage = async () => {
+      if (!currentUserId) {
+        setBillingPlanId('free');
+        setBillingUsageLines(EMPTY_BILLING_USAGE_LINES);
+        setBillingUsageLoading(false);
+        setBillingGraceActive(false);
+        setBillingRestrictedToFirstProperty(false);
+        setBillingGraceDeadline(null);
+        return;
+      }
+
+      setBillingUsageLoading(true);
+      try {
+        const legacyPlanId =
+          String(user?.user_metadata?.plan_id ?? '').trim() || undefined;
+        const subscription = getBillingSubscriptionForUser(
+          currentUserId,
+          legacyPlanId,
+        );
+        const accessPolicy = getPropertyAccessPolicyForUser(
+          currentUserId,
+          legacyPlanId,
+        );
+        const snapshot = await getBillingUsageForUser(currentUserId);
+        const quote = calculateBillingQuote(subscription.plan_id, snapshot);
+        if (!alive) return;
+        setBillingPlanId(subscription.plan_id);
+        setBillingUsageLines(quote.lines);
+        setBillingGraceActive(accessPolicy.grace_active);
+        setBillingRestrictedToFirstProperty(accessPolicy.restricted_to_first_property);
+        setBillingGraceDeadline(accessPolicy.grace_deadline);
+      } catch {
+        if (!alive) return;
+        setBillingPlanId('free');
+        setBillingUsageLines(EMPTY_BILLING_USAGE_LINES);
+        setBillingGraceActive(false);
+        setBillingRestrictedToFirstProperty(false);
+        setBillingGraceDeadline(null);
+      } finally {
+        if (!alive) return;
+        setBillingUsageLoading(false);
+      }
+    };
+
+    void refreshBillingUsage();
+
+    const onBillingUpdated = (event: Event) => {
+      const custom = event as CustomEvent<{ userId?: string }>;
+      const changedUserId = String(custom.detail?.userId ?? '').trim();
+      if (changedUserId && changedUserId !== currentUserId) return;
+      void refreshBillingUsage();
+    };
+
+    const onStorage = () => {
+      void refreshBillingUsage();
+    };
+
+    const onFocus = () => {
+      void refreshBillingUsage();
+    };
+
+    window.addEventListener(BILLING_UPDATED_EVENT, onBillingUpdated);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    const intervalId = window.setInterval(() => {
+      void refreshBillingUsage();
+    }, 45 * 1000);
+
+    return () => {
+      alive = false;
+      window.removeEventListener(BILLING_UPDATED_EVENT, onBillingUpdated);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(intervalId);
+    };
+  }, [currentUserId, user?.user_metadata?.plan_id]);
+
+  useEffect(() => {
     if (!currentUserId) return;
     void trackGamificationEvent(currentUserId, 'app_open').catch(() => null);
   }, [currentUserId]);
@@ -391,6 +499,42 @@ export default function AppLayout() {
       void trackGamificationEvent(currentUserId, 'visit_user_center').catch(() => null);
     }
   }, [currentUserId, location.pathname]);
+
+  useEffect(() => {
+    let alive = true;
+
+    const refreshGamification = () => {
+      if (!currentUserId || !alive) {
+        setGamificationState(null);
+        return;
+      }
+      try {
+        setGamificationState(getGamificationState(currentUserId));
+      } catch {
+        setGamificationState(null);
+      }
+    };
+
+    refreshGamification();
+
+    const onUpdated = (event: Event) => {
+      const custom = event as CustomEvent<{ userId?: string }>;
+      const changedUserId = String(custom.detail?.userId ?? '').trim();
+      if (changedUserId && changedUserId !== currentUserId) return;
+      refreshGamification();
+    };
+
+    const onStorage = () => refreshGamification();
+
+    window.addEventListener(GAMIFICATION_UPDATED_EVENT, onUpdated);
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      alive = false;
+      window.removeEventListener(GAMIFICATION_UPDATED_EVENT, onUpdated);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [currentUserId]);
 
   useEffect(() => {
     const unsubscribe = subscribeBrandTheme(() => {
@@ -411,20 +555,21 @@ export default function AppLayout() {
   useEffect(() => {
     if (!currentUserId) {
       setAppMode(getUserAppMode());
-      setMenuTextVisible(getUserMenuTextVisible());
       return;
     }
 
-    setAppMode(getUserAppMode(currentUserId));
-    setMenuTextVisible(getUserMenuTextVisible(currentUserId));
+    if (!canUseSuperMode) {
+      updateUserAppMode('normal', currentUserId, user);
+    }
+
+    setAppMode(getUserAppMode(currentUserId, user));
 
     const unsubscribe = subscribeUserPreferences(currentUserId, (prefs) => {
       setAppMode(prefs.mode);
-      setMenuTextVisible(prefs.view.menu_text_visible);
-    });
+    }, user);
 
     return unsubscribe;
-  }, [currentUserId]);
+  }, [canUseSuperMode, currentUserId, user]);
 
   const userName = resolveUserName(profile, user);
   const planLabel = normalizePlanLabel(
@@ -432,9 +577,12 @@ export default function AppLayout() {
   );
   const brandPalette = getBrandPalette(tema);
   const creditsNumber = normalizeCredits(walletCredits);
+  const xpTotal = normalizeCredits(gamificationState?.xp_total ?? 0);
+  const xpLevel = normalizeCredits(gamificationState?.level.level ?? 1);
   const avatarSource = avatarSrc || profile?.avatar_url || profile?.logo_url || '';
-  const companyName = profile?.company_name?.trim() || brand.name;
-  const isSuperMode = appMode === 'super';
+  const cargoProfissao = String(profile?.producer?.cargo_profissao ?? '').trim();
+  const companyName = truncateHeaderSubtitle(cargoProfissao);
+  const isSuperMode = canUseSuperMode && appMode === 'super';
   const brandDisplayName = brand.name.trim() || 'PerfilSolo';
   const appVersionLabel = formatAppVersion();
   const headerBg = brandPalette.header.background;
@@ -454,8 +602,12 @@ export default function AppLayout() {
       marginTop: 4,
       height: 32,
       paddingInline: 10,
+      width: 'auto',
+      minWidth: 'max-content',
+      flex: '0 0 auto',
       boxShadow: softShadow,
-      transition: 'transform 0.16s ease, box-shadow 0.16s ease',
+      transition:
+        'transform 0.16s ease, box-shadow 0.16s ease, width 220ms cubic-bezier(0.22, 1, 0.36, 1), padding-inline 220ms cubic-bezier(0.22, 1, 0.36, 1), background-color 0.18s ease, color 0.18s ease',
       '&:hover': {
         transform: 'translateY(-1px)',
         boxShadow: hoverShadow,
@@ -465,8 +617,8 @@ export default function AppLayout() {
       fontSize: 12,
       lineHeight: 1.1,
       whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
+      overflow: 'visible',
+      textOverflow: 'clip',
     },
     section: {
       marginTop: 2,
@@ -510,6 +662,16 @@ export default function AppLayout() {
       icon: IconHome,
     },
     {
+      label: 'Loja',
+      path: '/marketplace',
+      icon: IconShoppingBag,
+    },
+    {
+      label: 'Propriedade',
+      path: '/propriedades',
+      icon: IconMapPin2,
+    },
+    {
       label: 'Culturas',
       path: '/cadastros/culturas/busca',
       icon: IconPlant2,
@@ -535,7 +697,7 @@ export default function AppLayout() {
       icon: IconBriefcase2,
     },
     {
-      label: 'Analises de Solo',
+      label: 'Análises de Solo',
       path: '/analise-solo',
       icon: IconTestPipe2,
     },
@@ -543,16 +705,6 @@ export default function AppLayout() {
       label: 'Relatorios',
       path: '/relatorios',
       icon: IconFileAnalytics,
-    },
-    {
-      label: 'Propriedade',
-      path: '/propriedades',
-      icon: IconMapPin2,
-    },
-    {
-      label: 'Modo API',
-      path: '/integracoes/api',
-      icon: IconApiApp,
     },
     {
       label: 'Aulas',
@@ -577,14 +729,9 @@ export default function AppLayout() {
       icon: IconPhotoUp,
     },
     {
-      label: 'Usuarios',
+      label: 'Usuários',
       path: '/super/usuarios',
       icon: IconUser,
-    },
-    {
-      label: 'API Docs',
-      path: '/integracoes/api',
-      icon: IconCodeDots,
     },
   ];
 
@@ -669,14 +816,14 @@ export default function AppLayout() {
   };
 
   const handleModeToggle = (checked: boolean) => {
-    const nextMode: AppUserMode = checked ? 'super' : 'normal';
-    const nextPrefs = updateUserAppMode(nextMode, currentUserId);
-    setAppMode(nextPrefs.mode);
-  };
+    if (!canUseSuperMode) {
+      setAppMode('normal');
+      return;
+    }
 
-  const handleMenuTextToggle = (checked: boolean) => {
-    const nextPrefs = updateUserMenuTextVisible(checked, currentUserId);
-    setMenuTextVisible(nextPrefs.view.menu_text_visible);
+    const nextMode: AppUserMode = checked ? 'super' : 'normal';
+    const nextPrefs = updateUserAppMode(nextMode, currentUserId, user);
+    setAppMode(nextPrefs.mode);
   };
   const headerRows = isSuperMode ? 3 : 2;
   const headerTotalHeight = HEADER_HEIGHT * headerRows;
@@ -707,12 +854,17 @@ export default function AppLayout() {
           avatarSource={avatarSource}
           avatarEmoji={avatarEmoji}
           planLabel={planLabel}
+          billingPlanId={billingPlanId}
           creditsNumber={creditsNumber}
           purchasedCredits={creditsBreakdown.purchased}
           earnedCredits={creditsBreakdown.earned}
           spentCredits={creditsBreakdown.spent}
+          usageLines={billingUsageLines}
+          usageLoading={billingUsageLoading}
+          xpTotal={xpTotal}
+          xpLevel={xpLevel}
+          canUseSuperMode={canUseSuperMode}
           isSuperMode={isSuperMode}
-          menuTextVisible={menuTextVisible}
           brandDisplayName={brandDisplayName}
           brandLogoUrl={brand.logo_url}
           topMenuItems={topMenuItems}
@@ -724,6 +876,7 @@ export default function AppLayout() {
           onNavigate={toggleMenuRoute}
           onOpenUserCenter={() => toggleMenuRoute('/user?tab=perfil')}
           onOpenBilling={() => toggleMenuRoute('/user?tab=plano')}
+          onOpenJourney={() => toggleMenuRoute('/user?tab=jornada')}
           onToggleMainMenu={toggleMainMenu}
           onModeToggle={handleModeToggle}
           notificationsOpened={notificationsOpened}
@@ -731,6 +884,9 @@ export default function AppLayout() {
           notificationsLoading={notificationsLoading}
           notificationRows={notificationRows}
           notificationExpandedId={notificationExpandedId}
+          billingGraceActive={billingGraceActive}
+          billingRestrictedToFirstProperty={billingRestrictedToFirstProperty}
+          billingGraceDeadline={billingGraceDeadline}
           onNotificationsOpenedChange={setNotificationsOpened}
           onToggleNotifications={toggleNotificationsMenu}
           onOpenNotificationsCenter={openNotificationsCenter}
@@ -783,11 +939,9 @@ export default function AppLayout() {
       <MainDrawer
         opened={drawerOpened}
         themeMode={tema}
-        menuTextVisible={menuTextVisible}
         isSuperMode={isSuperMode}
         onClose={closeDrawer}
         onToggleTheme={alternarTema}
-        onMenuTextToggle={handleMenuTextToggle}
         onGo={toggleMenuRoute}
       />
 
@@ -798,7 +952,7 @@ export default function AppLayout() {
             inset: 0,
             zIndex: 2000,
             background:
-              tema === 'light' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.45)',
+              tema === 'light' ? 'rgba(217, 225, 219, 0.88)' : 'rgba(0,0,0,0.45)',
             backdropFilter: 'blur(4px)',
           }}
         >

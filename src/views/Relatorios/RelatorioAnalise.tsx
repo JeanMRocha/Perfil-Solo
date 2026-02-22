@@ -118,7 +118,7 @@ export default function RelatorioAnalise({}: ReportProps) {
   const mockData = {
     client: profile?.company_name || 'Fazenda Vale Verde',
     date: '17/02/2026',
-    talhao: 'Talhao 01 - Cafe',
+    talhao: 'Talhão 01 - Cafe',
     analise: analisesMock[0],
   };
 

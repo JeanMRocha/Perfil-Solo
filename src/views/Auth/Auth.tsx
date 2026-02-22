@@ -49,7 +49,7 @@ export default function Authentication() {
       password: '',
     },
     validate: {
-      email: (value) => (isValidEmail(value) ? null : 'Email invalido'),
+      email: (value) => (isValidEmail(value) ? null : 'Email inválido'),
     },
   });
 
@@ -73,7 +73,7 @@ export default function Authentication() {
     const normalized = String(email ?? '').trim().toLowerCase();
     if (!isValidEmail(normalized)) {
       notifications.show({
-        title: 'Email invalido',
+        title: 'Email inválido',
         message: 'Informe um email valido para verificacao.',
         color: 'red',
       });
@@ -94,8 +94,8 @@ export default function Authentication() {
       });
     } catch (error: any) {
       notifications.show({
-        title: 'Falha ao enviar codigo',
-        message: String(error?.message ?? 'Nao foi possivel enviar o codigo.'),
+        title: 'Falha ao enviar código',
+        message: String(error?.message ?? 'Não foi possível enviar o código.'),
         color: 'red',
       });
     } finally {
@@ -107,7 +107,7 @@ export default function Authentication() {
     const loginEmail = String(values.email ?? '').trim().toLowerCase();
     if (!isValidEmail(loginEmail)) {
       notifications.show({
-        title: 'Email invalido',
+        title: 'Email inválido',
         message: 'Informe um email valido para continuar.',
         color: 'red',
       });
@@ -155,7 +155,7 @@ export default function Authentication() {
       notifications.show({
         title: isNetwork ? 'Falha de rede com Supabase' : 'Falha no login',
         message: isNetwork
-          ? 'Nao foi possivel conectar ao Supabase. Verifique URL do projeto e DNS.'
+          ? 'Não foi possível conectar ao Supabase. Verifique URL do projeto e DNS.'
           : message,
         color: 'red',
       });
@@ -166,8 +166,8 @@ export default function Authentication() {
     const email = verificationEmail || userEmail;
     if (!isValidEmail(email)) {
       notifications.show({
-        title: 'Email invalido',
-        message: 'Nao foi possivel identificar email para verificar.',
+        title: 'Email inválido',
+        message: 'Não foi possível identificar email para verificar.',
         color: 'red',
       });
       return;
@@ -198,8 +198,8 @@ export default function Authentication() {
       navigate('/dashboard', { replace: true });
     } catch (error: any) {
       notifications.show({
-        title: 'Codigo invalido',
-        message: String(error?.message ?? 'Nao foi possivel validar o codigo.'),
+        title: 'Código inválido',
+        message: String(error?.message ?? 'Não foi possível validar o código.'),
         color: 'red',
       });
     } finally {
@@ -240,8 +240,8 @@ export default function Authentication() {
 
                 <TextInput
                   mt="md"
-                  label="Codigo de verificacao"
-                  placeholder="Digite o codigo de 6 digitos"
+                  label="Código de verificacao"
+                  placeholder="Digite o código de 6 digitos"
                   value={verificationCode}
                   onChange={(event) => setVerificationCode(event.currentTarget.value)}
                 />
@@ -277,7 +277,7 @@ export default function Authentication() {
                 <PasswordInput
                   label="Senha"
                   placeholder={
-                    isLocalDataMode ? 'Nao utilizada no modo local' : 'Sua senha'
+                    isLocalDataMode ? 'Não utilizada no modo local' : 'Sua senha'
                   }
                   required={!isLocalDataMode}
                   mt="md"

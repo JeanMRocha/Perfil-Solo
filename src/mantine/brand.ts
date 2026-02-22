@@ -72,23 +72,23 @@ export type BrandPalette = {
 
 const LIGHT_PALETTE: BrandPalette = {
   header: {
-    background: '#f4fbf6',
-    border: '#cde8d7',
+    background: 'linear-gradient(180deg, #e2e9e5 0%, #d9e3dc 100%)',
+    border: '#adc0b3',
     text: '#0f172a',
     textMuted: '#334155',
     brandTitle: '#14532d',
-    logoBorder: '#86d2a4',
+    logoBorder: '#6fb98b',
     logoFallback: '#15803d',
   },
   footer: {
-    background: '#f8fafc',
-    border: '#e2e8f0',
+    background: '#ecf1ee',
+    border: '#d3dad4',
     text: '#0f172a',
     textMuted: '#475569',
   },
   menu: {
-    superRowBackground: '#fffbeb',
-    mainRowBackground: '#f8fafc',
+    superRowBackground: 'linear-gradient(180deg, #e9e4d9 0%, #ddd4c4 100%)',
+    mainRowBackground: 'linear-gradient(180deg, #dbe6de 0%, #ccdcd0 100%)',
   },
   credits: {
     ringPurchased: '#16a34a',

@@ -1,5 +1,7 @@
 export const USER_CENTER_TABS = [
   'perfil',
+  'seguranca',
+  'empresa',
   'jornada',
   'plano',
   'creditos',

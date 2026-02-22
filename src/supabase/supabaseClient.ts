@@ -61,7 +61,7 @@ if (isLocalDataMode) {
   const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    debug('Supabase URL/KEY ausentes. Aplicando stub de seguranca.');
+    debug('Supabase URL/KEY ausentes. Aplicando stub de segurança.');
     supabaseClient = createSupabaseStub();
   } else {
     supabaseClient = createClient<Database>(supabaseUrl, supabaseKey, {

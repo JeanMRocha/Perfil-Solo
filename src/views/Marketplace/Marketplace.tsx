@@ -1,214 +1,395 @@
-// src/views/Marketplace/Marketplace.tsx
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    Card, Group, Text, Title, Avatar, Badge, Button,
-    TextInput, Select, Tabs, Rating, SimpleGrid
+  Badge,
+  Button,
+  Card,
+  Group,
+  NumberInput,
+  SimpleGrid,
+  Stack,
+  Table,
+  Tabs,
+  Text,
+  TextInput,
+  Title,
 } from '@mantine/core';
-import { IconSearch, IconFilter, IconMapPin, IconBuildingStore } from '@tabler/icons-react';
-import { Partner, RegionalBenchmark } from '../../types/marketplace';
+import { notifications } from '@mantine/notifications';
+import { useStore } from '@nanostores/react';
 import {
-    getSystemBrand,
-    subscribeSystemConfig,
-} from '../../services/systemConfigService';
+  IconCopy,
+  IconShoppingCart,
+  IconSparkles,
+  IconUsers,
+} from '@tabler/icons-react';
+import { $currUser } from '../../global-state/user';
+import {
+  APP_STORE_UPDATED_EVENT,
+  attachUserToReferralCode,
+  ensureStoreReferralProfile,
+  getAppStoreCatalog,
+  getStoreRecurringOverviewForUser,
+  getStoreReferralSummary,
+  getUserStoreQuotaOverview,
+  listStorePurchaseReceiptsForUser,
+  purchaseAppStoreItem,
+  validateAppStoreCoupon,
+  type StoreCatalogItem,
+  type StorePurchaseReceipt,
+  type StoreQuotaOverview,
+} from '../../services/appStoreService';
+import {
+  CREDITS_UPDATED_EVENT,
+  getUserCredits,
+  registerAndEnsureUserCredits,
+} from '../../services/creditsService';
+import {
+  calculateBillingQuote,
+  formatBillingMoney,
+  getBillingSubscriptionForUser,
+  getBillingUsageForUser,
+  type BillingQuote,
+} from '../../services/billingPlanService';
 
-// Mock Data
-const MOCK_PARTNERS: Partner[] = [
-    {
-        id: '1',
-        name: 'Laboratório Solo Fértil',
-        type: 'lab',
-        region: 'MG - Sul de Minas',
-        rating: 4.8,
-        contact_info: { email: 'contato@solofertil.com.br' },
-        services: ['Análise Química Completa', 'Análise Foliar'],
-        verified: true
-    },
-    {
-        id: '2',
-        name: 'Eng. Agrônomo Carlos Silva',
-        type: 'consultant',
-        region: 'SP - Alta Mogiana',
-        rating: 5.0,
-        contact_info: { phone: '(16) 99999-8888' },
-        services: ['Consultoria Café', 'Manejo Nutricional'],
-        verified: true
-    },
-    {
-        id: '3',
-        name: 'AgroCalcário Distribuidora',
-        type: 'vendor',
-        region: 'MG - Cerrado',
-        rating: 4.5,
-        contact_info: { website: 'www.agrocalcario.com.br' },
-        services: ['Calcário Dolomítico', 'Gesso Agrícola'],
-        verified: false
-    }
-];
+function normalizeCode(input: unknown): string {
+  return String(input ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
 
-const MOCK_BENCHMARK: RegionalBenchmark = {
-    region: 'Sul de Minas',
-    crop: 'Café Arábica',
-    avg_ph: 5.2,
-    avg_productivity: 35.5,
-    top_performer_avg_ph: 6.0,
-    last_updated: 'Fev/2026'
-};
+function formatResourceLabel(resource: string): string {
+  if (resource === 'properties') return 'Propriedades';
+  if (resource === 'talhoes') return 'Talhões';
+  return 'Análises';
+}
+
+function formatPricing(item: StoreCatalogItem): string {
+  if (item.pricing_mode === 'recurring_brl') {
+    return `${formatBillingMoney(item.unit_price_cents)}/mes`;
+  }
+  return `${item.unit_cost_credits} creditos`;
+}
 
 export default function Marketplace() {
-    const [search, setSearch] = useState('');
-    const [filterType, setFilterType] = useState<string | null>('all');
-    const [systemName, setSystemName] = useState(() => getSystemBrand().name);
+  const user = useStore($currUser);
+  const userId = String(user?.id ?? '').trim();
+  const userEmail = String(user?.email ?? '').trim().toLowerCase();
+  const planId = String(user?.user_metadata?.plan_id ?? '').trim();
 
-    useEffect(() => {
-        const unsubscribe = subscribeSystemConfig((config) => {
-            setSystemName(config.brand.name);
-        });
+  const [catalog, setCatalog] = useState<StoreCatalogItem[]>([]);
+  const [quotaOverview, setQuotaOverview] = useState<StoreQuotaOverview | null>(null);
+  const [quote, setQuote] = useState<BillingQuote | null>(null);
+  const [creditsBalance, setCreditsBalance] = useState(0);
+  const [recurringActiveCents, setRecurringActiveCents] = useState(0);
+  const [receipts, setReceipts] = useState<StorePurchaseReceipt[]>([]);
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [referralCodeInput, setReferralCodeInput] = useState('');
+  const [referralCode, setReferralCode] = useState('');
 
-        return unsubscribe;
-    }, []);
-
-    const filteredPartners = MOCK_PARTNERS.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-            p.region.toLowerCase().includes(search.toLowerCase());
-        const matchesType = filterType === 'all' || p.type === filterType;
-        return matchesSearch && matchesType;
+  const refresh = useCallback(async () => {
+    if (!userId || !userEmail) return;
+    registerAndEnsureUserCredits({
+      id: userId,
+      email: userEmail,
+      name: String(user?.user_metadata?.name ?? 'Usuário'),
     });
 
-    return (
-        <div style={{ padding: '1rem' }}>
-            {/* Header Ecosystem */}
-            <Group justify="space-between" mb="xl">
-                <div>
-                    <Title order={2}>Ecossistema {systemName}</Title>
-                    <Text c="dimmed">Conecte-se com os melhores parceiros e compare sua produtividade.</Text>
-                </div>
-                <Button variant="light" leftSection={<IconBuildingStore size={18} />}>
-                    Seja um Parceiro
-                </Button>
-            </Group>
+    setCatalog(getAppStoreCatalog());
+    setCreditsBalance(getUserCredits(userId));
+    setQuotaOverview(await getUserStoreQuotaOverview(userId, planId));
+    setReceipts(listStorePurchaseReceiptsForUser(userId).slice(0, 30));
+    setRecurringActiveCents(getStoreRecurringOverviewForUser(userId).total_monthly_cents);
+    ensureStoreReferralProfile(userId);
+    setReferralCode(getStoreReferralSummary(userId).profile.referral_code);
 
-            {/* Benchmark Section (Big Data Teaser) */}
-            <Card withBorder radius="md" p="xl" mb="xl" bg="blue.0" style={{ borderLeft: '5px solid #228be6' }}>
-                <Group justify="space-between" align="start">
-                    <div>
-                        <Group mb="xs">
-                            <Title order={4} c="blue.8">Benchmark Regional (Big Data)</Title>
-                            <Badge color="blue" variant="filled">BETA</Badge>
-                        </Group>
-                        <Text size="sm" c="dimmed" mb="md">
-                            Comparativo anônimo da sua região ({MOCK_BENCHMARK.region}) para {MOCK_BENCHMARK.crop}.
-                        </Text>
+    const usage = await getBillingUsageForUser(userId);
+    const sub = getBillingSubscriptionForUser(userId, planId);
+    setQuote(calculateBillingQuote(sub.plan_id, usage));
+  }, [planId, user?.user_metadata?.name, userEmail, userId]);
 
-                        <Group gap="xl">
-                            <div>
-                                <Text size="xs" fw={700} c="dimmed">MÉDIA REGIONAL</Text>
-                                <Text size="xl" fw={700}>{MOCK_BENCHMARK.avg_productivity} sc/ha</Text>
-                                <Text size="xs" c="red">pH Médio: {MOCK_BENCHMARK.avg_ph}</Text>
-                            </div>
-                            <div style={{ borderLeft: '1px solid #ccc', paddingLeft: 16 }}>
-                                <Text size="xs" fw={700} c="dimmed">TOP 10% PRODUTORES</Text>
-                                <Text size="xl" fw={700} c="green.7">48.2 sc/ha</Text>
-                                <Text size="xs" c="green">pH Médio: {MOCK_BENCHMARK.top_performer_avg_ph}</Text>
-                            </div>
-                        </Group>
-                    </div>
-                    <Button variant="white" color="blue" size="xs">
-                        Ver Relatório Completo
-                    </Button>
-                </Group>
+  useEffect(() => {
+    void refresh();
+    const onUpdate = (event: Event) => {
+      const custom = event as CustomEvent<{ userId?: string }>;
+      const changedUserId = String(custom.detail?.userId ?? '').trim();
+      if (changedUserId && changedUserId !== userId) return;
+      void refresh();
+    };
+    window.addEventListener(CREDITS_UPDATED_EVENT, onUpdate);
+    window.addEventListener(APP_STORE_UPDATED_EVENT, onUpdate);
+    return () => {
+      window.removeEventListener(CREDITS_UPDATED_EVENT, onUpdate);
+      window.removeEventListener(APP_STORE_UPDATED_EVENT, onUpdate);
+    };
+  }, [refresh, userId]);
+
+  const itemById = useMemo(() => new Map(catalog.map((row) => [row.id, row])), [catalog]);
+  const cartLines = useMemo(
+    () =>
+      Object.entries(cart)
+        .map(([itemId, qtyRaw]) => {
+          const item = itemById.get(itemId);
+          if (!item) return null;
+          const qty = Math.max(1, Math.round(Number(qtyRaw) || 1));
+          return { item, qty };
+        })
+        .filter((row): row is { item: StoreCatalogItem; qty: number } => Boolean(row)),
+    [cart, itemById],
+  );
+  const recurringCartCents = useMemo(
+    () =>
+      cartLines.reduce(
+        (sum, row) => sum + (row.item.pricing_mode === 'recurring_brl' ? row.item.unit_price_cents * row.qty : 0),
+        0,
+      ),
+    [cartLines],
+  );
+  const creditsCart = useMemo(
+    () =>
+      cartLines.reduce(
+        (sum, row) => sum + (row.item.pricing_mode === 'credits' ? row.item.unit_cost_credits * row.qty : 0),
+        0,
+      ),
+    [cartLines],
+  );
+  const coupon = useMemo(
+    () =>
+      couponCode
+        ? validateAppStoreCoupon({
+            code: couponCode,
+            credits_subtotal: creditsCart,
+            recurring_subtotal_cents: recurringCartCents,
+          })
+        : null,
+    [couponCode, creditsCart, recurringCartCents],
+  );
+  const discountCredits = coupon?.valid ? coupon.discount_credits : 0;
+  const creditsFinal = Math.max(0, creditsCart - discountCredits);
+  const projectedNextInvoice = (quote?.total_monthly_cents ?? 0) + recurringActiveCents + recurringCartCents;
+
+  const handleCheckout = async () => {
+    if (!userId || cartLines.length === 0) return;
+    try {
+      setCheckoutLoading(true);
+      let remainingDiscount = discountCredits;
+      for (const line of cartLines) {
+        const lineTotal = line.item.pricing_mode === 'credits' ? line.item.unit_cost_credits * line.qty : 0;
+        const lineDiscount = Math.min(remainingDiscount, lineTotal);
+        remainingDiscount -= lineDiscount;
+        await purchaseAppStoreItem({
+          user_id: userId,
+          item_id: line.item.id,
+          quantity: line.qty,
+          created_by: userId,
+          coupon_code: coupon?.valid ? coupon.code : undefined,
+          discount_credits: lineDiscount,
+        });
+      }
+      setCart({});
+      setCouponCode('');
+      setCouponInput('');
+      notifications.show({ title: 'Carrinho finalizado', message: 'Pedido processado.', color: 'teal' });
+      await refresh();
+    } catch (error: any) {
+      notifications.show({
+        title: 'Falha no checkout',
+        message: String(error?.message ?? 'Não foi possível finalizar.'),
+        color: 'red',
+      });
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  return (
+    <Stack p="md">
+      <Group justify="space-between">
+        <Title order={2}>Marketplace Interno</Title>
+        <Group>
+          <Badge variant="light" color="violet">Saldo: {creditsBalance} creditos</Badge>
+          <Badge variant="light" color="blue">Recorrente ativo: {formatBillingMoney(recurringActiveCents)}/mes</Badge>
+        </Group>
+      </Group>
+
+      <Tabs defaultValue="loja" variant="outline">
+        <Tabs.List>
+          <Tabs.Tab value="loja" leftSection={<IconShoppingCart size={16} />}>Loja</Tabs.Tab>
+          <Tabs.Tab value="indicacao" leftSection={<IconUsers size={16} />}>Indicacao</Tabs.Tab>
+          <Tabs.Tab value="roadmap" leftSection={<IconSparkles size={16} />}>Roadmap</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="loja" pt="md">
+          <Stack>
+            <Card withBorder p="md">
+              <Text size="sm">Fatura atual estimada: <b>{formatBillingMoney(quote?.total_monthly_cents ?? 0)}</b></Text>
+              <Text size="sm">Projecao com carrinho: <b>{formatBillingMoney(projectedNextInvoice)}</b></Text>
+              <Text size="xs" c="dimmed">Propriedade/talhoes/analises entram em recorrencia. IA/cosmeticos ficam em creditos.</Text>
             </Card>
 
-            {/* Marketplace Directory */}
-            <Tabs defaultValue="directory" variant="pills" radius="md">
-                <Tabs.List mb="md">
-                    <Tabs.Tab value="directory" leftSection={<IconSearch size={16} />}>
-                        Diretório de Parceiros
-                    </Tabs.Tab>
-                    <Tabs.Tab value="map" leftSection={<IconMapPin size={16} />}>
-                        Mapa de Prestadores
-                    </Tabs.Tab>
-                </Tabs.List>
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
+              {catalog.filter((row) => row.status === 'active').map((item) => (
+                <Card key={item.id} withBorder p="md">
+                  <Text fw={700}>{item.label}</Text>
+                  <Text size="sm" c="dimmed">{item.description}</Text>
+                  <Text size="sm" mt="xs">Valor: <b>{formatPricing(item)}</b></Text>
+                  <Group mt="xs" grow>
+                    <NumberInput
+                      min={item.min_quantity}
+                      max={item.max_quantity}
+                      value={quantities[item.id] ?? item.min_quantity}
+                      onChange={(value) =>
+                        setQuantities((prev) => ({
+                          ...prev,
+                          [item.id]: typeof value === 'number' ? value : item.min_quantity,
+                        }))
+                      }
+                    />
+                    <Button
+                      variant="light"
+                      onClick={() => {
+                        const qty = Math.max(1, Math.round(Number(quantities[item.id] ?? 1)));
+                        setCart((prev) => ({ ...prev, [item.id]: (prev[item.id] ?? 0) + qty }));
+                      }}
+                    >
+                      Carrinho
+                    </Button>
+                  </Group>
+                </Card>
+              ))}
+            </SimpleGrid>
 
-                <Tabs.Panel value="directory">
-                    {/* Filters */}
-                    <Group mb="lg">
-                        <TextInput
-                            placeholder="Buscar por nome ou região..."
-                            leftSection={<IconSearch size={14} />}
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            style={{ flex: 1 }}
-                        />
-                        <Select
-                            data={[
-                                { value: 'all', label: 'Todos' },
-                                { value: 'lab', label: 'Laboratórios' },
-                                { value: 'consultant', label: 'Consultores' },
-                                { value: 'vendor', label: 'Fornecedores' }
-                            ]}
-                            value={filterType}
-                            onChange={setFilterType}
-                            leftSection={<IconFilter size={14} />}
-                            w={200}
-                        />
-                    </Group>
+            <Card withBorder p="md">
+              <Text fw={700} mb="xs">Carrinho</Text>
+              <Table withTableBorder>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Item</Table.Th>
+                    <Table.Th>Modelo</Table.Th>
+                    <Table.Th>Qtd</Table.Th>
+                    <Table.Th>Total</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {cartLines.length === 0 ? (
+                    <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed">Carrinho vazio.</Text></Table.Td></Table.Tr>
+                  ) : cartLines.map((row) => (
+                    <Table.Tr key={row.item.id}>
+                      <Table.Td>{row.item.label}</Table.Td>
+                      <Table.Td>{row.item.pricing_mode === 'recurring_brl' ? 'Recorrente' : 'Avulso'}</Table.Td>
+                      <Table.Td>{row.qty}</Table.Td>
+                      <Table.Td>{row.item.pricing_mode === 'recurring_brl' ? `${formatBillingMoney(row.item.unit_price_cents * row.qty)}/mes` : `${row.item.unit_cost_credits * row.qty} creditos`}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+              <Group mt="sm" align="end">
+                <TextInput
+                  label="Cupom"
+                  value={couponInput}
+                  onChange={(event) => {
+                    setCouponInput(event.currentTarget.value);
+                    if (couponCode && normalizeCode(event.currentTarget.value) !== couponCode) {
+                      setCouponCode('');
+                    }
+                  }}
+                />
+                <Button
+                  variant="light"
+                  onClick={() => {
+                    const result = validateAppStoreCoupon({
+                      code: couponInput,
+                      credits_subtotal: creditsCart,
+                      recurring_subtotal_cents: recurringCartCents,
+                    });
+                    if (!result.valid) {
+                      notifications.show({ title: 'Cupom inválido', message: result.message, color: 'red' });
+                      setCouponCode('');
+                      return;
+                    }
+                    setCouponCode(result.code);
+                  }}
+                >
+                  Aplicar
+                </Button>
+                <Button onClick={() => void handleCheckout()} loading={checkoutLoading}>Finalizar</Button>
+              </Group>
+              <Text size="sm" mt="sm">Total avulso: {creditsFinal} creditos (desconto: -{discountCredits})</Text>
+              <Text size="sm">Total recorrente no carrinho: {formatBillingMoney(recurringCartCents)}/mes</Text>
+            </Card>
 
-                    {/* Partner Grid */}
-                    <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
-                        {filteredPartners.map(partner => (
-                            <Card key={partner.id} withBorder radius="md" padding="md">
-                                <Group wrap="nowrap" align="flex-start">
-                                    <Avatar size="lg" radius="md" color="blue">
-                                        {partner.name.substring(0, 2).toUpperCase()}
-                                    </Avatar>
-                                    <div style={{ flex: 1 }}>
-                                        <Group justify="space-between" align="center" wrap="nowrap">
-                                            <Text size="sm" fw={700} lineClamp={1}>
-                                                {partner.name}
-                                            </Text>
-                                            {partner.verified && (
-                                                <Badge size="xs" color="blue" variant="light">Verificado</Badge>
-                                            )}
-                                        </Group>
+            <Card withBorder p="md">
+              <Text fw={700} mb="xs">Limites da conta</Text>
+              <Table withTableBorder>
+                <Table.Thead><Table.Tr><Table.Th>Recurso</Table.Th><Table.Th>Total</Table.Th><Table.Th>Usado</Table.Th><Table.Th>Restante</Table.Th></Table.Tr></Table.Thead>
+                <Table.Tbody>
+                  {quotaOverview ? (['properties', 'talhoes', 'analises'] as const).map((resource) => (
+                    <Table.Tr key={resource}>
+                      <Table.Td>{formatResourceLabel(resource)}</Table.Td>
+                      <Table.Td>{quotaOverview.rows[resource].total_limit}</Table.Td>
+                      <Table.Td>{quotaOverview.rows[resource].used}</Table.Td>
+                      <Table.Td>{quotaOverview.rows[resource].remaining}</Table.Td>
+                    </Table.Tr>
+                  )) : <Table.Tr><Table.Td colSpan={4}>Carregando...</Table.Td></Table.Tr>}
+                </Table.Tbody>
+              </Table>
+            </Card>
 
-                                        <Text size="xs" c="dimmed" mb="xs">
-                                            {partner.region} • {partner.type === 'lab' ? 'Laboratório' : partner.type === 'consultant' ? 'Consultoria' : 'Varejo'}
-                                        </Text>
+            <Card withBorder p="md">
+              <Text fw={700} mb="xs">Historico</Text>
+              <Table withTableBorder>
+                <Table.Thead><Table.Tr><Table.Th>Data</Table.Th><Table.Th>Item</Table.Th><Table.Th>Modelo</Table.Th><Table.Th>Valor</Table.Th></Table.Tr></Table.Thead>
+                <Table.Tbody>
+                  {receipts.length === 0 ? (
+                    <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed">Sem compras.</Text></Table.Td></Table.Tr>
+                  ) : receipts.map((row) => (
+                    <Table.Tr key={row.id}>
+                      <Table.Td>{new Date(row.created_at).toLocaleString('pt-BR')}</Table.Td>
+                      <Table.Td>{row.item_label}</Table.Td>
+                      <Table.Td>{row.pricing_mode === 'recurring_brl' ? 'Recorrente' : 'Avulso'}</Table.Td>
+                      <Table.Td>{row.pricing_mode === 'recurring_brl' ? `${formatBillingMoney(row.total_price_cents)}/mes` : `${row.total_cost_credits} creditos`}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Card>
+          </Stack>
+        </Tabs.Panel>
 
-                                        <Group gap={4} mb="xs">
-                                            <Rating value={partner.rating} readOnly size="xs" />
-                                            <Text size="xs" c="dimmed">({partner.rating})</Text>
-                                        </Group>
+        <Tabs.Panel value="indicacao" pt="md">
+          <Card withBorder p="md">
+            <TextInput label="Meu código de indicacao" value={referralCode} readOnly />
+            <Group mt="xs">
+              <Button leftSection={<IconCopy size={14} />} variant="light" onClick={() => void navigator.clipboard.writeText(referralCode)}>Copiar</Button>
+            </Group>
+            <Group mt="md" align="end">
+              <TextInput label="Vincular código" value={referralCodeInput} onChange={(event) => setReferralCodeInput(event.currentTarget.value)} />
+              <Button onClick={() => {
+                if (!userId) return;
+                try {
+                  attachUserToReferralCode({ user_id: userId, referral_code: referralCodeInput });
+                  notifications.show({ title: 'Código vinculado', message: 'Indicacao aplicada.', color: 'teal' });
+                  setReferralCodeInput('');
+                } catch (error: any) {
+                  notifications.show({ title: 'Falha', message: String(error?.message ?? 'Erro ao vincular.'), color: 'red' });
+                }
+              }}>Vincular</Button>
+            </Group>
+          </Card>
+        </Tabs.Panel>
 
-                                        <Group gap={4}>
-                                            {partner.services.slice(0, 2).map((s, i) => (
-                                                <Badge key={i} size="xs" variant="outline" color="gray">
-                                                    {s}
-                                                </Badge>
-                                            ))}
-                                            {partner.services.length > 2 && (
-                                                <Badge size="xs" variant="outline" color="gray">
-                                                    +{partner.services.length - 2}
-                                                </Badge>
-                                            )}
-                                        </Group>
-                                    </div>
-                                </Group>
-
-                                <Button fullWidth mt="md" variant="light" size="xs">
-                                    Ver Perfil / Contatar
-                                </Button>
-                            </Card>
-                        ))}
-                    </SimpleGrid>
-                </Tabs.Panel>
-
-                <Tabs.Panel value="map">
-                    <Text p="xl" ta="center" c="dimmed">
-                        Visualização em mapa em breve...
-                    </Text>
-                </Tabs.Panel>
-            </Tabs>
-        </div>
-    );
+        <Tabs.Panel value="roadmap" pt="md">
+          <Card withBorder p="md">
+            <Text>1. Checkout com auditoria de cupom.</Text>
+            <Text>2. Catalogo com imagens reais dos itens.</Text>
+            <Text>3. Promocoes por temporada.</Text>
+            <Text>4. IA premium por ticket.</Text>
+          </Card>
+        </Tabs.Panel>
+      </Tabs>
+    </Stack>
+  );
 }

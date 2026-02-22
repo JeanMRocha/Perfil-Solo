@@ -47,13 +47,35 @@ import {
   listAllInAppPurchaseReceipts,
   type InAppPurchaseReceipt,
 } from '../../services/inAppPurchasesService';
+import { type BillingPlanId } from '../../modules/billing';
+import {
+  BILLING_UPDATED_EVENT,
+  createCreditTopupFromMoney,
+  createMonthlyInvoiceForUser,
+  formatBillingMoney,
+  getBillingStats,
+  listBillingLedger,
+  listBillingSubscriptions,
+  refundBillingEntry,
+  setBillingPlanForUser,
+  type BillingLedgerEntry,
+  type BillingStats,
+} from '../../services/billingPlanService';
+import {
+  getBillingCatalogConfig,
+  resetBillingCatalogConfig,
+  updateBillingCatalogConfig,
+  type BillingCatalogConfig,
+} from '../../services/billingCatalogService';
 import {
   CouponsTab,
   CreditsTab,
+  MonetizationTab,
   PurchasesTab,
   ReceiptsTab,
   RulesTab,
   UsersTab,
+  type BillingLedgerTypeFilter,
   type ReceiptTypeFilter,
   type RequestStatusFilter,
   type TransactionFlowFilter,
@@ -64,6 +86,48 @@ import {
 function toTime(dateLike: string): number {
   const time = new Date(dateLike).getTime();
   return Number.isFinite(time) ? time : 0;
+}
+
+function emptyBillingStats(): BillingStats {
+  return {
+    total_gross_cents: 0,
+    total_refunded_cents: 0,
+    total_net_cents: 0,
+    total_credits_issued: 0,
+    invoice_count: 0,
+    topup_count: 0,
+    refund_count: 0,
+    entries_count: 0,
+    active_subscriptions_by_plan: {
+      free: 0,
+      premium: 0,
+    },
+  };
+}
+
+function cloneCatalog(config: BillingCatalogConfig): BillingCatalogConfig {
+  return {
+    ...config,
+    plans: {
+      free: { ...config.plans.free },
+      premium: { ...config.plans.premium },
+    },
+    features: {
+      properties: {
+        included_by_plan: { ...config.features.properties.included_by_plan },
+        extra_unit_price_cents: config.features.properties.extra_unit_price_cents,
+      },
+      talhoes: {
+        included_by_plan: { ...config.features.talhoes.included_by_plan },
+        extra_unit_price_cents: config.features.talhoes.extra_unit_price_cents,
+      },
+      analises: {
+        included_by_plan: { ...config.features.analises.included_by_plan },
+        extra_unit_price_cents: config.features.analises.extra_unit_price_cents,
+      },
+    },
+    free_features: [...config.free_features],
+  };
 }
 
 export default function UserManagement() {
@@ -108,6 +172,23 @@ export default function UserManagement() {
     useState<ReceiptTypeFilter>('all');
   const [receiptDateFrom, setReceiptDateFrom] = useState('');
   const [receiptDateTo, setReceiptDateTo] = useState('');
+  const [billingSubscriptionsMap, setBillingSubscriptionsMap] = useState<
+    Record<string, BillingPlanId>
+  >({});
+  const [billingLedgerRows, setBillingLedgerRows] = useState<BillingLedgerEntry[]>([]);
+  const [billingStats, setBillingStats] = useState<BillingStats>(emptyBillingStats());
+  const [billingSelectedUserId, setBillingSelectedUserId] = useState('');
+  const [billingSelectedPlanId, setBillingSelectedPlanId] =
+    useState<BillingPlanId>('free');
+  const [billingTopupReais, setBillingTopupReais] = useState<number | ''>(20);
+  const [billingUserFilter, setBillingUserFilter] = useState('all');
+  const [billingTypeFilter, setBillingTypeFilter] =
+    useState<BillingLedgerTypeFilter>('all');
+  const [billingDateFrom, setBillingDateFrom] = useState('');
+  const [billingDateTo, setBillingDateTo] = useState('');
+  const [billingCatalogDraft, setBillingCatalogDraft] = useState<BillingCatalogConfig>(() =>
+    cloneCatalog(getBillingCatalogConfig()),
+  );
   const [activeTab, setActiveTab] = useState<string | null>('usuarios');
 
   const selectedUser = useMemo(
@@ -122,6 +203,13 @@ export default function UserManagement() {
       setSelectedUserId('');
       setSetBalanceValue(0);
     }
+    if (billingSelectedUserId && !rows.some((row) => row.id === billingSelectedUserId)) {
+      setBillingSelectedUserId('');
+      setBillingSelectedPlanId('free');
+    }
+    if (!billingSelectedUserId && rows.length > 0) {
+      setBillingSelectedUserId(rows[0].id);
+    }
     setInitialCreditsConfig(getInitialCreditsAfterSignup());
     setRequests(listCreditPurchaseRequests().slice(0, 30));
     setPurchaseReceipts(listAllInAppPurchaseReceipts().slice(0, 300));
@@ -130,6 +218,15 @@ export default function UserManagement() {
     setEngagementPerformanceRows(listCreditEngagementUsersPerformance().slice(0, 200));
     setCouponRows(listCreditCoupons());
     setCouponRedemptions(listCreditCouponRedemptions(50));
+    const subscriptions = listBillingSubscriptions();
+    const planMap = subscriptions.reduce<Record<string, BillingPlanId>>((acc, row) => {
+      acc[row.user_id] = row.plan_id;
+      return acc;
+    }, {});
+    setBillingSubscriptionsMap(planMap);
+    setBillingLedgerRows(listBillingLedger(1000));
+    setBillingStats(getBillingStats());
+    setBillingCatalogDraft(cloneCatalog(getBillingCatalogConfig()));
   };
 
   useEffect(() => {
@@ -144,15 +241,18 @@ export default function UserManagement() {
     const onRegistryChanged = () => refresh();
     const onCreditsChanged = () => refresh();
     const onInAppPurchasesChanged = () => refresh();
+    const onBillingUpdated = () => refresh();
     const onStorage = () => refresh();
     window.addEventListener(USERS_REGISTRY_UPDATED_EVENT, onRegistryChanged);
     window.addEventListener(CREDITS_UPDATED_EVENT, onCreditsChanged);
     window.addEventListener(IN_APP_PURCHASES_UPDATED_EVENT, onInAppPurchasesChanged);
+    window.addEventListener(BILLING_UPDATED_EVENT, onBillingUpdated);
     window.addEventListener('storage', onStorage);
     return () => {
       window.removeEventListener(USERS_REGISTRY_UPDATED_EVENT, onRegistryChanged);
       window.removeEventListener(CREDITS_UPDATED_EVENT, onCreditsChanged);
       window.removeEventListener(IN_APP_PURCHASES_UPDATED_EVENT, onInAppPurchasesChanged);
+      window.removeEventListener(BILLING_UPDATED_EVENT, onBillingUpdated);
       window.removeEventListener('storage', onStorage);
     };
   }, [currentUser?.id]);
@@ -166,6 +266,11 @@ export default function UserManagement() {
     setSelectedBalance(getUserCredits(selectedUserId));
     setTransactions(listCreditTransactionsForUser(selectedUserId).slice(0, 60));
   }, [selectedUserId, users, requests, couponRows]);
+
+  useEffect(() => {
+    if (!billingSelectedUserId) return;
+    setBillingSelectedPlanId(billingSubscriptionsMap[billingSelectedUserId] ?? 'free');
+  }, [billingSelectedUserId, billingSubscriptionsMap]);
 
   const userRows = useMemo<UserRow[]>(
     () =>
@@ -239,6 +344,27 @@ export default function UserManagement() {
     });
   }, [purchaseReceipts, receiptUserFilter, receiptTypeFilter, receiptDateFrom, receiptDateTo]);
 
+  const filteredBillingRows = useMemo(() => {
+    const fromMs = billingDateFrom ? new Date(`${billingDateFrom}T00:00:00`).getTime() : 0;
+    const toMs = billingDateTo ? new Date(`${billingDateTo}T23:59:59.999`).getTime() : 0;
+
+    return billingLedgerRows.filter((row) => {
+      if (billingUserFilter !== 'all' && row.user_id !== billingUserFilter) return false;
+      if (billingTypeFilter !== 'all' && row.type !== billingTypeFilter) return false;
+
+      const rowTime = toTime(row.created_at);
+      if (fromMs && rowTime < fromMs) return false;
+      if (toMs && rowTime > toMs) return false;
+      return true;
+    });
+  }, [
+    billingLedgerRows,
+    billingUserFilter,
+    billingTypeFilter,
+    billingDateFrom,
+    billingDateTo,
+  ]);
+
   const applyGrant = () => {
     if (!selectedUserId) return;
     const amount = Math.abs(Math.round(Number(operationAmount) || 0));
@@ -247,19 +373,19 @@ export default function UserManagement() {
       grantCreditsToUser(
         selectedUserId,
         amount,
-        operationReason || 'Credito concedido pelo super usuario',
+        operationReason || 'Crédito concedido pelo super usuário',
         currentAdminId,
       );
       notifications.show({
-        title: 'Credito concedido',
+        title: 'Crédito concedido',
         message: `${amount} creditos adicionados para o usuario.`,
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
       notifications.show({
-        title: 'Falha ao conceder credito',
-        message: String(error?.message ?? 'Nao foi possivel concluir a operacao.'),
+        title: 'Falha ao conceder crédito',
+        message: String(error?.message ?? 'Não foi possível concluir a operação.'),
         color: 'red',
       });
     }
@@ -273,7 +399,7 @@ export default function UserManagement() {
       removeCreditsFromUser(
         selectedUserId,
         amount,
-        operationReason || 'Debito aplicado pelo super usuario',
+        operationReason || 'Debito aplicado pelo super usuário',
         currentAdminId,
       );
       notifications.show({
@@ -284,8 +410,8 @@ export default function UserManagement() {
       refresh();
     } catch (error: any) {
       notifications.show({
-        title: 'Falha ao remover credito',
-        message: String(error?.message ?? 'Nao foi possivel concluir a operacao.'),
+        title: 'Falha ao remover crédito',
+        message: String(error?.message ?? 'Não foi possível concluir a operação.'),
         color: 'red',
       });
     }
@@ -297,14 +423,14 @@ export default function UserManagement() {
       setCreditsForUser(selectedUserId, Number(setBalanceValue) || 0, currentAdminId);
       notifications.show({
         title: 'Saldo ajustado',
-        message: 'O saldo do usuario foi atualizado.',
+        message: 'O saldo do usuário foi atualizado.',
         color: 'blue',
       });
       refresh();
     } catch (error: any) {
       notifications.show({
         title: 'Falha ao ajustar saldo',
-        message: String(error?.message ?? 'Nao foi possivel ajustar saldo.'),
+        message: String(error?.message ?? 'Não foi possível ajustar saldo.'),
         color: 'red',
       });
     }
@@ -331,7 +457,7 @@ export default function UserManagement() {
     setAdConfig(next);
     notifications.show({
       title: 'Recompensa por propaganda atualizada',
-      message: 'As regras foram salvas para todos os usuarios.',
+      message: 'As regras foram salvas para todos os usuários.',
       color: 'teal',
     });
   };
@@ -367,7 +493,7 @@ export default function UserManagement() {
     try {
       const expiresAtIso = couponExpiresAt ? new Date(couponExpiresAt).toISOString() : null;
       if (couponExpiresAt && Number.isNaN(new Date(couponExpiresAt).getTime())) {
-        throw new Error('Data de expiracao invalida.');
+        throw new Error('Data de expiracao inválida.');
       }
 
       createCreditCoupon({
@@ -397,7 +523,7 @@ export default function UserManagement() {
     } catch (error: any) {
       notifications.show({
         title: 'Falha ao criar cupom',
-        message: String(error?.message ?? 'Nao foi possivel salvar o cupom.'),
+        message: String(error?.message ?? 'Não foi possível salvar o cupom.'),
         color: 'red',
       });
     }
@@ -415,7 +541,7 @@ export default function UserManagement() {
     } catch (error: any) {
       notifications.show({
         title: 'Falha ao atualizar cupom',
-        message: String(error?.message ?? 'Nao foi possivel atualizar o cupom.'),
+        message: String(error?.message ?? 'Não foi possível atualizar o cupom.'),
         color: 'red',
       });
     }
@@ -427,14 +553,14 @@ export default function UserManagement() {
       refundCreditTransaction(selectedUserId, tx.id, currentAdminId);
       notifications.show({
         title: 'Ressarcimento concluido',
-        message: 'O credito foi devolvido ao usuario.',
+        message: 'O crédito foi devolvido ao usuário.',
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
       notifications.show({
         title: 'Falha no ressarcimento',
-        message: String(error?.message ?? 'Nao foi possivel ressarcir a transacao.'),
+        message: String(error?.message ?? 'Não foi possível ressarcir a transacao.'),
         color: 'red',
       });
     }
@@ -446,20 +572,203 @@ export default function UserManagement() {
         request.id,
         approved,
         currentAdminId,
-        approved ? 'Aprovado pelo super usuario' : 'Negado pelo super usuario',
+        approved ? 'Aprovado pelo super usuário' : 'Negado pelo super usuário',
       );
       notifications.show({
-        title: approved ? 'Solicitacao aprovada' : 'Solicitacao negada',
+        title: approved ? 'Solicitação aprovada' : 'Solicitação negada',
         message: approved
-          ? 'Creditos liberados para o usuario.'
-          : 'Solicitacao marcada como negada.',
+          ? 'Créditos liberados para o usuário.'
+          : 'Solicitação marcada como negada.',
         color: approved ? 'teal' : 'yellow',
       });
       refresh();
     } catch (error: any) {
       notifications.show({
-        title: 'Falha ao revisar solicitacao',
-        message: String(error?.message ?? 'Nao foi possivel revisar a solicitacao.'),
+        title: 'Falha ao revisar solicitação',
+        message: String(error?.message ?? 'Não foi possível revisar a solicitação.'),
+        color: 'red',
+      });
+    }
+  };
+
+  const applyBillingPlan = () => {
+    if (!billingSelectedUserId) return;
+    try {
+      const updated = setBillingPlanForUser({
+        user_id: billingSelectedUserId,
+        plan_id: billingSelectedPlanId,
+        updated_by: currentAdminId,
+      });
+      notifications.show({
+        title: 'Plano atualizado',
+        message: `Plano ${updated.plan_id.toUpperCase()} aplicado para o usuario.`,
+        color: 'teal',
+      });
+      refresh();
+    } catch (error: any) {
+      notifications.show({
+        title: 'Falha ao atualizar plano',
+        message: String(error?.message ?? 'Não foi possível salvar o plano.'),
+        color: 'red',
+      });
+    }
+  };
+
+  const generateMonthlyInvoice = async () => {
+    if (!billingSelectedUserId) return;
+    try {
+      const legacyPlan = billingSubscriptionsMap[billingSelectedUserId];
+      const { quote } = await createMonthlyInvoiceForUser({
+        user_id: billingSelectedUserId,
+        legacy_plan_id: legacyPlan,
+        created_by: currentAdminId,
+      });
+      notifications.show({
+        title: 'Fechamento gerado',
+        message: `Total mensal calculado: ${formatBillingMoney(quote.total_monthly_cents)}.`,
+        color: 'teal',
+      });
+      refresh();
+    } catch (error: any) {
+      notifications.show({
+        title: 'Falha ao gerar fechamento',
+        message: String(error?.message ?? 'Não foi possível gerar o fechamento mensal.'),
+        color: 'red',
+      });
+    }
+  };
+
+  const convertMoneyToCredits = () => {
+    if (!billingSelectedUserId) return;
+    const amountCents = Math.max(0, Math.round((Number(billingTopupReais) || 0) * 100));
+    if (amountCents <= 0) return;
+
+    try {
+      const { entry } = createCreditTopupFromMoney({
+        user_id: billingSelectedUserId,
+        amount_cents: amountCents,
+        created_by: currentAdminId,
+      });
+      notifications.show({
+        title: 'Conversão realizada',
+        message: `${formatBillingMoney(entry.amount_cents)} convertidos em ${entry.credits_delta} creditos cosmeticos.`,
+        color: 'teal',
+      });
+      refresh();
+    } catch (error: any) {
+      notifications.show({
+        title: 'Falha na conversão',
+        message: String(error?.message ?? 'Não foi possível converter dinheiro em créditos.'),
+        color: 'red',
+      });
+    }
+  };
+
+  const handleBillingRefund = (row: BillingLedgerEntry) => {
+    try {
+      refundBillingEntry({
+        entry_id: row.id,
+        created_by: currentAdminId,
+        reason: 'Estorno manual pelo super usuário',
+        reverse_credits: row.type === 'credit_topup',
+      });
+      notifications.show({
+        title: 'Estorno registrado',
+        message: 'Lançamento estornado com sucesso.',
+        color: 'teal',
+      });
+      refresh();
+    } catch (error: any) {
+      notifications.show({
+        title: 'Falha no estorno',
+        message: String(error?.message ?? 'Não foi possível estornar o lançamento.'),
+        color: 'red',
+      });
+    }
+  };
+
+  const handleCatalogPlanBasePriceChange = (
+    planId: BillingPlanId,
+    value: number | '',
+  ) => {
+    setBillingCatalogDraft((prev) => ({
+      ...prev,
+      plans: {
+        ...prev.plans,
+        [planId]: {
+          ...prev.plans[planId],
+          base_price_cents: Math.max(0, Math.round(Number(value) || 0)),
+        },
+      },
+    }));
+  };
+
+  const handleCatalogFeatureChange = (
+    featureId: 'properties' | 'talhoes' | 'analises',
+    patch: {
+      included_free?: number | '';
+      included_premium?: number | '';
+      extra_unit_price_cents?: number | '';
+    },
+  ) => {
+    setBillingCatalogDraft((prev) => ({
+      ...prev,
+      features: {
+        ...prev.features,
+        [featureId]: {
+          ...prev.features[featureId],
+          included_by_plan: {
+            free:
+              patch.included_free == null
+                ? prev.features[featureId].included_by_plan.free
+                : Math.max(0, Math.round(Number(patch.included_free) || 0)),
+            premium:
+              patch.included_premium == null
+                ? prev.features[featureId].included_by_plan.premium
+                : Math.max(0, Math.round(Number(patch.included_premium) || 0)),
+          },
+          extra_unit_price_cents:
+            patch.extra_unit_price_cents == null
+              ? prev.features[featureId].extra_unit_price_cents
+              : Math.max(0, Math.round(Number(patch.extra_unit_price_cents) || 0)),
+        },
+      },
+    }));
+  };
+
+  const saveCatalogConfig = () => {
+    try {
+      const next = updateBillingCatalogConfig(billingCatalogDraft, currentAdminId);
+      setBillingCatalogDraft(cloneCatalog(next));
+      notifications.show({
+        title: 'Catalogo atualizado',
+        message: 'Landing e planos foram atualizados com as novas configurações.',
+        color: 'teal',
+      });
+      refresh();
+    } catch (error: any) {
+      notifications.show({
+        title: 'Falha ao salvar catalogo',
+        message: String(error?.message ?? 'Não foi possível salvar configurações.'),
+        color: 'red',
+      });
+    }
+  };
+
+  const resetCatalogConfig = () => {
+    try {
+      const next = resetBillingCatalogConfig(currentAdminId);
+      setBillingCatalogDraft(cloneCatalog(next));
+      notifications.show({
+        title: 'Catalogo restaurado',
+        message: 'Valores padrao de monetizacao foram restaurados.',
+        color: 'blue',
+      });
+      refresh();
+    } catch (error: any) {
+      notifications.show({
+        title: 'Falha ao restaurar catalogo',
+        message: String(error?.message ?? 'Não foi possível restaurar configurações.'),
         color: 'red',
       });
     }
@@ -467,13 +776,14 @@ export default function UserManagement() {
 
   return (
     <Stack>
-      <PageHeader title="Gestao de Usuarios e Creditos" color="yellow" />
+      <PageHeader title="Gestao de Usuários e Créditos" color="yellow" />
 
       <Tabs value={activeTab} onChange={setActiveTab} keepMounted={false}>
         <Tabs.List grow>
           <Tabs.Tab value="usuarios">Usuarios</Tabs.Tab>
           <Tabs.Tab value="creditos">Creditos</Tabs.Tab>
           <Tabs.Tab value="compras">Compras</Tabs.Tab>
+          <Tabs.Tab value="monetizacao">Monetizacao</Tabs.Tab>
           <Tabs.Tab value="cupons">Cupons</Tabs.Tab>
           <Tabs.Tab value="regras">Regras</Tabs.Tab>
           <Tabs.Tab value="comprovantes">Comprovantes</Tabs.Tab>
@@ -490,6 +800,7 @@ export default function UserManagement() {
             onSelectUser={(row) => {
               setSelectedUserId(row.id);
               setSetBalanceValue(row.balance);
+              setBillingSelectedUserId(row.id);
               setActiveTab('creditos');
             }}
           />
@@ -533,6 +844,45 @@ export default function UserManagement() {
             onClearRequestFilters={() => setRequestStatusFilter('all')}
             onReviewRequest={handleReviewRequest}
             formatCreditPrice={formatCreditPrice}
+          />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="monetizacao" pt="md">
+          <MonetizationTab
+            users={users}
+            selectedUserId={billingSelectedUserId}
+            selectedPlanId={billingSelectedPlanId}
+            topupReais={billingTopupReais}
+            stats={billingStats}
+            rows={filteredBillingRows}
+            userById={userById}
+            userFilter={billingUserFilter}
+            typeFilter={billingTypeFilter}
+            dateFrom={billingDateFrom}
+            dateTo={billingDateTo}
+            onSelectedUserChange={setBillingSelectedUserId}
+            onSelectedPlanChange={setBillingSelectedPlanId}
+            onTopupReaisChange={setBillingTopupReais}
+            onUserFilterChange={setBillingUserFilter}
+            onTypeFilterChange={setBillingTypeFilter}
+            onDateFromChange={setBillingDateFrom}
+            onDateToChange={setBillingDateTo}
+            onClearFilters={() => {
+              setBillingUserFilter('all');
+              setBillingTypeFilter('all');
+              setBillingDateFrom('');
+              setBillingDateTo('');
+            }}
+            onApplyPlan={applyBillingPlan}
+            onGenerateInvoice={generateMonthlyInvoice}
+            onTopupCredits={convertMoneyToCredits}
+            onRefund={handleBillingRefund}
+            catalogConfig={billingCatalogDraft}
+            onCatalogPlanBasePriceChange={handleCatalogPlanBasePriceChange}
+            onCatalogFeatureChange={handleCatalogFeatureChange}
+            onSaveCatalogConfig={saveCatalogConfig}
+            onResetCatalogConfig={resetCatalogConfig}
+            formatMoney={formatBillingMoney}
           />
         </Tabs.Panel>
 

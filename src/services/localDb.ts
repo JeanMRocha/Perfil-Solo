@@ -68,6 +68,14 @@ function createId() {
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function normalizeRequiredPropertyName(input: string): string {
+  const normalized = String(input ?? '').trim();
+  if (!normalized) {
+    throw new Error('Informe o nome da propriedade.');
+  }
+  return normalized;
+}
+
 async function listAll<T>(store: LocalForage): Promise<T[]> {
   const rows: T[] = [];
   await store.iterate((value: unknown) => {
@@ -165,10 +173,6 @@ function mergePropertyPatch(
       safePatch.proprietario_principal !== undefined
         ? safePatch.proprietario_principal
         : current.proprietario_principal,
-    maquinas:
-      safePatch.maquinas !== undefined ? safePatch.maquinas : current.maquinas,
-    galpoes:
-      safePatch.galpoes !== undefined ? safePatch.galpoes : current.galpoes,
     area_allocations:
       safePatch.area_allocations !== undefined
         ? safePatch.area_allocations
@@ -194,11 +198,12 @@ export async function createPropertyLocal(input: {
   contact?: ContactInfo;
   patch?: Partial<Property>;
 }): Promise<Property> {
+  const normalizedName = normalizeRequiredPropertyName(input.nome);
   const createdAt = nowIso();
   const baseProperty: Property = {
     id: createId(),
     user_id: input.userId,
-    nome: input.nome,
+    nome: normalizedName,
     contato: getPrimaryEmail(input.contact) ?? getPrimaryPhone(input.contact) ?? '',
     contato_detalhes: input.contact ?? {},
     created_at: createdAt,
@@ -230,8 +235,11 @@ export async function updatePropertyLocal(input: {
     | null;
 
   if (!current) {
-    throw new Error('Propriedade nao encontrada para atualizacao.');
+    throw new Error('Propriedade não encontrada para atualizacao.');
   }
+
+  const normalizedName =
+    input.nome === undefined ? undefined : normalizeRequiredPropertyName(input.nome);
 
   const merged = mergePropertyPatch(current, input.patch);
   const mergedContactDetails =
@@ -239,7 +247,7 @@ export async function updatePropertyLocal(input: {
 
   const updated: Property = {
     ...merged,
-    nome: input.nome ?? merged.nome,
+    nome: normalizedName ?? merged.nome,
     contato:
       input.contact != null
         ? getPrimaryEmail(input.contact) ?? getPrimaryPhone(input.contact) ?? ''
@@ -309,6 +317,7 @@ export async function createTalhaoLocal(input: {
     data_inicio: string;
     data_fim: string;
     safra?: string;
+    fonte?: string;
   }[];
 }): Promise<Talhao> {
   const createdAt = nowIso();
@@ -332,7 +341,7 @@ export async function updateTalhaoLocal(input: {
   talhaoId: string;
   nome?: string;
   area_ha?: number;
-  tipo_solo?: string;
+  tipo_solo?: string | null;
   coordenadas_svg?: string;
   cor_identificacao?: string;
   historico_culturas?: {
@@ -341,18 +350,20 @@ export async function updateTalhaoLocal(input: {
     data_inicio: string;
     data_fim: string;
     safra?: string;
+    fonte?: string;
   }[];
 }): Promise<Talhao> {
   const current = (await talhoesStore.getItem(input.talhaoId)) as Talhao | null;
   if (!current) {
-    throw new Error('Talhao nao encontrado para atualizacao.');
+    throw new Error('Talhão não encontrado para atualizacao.');
   }
 
   const updated: Talhao = {
     ...current,
     nome: input.nome ?? current.nome,
     area_ha: input.area_ha ?? current.area_ha,
-    tipo_solo: input.tipo_solo ?? current.tipo_solo,
+    tipo_solo:
+      input.tipo_solo === undefined ? current.tipo_solo : input.tipo_solo ?? undefined,
     coordenadas_svg: input.coordenadas_svg ?? current.coordenadas_svg,
     cor_identificacao: input.cor_identificacao ?? current.cor_identificacao,
     historico_culturas:
@@ -390,6 +401,42 @@ export async function getAnalysesByProperty(
       const talhao = talhaoById.get(row.talhao_id);
       if (!talhao) return false;
       if (talhao.property_id !== propertyId) return false;
+      if (row.user_id !== property.user_id) return false;
+      return true;
+    }),
+  );
+}
+
+export async function getAnalysesByProperties(
+  propertyIds: string[],
+): Promise<AnalysisRow[]> {
+  const normalizedIds = propertyIds
+    .map((id) => String(id ?? '').trim())
+    .filter((id) => id.length > 0);
+  if (normalizedIds.length === 0) return [];
+
+  const propertyIdSet = new Set(normalizedIds);
+  const [allAnalyses, allProperties, allTalhoes] = await Promise.all([
+    listAll<AnalysisRow>(analysesStore),
+    listAll<Property>(propertiesStore),
+    listAll<Talhao>(talhoesStore),
+  ]);
+
+  const propertyById = new Map(
+    allProperties
+      .filter((row) => propertyIdSet.has(row.id))
+      .map((row) => [row.id, row]),
+  );
+  const talhaoById = new Map(allTalhoes.map((row) => [row.id, row]));
+
+  return sortByCreatedDesc(
+    allAnalyses.filter((row) => {
+      if (!propertyIdSet.has(row.property_id)) return false;
+      const property = propertyById.get(row.property_id);
+      if (!property) return false;
+      const talhao = talhaoById.get(row.talhao_id);
+      if (!talhao) return false;
+      if (talhao.property_id !== row.property_id) return false;
       if (row.user_id !== property.user_id) return false;
       return true;
     }),
@@ -453,16 +500,16 @@ export async function createAnalysisLocal(
   ]);
 
   if (!property) {
-    throw new Error('Propriedade vinculada a analise nao encontrada.');
+    throw new Error('Propriedade vinculada a análise não encontrada.');
   }
   if (!talhao) {
-    throw new Error('Talhao vinculado a analise nao encontrado.');
+    throw new Error('Talhão vinculado a análise não encontrado.');
   }
   if (talhao.property_id !== input.property_id) {
-    throw new Error('Integridade invalida: talhao nao pertence a propriedade informada.');
+    throw new Error('Integridade inválida: talhão não pertence a propriedade informada.');
   }
   if (property.user_id !== input.user_id) {
-    throw new Error('Integridade invalida: usuario nao corresponde ao dono da propriedade.');
+    throw new Error('Integridade inválida: usuário não corresponde ao dono da propriedade.');
   }
 
   const createdAt = nowIso();

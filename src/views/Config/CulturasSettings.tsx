@@ -320,8 +320,8 @@ export default function CulturasSettings({
       Number(draft.idade_min) > Number(draft.idade_max)
     ) {
       notifications.show({
-        title: 'Faixa de idade invalida',
-        message: 'Idade minima nao pode ser maior que idade maxima.',
+        title: 'Faixa de idade inválida',
+        message: 'Idade minima não pode ser maior que idade maxima.',
         color: 'yellow',
       });
       return;
@@ -403,7 +403,7 @@ export default function CulturasSettings({
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, estagio: e.currentTarget.value }))
               }
-              placeholder="Ex.: producao"
+              placeholder="Ex.: produção"
             />
             <TextInput
               label="Extrator"
@@ -438,12 +438,12 @@ export default function CulturasSettings({
           </SimpleGrid>
 
           <TextInput
-            label="Observacoes"
+            label="Observações"
             value={draft.observacoes}
             onChange={(e) =>
               setDraft((prev) => ({ ...prev, observacoes: e.currentTarget.value }))
             }
-            placeholder="Observacoes tecnicas da regra"
+            placeholder="Observações tecnicas da regra"
           />
 
           <Card withBorder p="sm">
@@ -493,7 +493,7 @@ export default function CulturasSettings({
                           placeholder="Ex.: Milho grao tipo 1"
                         />
                         <TextInput
-                          label="SKU / Codigo interno"
+                          label="SKU / Código interno"
                           value={product.sku}
                           onChange={(e) =>
                             updateProduct(product.id, { sku: e.currentTarget.value })
@@ -614,7 +614,7 @@ export default function CulturasSettings({
 
                       <Divider my="xs" />
                       <TextInput
-                        label="Observacoes do produto"
+                        label="Observações do produto"
                         value={product.observacoes}
                         onChange={(e) =>
                           updateProduct(product.id, { observacoes: e.currentTarget.value })

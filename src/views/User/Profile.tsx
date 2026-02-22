@@ -18,7 +18,7 @@ import {
   Textarea,
 } from '@mantine/core';
 import { useStore } from '@nanostores/react';
-import { IconBuildingStore, IconHome, IconMapPin, IconUpload, IconUser } from '@tabler/icons-react';
+import { IconMapPin, IconUpload, IconUser } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import PageHeader from '../../components/PageHeader';
 import { $currUser } from '../../global-state/user';
@@ -56,15 +56,14 @@ import { lookupAddressByCep, normalizeCep } from '../../services/cepService';
 
 type ProfileTab =
   | 'identificacao'
-  | 'dadosEmpresa'
   | 'endereco'
   | 'mapa'
   | 'contato'
-  | 'nfe'
   | 'observacoes';
 
 const MAX_LOGO_FILE_BYTES = 1_500_000;
 const MAX_AVATAR_FILE_BYTES = 1_500_000;
+const MAX_CARGO_PROFISSAO_CHARS = 40;
 const ACCEPTED_IMAGE_TYPES = new Set([
   'image/png',
   'image/jpeg',
@@ -99,6 +98,51 @@ function hasCompletedAddress(producer: ProducerProfile): boolean {
   return Boolean(street && city && state && number);
 }
 
+function normalizeCargoProfissaoInput(input: string): string {
+  const cleaned = String(input ?? '')
+    .replace(/[^0-9A-Za-zÀ-ÖØ-öø-ÿ\s./,&()\-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trimStart();
+  return cleaned.slice(0, MAX_CARGO_PROFISSAO_CHARS);
+}
+
+function normalizeCpf(input: string): string {
+  return String(input ?? '').replace(/\D/g, '').slice(0, 11);
+}
+
+function formatCpf(input: string): string {
+  const digits = normalizeCpf(input);
+  if (!digits) return '';
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) {
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  }
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function isValidCpf(input: string): boolean {
+  const cpf = normalizeCpf(input);
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 9; i += 1) {
+    sum += Number(cpf[i]) * (10 - i);
+  }
+  let check = (sum * 10) % 11;
+  if (check === 10) check = 0;
+  if (check !== Number(cpf[9])) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i += 1) {
+    sum += Number(cpf[i]) * (11 - i);
+  }
+  check = (sum * 10) % 11;
+  if (check === 10) check = 0;
+  return check === Number(cpf[10]);
+}
+
 function RowField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Grid align="center" gutter="sm">
@@ -114,6 +158,36 @@ function RowField({ label, children }: { label: string; children: ReactNode }) {
 
 interface ProfilePageProps {
   embedded?: boolean;
+}
+
+function withAuthEmailFallback(
+  input: UserProfileT,
+  authEmail: string,
+): UserProfileT {
+  const fallbackEmail = String(authEmail ?? '').trim().toLowerCase();
+  if (!fallbackEmail) return input;
+
+  const nextEmail = String(input.email ?? '').trim() || fallbackEmail;
+  const nextContactEmail =
+    String(input.contact?.email ?? '').trim() || nextEmail || fallbackEmail;
+  const producer = input.producer;
+  const nextProducerContactEmail =
+    String(producer?.contact_email ?? '').trim() || nextContactEmail;
+
+  return {
+    ...input,
+    email: nextEmail,
+    contact: {
+      ...(input.contact ?? {}),
+      email: nextContactEmail,
+    },
+    producer: producer
+      ? {
+          ...producer,
+          contact_email: nextProducerContactEmail,
+        }
+      : producer,
+  };
 }
 
 export default function ProfilePage({ embedded = false }: ProfilePageProps) {
@@ -141,12 +215,24 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     (async () => {
       try {
         const data = await getProfile();
-        setProfile(data);
+        setProfile(withAuthEmailFallback(data, userEmail));
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [userEmail]);
+
+  useEffect(() => {
+    if (!profile || !userEmail) return;
+    const producerEmail = String(profile.producer?.contact_email ?? '').trim();
+    const contactEmail = String(profile.contact?.email ?? '').trim();
+    const rootEmail = String(profile.email ?? '').trim();
+    if (producerEmail && contactEmail && rootEmail) return;
+    setProfile((prev) => {
+      if (!prev) return prev;
+      return withAuthEmailFallback(prev, userEmail);
+    });
+  }, [profile, userEmail]);
 
   useEffect(() => {
     if (!userId || !userEmail) {
@@ -200,7 +286,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     }
     return (
       <Container size="xl" mt="xl">
-        <PageHeader title="Dados do Produtor" />
+        <PageHeader title="Dados do Usuário" />
         <Text c="dimmed">Carregando...</Text>
       </Container>
     );
@@ -219,7 +305,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     }
     return (
       <Container size="xl" mt="xl">
-        <PageHeader title="Dados do Produtor" />
+        <PageHeader title="Dados do Usuário" />
         <Text c="red.6">Nao foi possivel carregar o cadastro.</Text>
         <Button mt="md" onClick={() => window.location.reload()}>
           Tentar novamente
@@ -229,6 +315,17 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
   }
 
   const producer = profile.producer;
+  const producerPersonType = producer.tipo_pessoa === 'pf' ? 'pf' : 'pj';
+  const resolvedAccountEmail = String(
+    userEmail || profile.email || profile.contact?.email || producer.contact_email || '',
+  )
+    .trim()
+    .toLowerCase();
+  const resolvedContactEmail = String(
+    producer.contact_email || profile.contact?.email || profile.email || userEmail || '',
+  )
+    .trim()
+    .toLowerCase();
 
   const setProducerField = <K extends keyof ProducerProfile>(
     key: K,
@@ -263,7 +360,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
 
     if (!isAcceptedImageFile(file)) {
       notifications.show({
-        title: 'Formato nao suportado',
+        title: 'Formato não suportado',
         message: 'Use PNG, JPG, WEBP, SVG ou GIF para o logotipo.',
         color: 'yellow',
       });
@@ -278,7 +375,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     reader.onerror = () => {
       notifications.show({
         title: 'Falha no upload',
-        message: 'Nao foi possivel ler o arquivo do logotipo.',
+        message: 'Não foi possível ler o arquivo do logotipo.',
         color: 'red',
       });
     };
@@ -291,7 +388,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       clearUploadedAvatarForUser(userId);
       notifications.show({
         title: 'Avatar removido',
-        message: 'Avatar personalizado removido. O icone rural sera usado.',
+        message: 'Avatar personalizado removido. O ícone rural sera usado.',
         color: 'blue',
       });
       return;
@@ -308,7 +405,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
 
     if (!isAcceptedImageFile(file)) {
       notifications.show({
-        title: 'Formato nao suportado',
+        title: 'Formato não suportado',
         message: 'Use PNG, JPG, WEBP, SVG ou GIF para o avatar.',
         color: 'yellow',
       });
@@ -328,7 +425,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     reader.onerror = () => {
       notifications.show({
         title: 'Falha no upload',
-        message: 'Nao foi possivel ler o arquivo do avatar.',
+        message: 'Não foi possível ler o arquivo do avatar.',
         color: 'red',
       });
     };
@@ -342,7 +439,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       if (!unlocked) {
         unlockRuralAvatarIcon(userId, icon.id, userId);
         notifications.show({
-          title: 'Icone desbloqueado',
+          title: 'Ícone desbloqueado',
           message: `${icon.label} liberado com custo de ${icon.price_credits} credito.`,
           color: 'teal',
         });
@@ -350,14 +447,14 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       }
       selectRuralAvatarIcon(userId, icon.id);
       notifications.show({
-        title: 'Icone selecionado',
+        title: 'Ícone selecionado',
         message: `${icon.label} agora e seu avatar ativo.`,
         color: 'blue',
       });
     } catch (error: any) {
       notifications.show({
         title: 'Falha ao atualizar avatar',
-        message: String(error?.message ?? 'Nao foi possivel atualizar avatar.'),
+        message: String(error?.message ?? 'Não foi possível atualizar avatar.'),
         color: 'red',
       });
     }
@@ -367,7 +464,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     if (!navigator.geolocation) {
       notifications.show({
         title: 'Geolocalizacao indisponivel',
-        message: 'Seu navegador nao suporta geolocalizacao.',
+        message: 'Seu navegador não suporta geolocalizacao.',
         color: 'yellow',
       });
       return;
@@ -379,7 +476,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
         setProducerField('latitude', position.coords.latitude.toFixed(6));
         setProducerField('longitude', position.coords.longitude.toFixed(6));
         notifications.show({
-          title: 'Localizacao capturada',
+          title: 'Localização capturada',
           message: 'Latitude e longitude preenchidas com sucesso.',
           color: 'green',
         });
@@ -387,7 +484,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       },
       () => {
         notifications.show({
-          title: 'Falha ao capturar localizacao',
+          title: 'Falha ao capturar localização',
           message: 'Permita acesso ao GPS e tente novamente.',
           color: 'red',
         });
@@ -406,7 +503,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       const lookup = await lookupAddressByCep(cep);
       if (!lookup) {
         notifications.show({
-          title: 'CEP nao encontrado',
+          title: 'CEP não encontrado',
           message: 'Revise o CEP informado.',
           color: 'yellow',
         });
@@ -433,7 +530,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       notifications.show({
         title: 'Falha ao buscar CEP',
         message:
-          error?.message ?? 'Nao foi possivel preencher endereco automaticamente.',
+          error?.message ?? 'Não foi possível preencher endereço automaticamente.',
         color: 'red',
       });
     } finally {
@@ -443,18 +540,42 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
 
   const handleSave = async () => {
     if (!profile || !profile.producer) return;
+    const normalizedCpf = normalizeCpf(profile.producer.cpf);
+    if (!isValidCpf(normalizedCpf)) {
+      notifications.show({
+        title: 'CPF inválido',
+        message: 'Informe um CPF valido na aba Perfil antes de salvar.',
+        color: 'red',
+      });
+      return;
+    }
 
     try {
       setSaving(true);
+      const nextContactEmail = String(
+        profile.producer.contact_email ||
+          profile.contact?.email ||
+          profile.email ||
+          userEmail ||
+          '',
+      )
+        .trim()
+        .toLowerCase();
       const next: UserProfileT = {
         ...profile,
+        producer: {
+          ...profile.producer,
+          cpf: normalizedCpf,
+          contact_email: nextContactEmail,
+          cargo_profissao: normalizeCargoProfissaoInput(
+            profile.producer.cargo_profissao,
+          ),
+        },
         name: profile.producer.nome_exibicao || profile.name,
-        company_name: profile.producer.razao_social || profile.company_name,
+        email: profile.email || userEmail || nextContactEmail || '',
+        company_name: profile.company_name,
         contact: {
-          email:
-            profile.producer.contact_email ||
-            profile.contact?.email ||
-            profile.email,
+          email: nextContactEmail,
           phone: profile.producer.contact_phone || profile.contact?.phone || '',
           address: buildAddress(profile.producer) || profile.contact?.address || '',
         },
@@ -470,7 +591,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
               next.producer?.contact_name ||
               next.producer?.nome_exibicao ||
               next.name ||
-              'Usuario',
+              'Usuário',
             email:
               next.producer?.contact_email ||
               next.contact?.email ||
@@ -488,7 +609,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
             title: 'Perfil salvo com alerta',
             message:
               err?.message ??
-              'Nao foi possivel sincronizar a pessoa de perfil no modulo Pessoas.',
+              'Não foi possível sincronizar a pessoa de perfil no modulo Pessoas.',
             color: 'yellow',
           });
         }
@@ -522,23 +643,15 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       let nextProfile: UserProfileT = { ...prev, producer: nextProducer };
 
       if (activeTab === 'identificacao') {
-        nextProducer.razao_social = '';
         nextProducer.nome_exibicao = '';
+        nextProducer.cargo_profissao = '';
+        nextProducer.cpf = '';
         nextProducer.website = '';
         nextProfile = {
           ...nextProfile,
           name: '',
-          company_name: '',
           logo_url: '',
         };
-      }
-
-      if (activeTab === 'dadosEmpresa') {
-        nextProducer.cpf = '';
-        nextProducer.cnpj = '';
-        nextProducer.ie = '';
-        nextProducer.im = '';
-        nextProducer.cnae = '';
       }
 
       if (activeTab === 'endereco') {
@@ -563,16 +676,6 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
         nextProducer.contact_extension = '';
       }
 
-      if (activeTab === 'nfe') {
-        nextProducer.nfe_process_version = '';
-        nextProducer.tax_regime = 'Regime Normal';
-        nextProducer.icms_rate = '';
-        nextProducer.city_code = '';
-        nextProducer.nfe_token = '';
-        nextProducer.nfe_series = '';
-        nextProducer.nfe_last_invoice = '';
-      }
-
       if (activeTab === 'observacoes') {
         nextProducer.notes = '';
       }
@@ -583,59 +686,72 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
 
   const profileContent = (
     <>
-      {!embedded ? (
-        <Text c="dimmed" size="sm" mb="sm">
-          <IconHome size={14} style={{ verticalAlign: 'text-bottom' }} /> DADOS DO PRODUTOR {'>>'} PRODUTOR RURAL {'>>'}
-        </Text>
-      ) : null}
-
-      <Card withBorder radius="md" p="md">
-        <Group justify="space-between" mb="sm">
-          <Text fw={700} size="xl">
-            Produtor Rural
-          </Text>
-          <Group gap="md">
-            <Avatar radius="md" size={56} src={profile.logo_url || undefined}>
-              <IconBuildingStore size={28} />
-            </Avatar>
-            <Avatar radius="xl" size={56} src={avatarDisplay.src || undefined}>
-              {avatarDisplay.emoji || <IconUser size={28} />}
-            </Avatar>
-          </Group>
-        </Group>
-
+      <Card withBorder radius="md" p="sm">
         <Tabs
           value={activeTab}
           onChange={(value) => setActiveTab((value as ProfileTab) ?? 'identificacao')}
           variant="outline"
         >
           <Tabs.List>
-            <Tabs.Tab value="identificacao">Identificacao da empresa</Tabs.Tab>
-            <Tabs.Tab value="dadosEmpresa">Dados da empresa</Tabs.Tab>
+            <Tabs.Tab value="identificacao">Perfil</Tabs.Tab>
             <Tabs.Tab value="endereco">Endereco</Tabs.Tab>
             <Tabs.Tab value="mapa">Localizacao no Mapa</Tabs.Tab>
             <Tabs.Tab value="contato">Dados de contato</Tabs.Tab>
-            <Tabs.Tab value="nfe">Configuracoes NFE</Tabs.Tab>
             <Tabs.Tab value="observacoes">Observacoes</Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel value="identificacao" pt="md">
-            <Card withBorder p="md">
-              <Stack gap="sm">
-                <RowField label="Razao social">
-                  <TextInput
-                    value={producer.razao_social}
-                    onChange={(event) =>
-                      setProducerField('razao_social', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
+          <Tabs.Panel value="identificacao" pt="xs">
+            <Card withBorder p="sm">
+              <Stack gap="xs">
                 <RowField label="Nome">
                   <TextInput
                     value={producer.nome_exibicao}
                     onChange={(event) =>
                       setProducerField('nome_exibicao', event.currentTarget.value)
                     }
+                  />
+                </RowField>
+                <RowField label="Cargo/Profissao">
+                  <TextInput
+                    value={producer.cargo_profissao}
+                    onChange={(event) =>
+                      setProducerField(
+                        'cargo_profissao',
+                        normalizeCargoProfissaoInput(event.currentTarget.value),
+                      )
+                    }
+                    placeholder="Ex.: Engenheiro Agronomo"
+                    maxLength={MAX_CARGO_PROFISSAO_CHARS}
+                    description={`${producer.cargo_profissao.length}/${MAX_CARGO_PROFISSAO_CHARS}`}
+                  />
+                </RowField>
+                <RowField label="Tipo de cadastro">
+                  <Select
+                    data={[
+                      { value: 'pf', label: 'Pessoa fisica' },
+                      { value: 'pj', label: 'Pessoa juridica' },
+                    ]}
+                    value={producerPersonType}
+                    onChange={(value) =>
+                      setProducerField('tipo_pessoa', value === 'pf' ? 'pf' : 'pj')
+                    }
+                  />
+                </RowField>
+                <RowField label="CPF">
+                  <TextInput
+                    value={formatCpf(producer.cpf)}
+                    onChange={(event) =>
+                      setProducerField('cpf', normalizeCpf(event.currentTarget.value))
+                    }
+                    placeholder="000.000.000-00"
+                    inputMode="numeric"
+                    maxLength={14}
+                  />
+                </RowField>
+                <RowField label="Email da conta">
+                  <TextInput
+                    value={resolvedAccountEmail}
+                    readOnly
                   />
                 </RowField>
                 <RowField label="Website">
@@ -648,28 +764,30 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
                   />
                 </RowField>
                 <RowField label="Logotipo">
-                  <Group align="center">
+                  <Group align="center" gap="sm" wrap="wrap">
                     <FileInput
                       placeholder="Escolher arquivo"
                       leftSection={<IconUpload size={14} />}
                       onChange={handleLogoFile}
                       accept="image/*"
                     />
-                    <TextInput
-                      w={420}
-                      value={profile.logo_url || ''}
-                      onChange={(event) =>
-                        setProfile((prev) =>
-                          prev
-                            ? { ...prev, logo_url: event.currentTarget.value }
-                            : prev,
-                        )
+                    <Button
+                      size="xs"
+                      color="red"
+                      variant="light"
+                      onClick={() =>
+                        setProfile((prev) => (prev ? { ...prev, logo_url: '' } : prev))
                       }
-                      placeholder="Ou informe URL do logotipo"
-                    />
+                      disabled={!profile.logo_url}
+                    >
+                      Remover logotipo
+                    </Button>
+                    <Text size="xs" c="dimmed">
+                      {profile.logo_url ? 'Logotipo carregado.' : 'Nenhum logotipo carregado.'}
+                    </Text>
                   </Group>
                 </RowField>
-                <RowField label="Avatar do usuario">
+                <RowField label="Avatar do usuário">
                   <Group align="center" gap="sm" wrap="wrap">
                     <Avatar radius="xl" size={42} src={avatarDisplay.src || undefined}>
                       {avatarDisplay.emoji || <IconUser size={20} />}
@@ -692,57 +810,9 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel value="dadosEmpresa" pt="md">
-            <Card withBorder p="md">
-              <Stack gap="sm">
-                <RowField label="CPF">
-                  <TextInput
-                    value={producer.cpf}
-                    onChange={(event) =>
-                      setProducerField('cpf', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
-                <RowField label="CNPJ">
-                  <TextInput
-                    value={producer.cnpj}
-                    onChange={(event) =>
-                      setProducerField('cnpj', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
-                <RowField label="IE">
-                  <TextInput
-                    value={producer.ie}
-                    onChange={(event) =>
-                      setProducerField('ie', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
-                <RowField label="IM">
-                  <TextInput
-                    value={producer.im}
-                    onChange={(event) =>
-                      setProducerField('im', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
-                <RowField label="CNAE">
-                  <TextInput
-                    value={producer.cnae}
-                    onChange={(event) =>
-                      setProducerField('cnae', event.currentTarget.value)
-                    }
-                    placeholder="Classificacao Nacional de Atividades Economicas"
-                  />
-                </RowField>
-              </Stack>
-            </Card>
-          </Tabs.Panel>
-
-          <Tabs.Panel value="endereco" pt="md">
-            <Card withBorder p="md">
-              <Stack gap="sm">
+          <Tabs.Panel value="endereco" pt="xs">
+            <Card withBorder p="sm">
+              <Stack gap="xs">
                 <Text c="red" fs="italic">
                   Digite o CEP e saia do campo para preenchimento automatico.
                 </Text>
@@ -756,7 +826,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
                     rightSection={loadingCep ? <Text size="xs">...</Text> : null}
                   />
                 </RowField>
-                <RowField label="Endereco">
+                <RowField label="Endereço">
                   <TextInput
                     value={producer.endereco}
                     onChange={(event) =>
@@ -764,7 +834,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
                     }
                   />
                 </RowField>
-                <RowField label="Numero">
+                <RowField label="Número">
                   <TextInput
                     value={producer.numero}
                     onChange={(event) =>
@@ -808,9 +878,9 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel value="mapa" pt="md">
-            <Card withBorder p="md">
-              <Stack gap="sm">
+          <Tabs.Panel value="mapa" pt="xs">
+            <Card withBorder p="sm">
+              <Stack gap="xs">
                 <RowField label="Latitude">
                   <TextInput
                     value={producer.latitude}
@@ -857,9 +927,9 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel value="contato" pt="md">
-            <Card withBorder p="md">
-              <Stack gap="sm">
+          <Tabs.Panel value="contato" pt="xs">
+            <Card withBorder p="sm">
+              <Stack gap="xs">
                 <RowField label="Contato">
                   <TextInput
                     value={producer.contact_name}
@@ -870,10 +940,27 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
                 </RowField>
                 <RowField label="Email">
                   <TextInput
-                    value={producer.contact_email}
-                    onChange={(event) =>
-                      setProducerField('contact_email', event.currentTarget.value)
-                    }
+                    value={resolvedContactEmail}
+                    onChange={(event) => {
+                      const nextEmail = String(event.currentTarget.value ?? '')
+                        .trim()
+                        .toLowerCase();
+                      setProfile((prev) => {
+                        if (!prev || !prev.producer) return prev;
+                        return {
+                          ...prev,
+                          email: prev.email || nextEmail,
+                          contact: {
+                            ...(prev.contact ?? {}),
+                            email: nextEmail,
+                          },
+                          producer: {
+                            ...prev.producer,
+                            contact_email: nextEmail,
+                          },
+                        };
+                      });
+                    }}
                   />
                 </RowField>
                 <RowField label="Telefone">
@@ -896,82 +983,9 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
             </Card>
           </Tabs.Panel>
 
-          <Tabs.Panel value="nfe" pt="md">
-            <Card withBorder p="md">
-              <Stack gap="sm">
-                <RowField label="Versao do processo de emissao">
-                  <Select
-                    data={[
-                      { value: '', label: 'Selecione' },
-                      { value: 'nfe4', label: 'NFe 4.00' },
-                      { value: 'nfe3', label: 'NFe 3.10' },
-                    ]}
-                    value={producer.nfe_process_version}
-                    onChange={(value) =>
-                      setProducerField('nfe_process_version', value ?? '')
-                    }
-                  />
-                </RowField>
-                <RowField label="Regime tributario">
-                  <Select
-                    data={[
-                      { value: 'Regime Normal', label: 'Regime Normal' },
-                      { value: 'Simples Nacional', label: 'Simples Nacional' },
-                      { value: 'MEI', label: 'MEI' },
-                    ]}
-                    value={producer.tax_regime}
-                    onChange={(value) =>
-                      setProducerField('tax_regime', value ?? 'Regime Normal')
-                    }
-                  />
-                </RowField>
-                <RowField label="Aliquota do ICMS">
-                  <TextInput
-                    value={producer.icms_rate}
-                    onChange={(event) =>
-                      setProducerField('icms_rate', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
-                <RowField label="Codigo do municipio">
-                  <TextInput
-                    value={producer.city_code}
-                    onChange={(event) =>
-                      setProducerField('city_code', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
-                <RowField label="Token">
-                  <TextInput
-                    value={producer.nfe_token}
-                    onChange={(event) =>
-                      setProducerField('nfe_token', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
-                <RowField label="Serie">
-                  <TextInput
-                    value={producer.nfe_series}
-                    onChange={(event) =>
-                      setProducerField('nfe_series', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
-                <RowField label="Numero da ultima NF emitida">
-                  <TextInput
-                    value={producer.nfe_last_invoice}
-                    onChange={(event) =>
-                      setProducerField('nfe_last_invoice', event.currentTarget.value)
-                    }
-                  />
-                </RowField>
-              </Stack>
-            </Card>
-          </Tabs.Panel>
-
-          <Tabs.Panel value="observacoes" pt="md">
-            <Card withBorder p="md">
-              <RowField label="Observacoes">
+          <Tabs.Panel value="observacoes" pt="xs">
+            <Card withBorder p="sm">
+              <RowField label="Observações">
                 <Textarea
                   minRows={8}
                   value={producer.notes}
@@ -1044,7 +1058,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
           </Stack>
         </Modal>
 
-        <Group mt="md">
+        <Group mt="xs">
           <Button onClick={handleSave} loading={saving}>
             Salvar
           </Button>
@@ -1060,7 +1074,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
 
   return (
     <Container size="xl" mt="xl">
-      <PageHeader title="Dados do Produtor" />
+      <PageHeader title="Dados do Usuário" />
       {profileContent}
     </Container>
   );

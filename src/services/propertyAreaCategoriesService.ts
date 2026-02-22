@@ -16,13 +16,13 @@ type AreaCategoriesStore = {
 };
 
 const DEFAULT_AREA_CATEGORIES: Array<Pick<PropertyAreaCategory, 'id' | 'name'>> = [
-  { id: 'talhoes', name: 'Talhoes' },
-  { id: 'preservacao', name: 'Areas de preservacao' },
+  { id: 'talhoes', name: 'Talhões' },
+  { id: 'preservacao', name: 'Áreas de preservação' },
   { id: 'estradas', name: 'Estradas' },
   { id: 'ruas', name: 'Ruas' },
-  { id: 'acudes', name: 'Acudes' },
+  { id: 'acudes', name: 'Açudes' },
   { id: 'benfeitorias', name: 'Benfeitorias' },
-  { id: 'servidao', name: 'Servidao' },
+  { id: 'servidao', name: 'Servidão' },
 ];
 
 function nowIso(): string {
@@ -168,7 +168,7 @@ export function renamePropertyAreaCategory(
   const store = readStore();
   const current = store.categories.find((row) => row.id === categoryId);
   if (!current) {
-    throw new Error('Categoria nao encontrada.');
+    throw new Error('Categoria não encontrada.');
   }
 
   const normalizedNeedle = normalizeText(normalizedName);
@@ -200,7 +200,7 @@ export function setPropertyAreaCategoryActive(
   const store = readStore();
   const current = store.categories.find((row) => row.id === categoryId);
   if (!current) {
-    throw new Error('Categoria nao encontrada.');
+    throw new Error('Categoria não encontrada.');
   }
   const updated: PropertyAreaCategory = {
     ...current,

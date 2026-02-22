@@ -72,6 +72,18 @@
   - React (`ErrorBoundary`)
   - carregamento lazy de rotas/componentes
 
+## Refatoracao de desempenho aplicada (2026-02-22)
+- `TalhaoDetailModal`:
+  - `GeoBackdropMap` carregado via lazy sob demanda (quando houver mapa real).
+  - `SoilClassificationWorkspace` carregado via lazy apenas ao abrir classificador.
+- `SoilClassificationWorkspace`:
+  - abas com `keepMounted=false` para evitar render de painel inativo.
+  - painel de relatorio com render isolado.
+- `FieldChecklist`:
+  - cache de perguntas com `useMemo` para evitar recriacao em cada render.
+- Componentes de relatorio:
+  - `RuleEngineReport`, `ConfidenceMeter` e `NextStepsPanel` com memoizacao.
+
 ## Regras de recompensa (fase atual)
 - Motor de regras em `src/services/creditsService.ts`:
   - `signup`: +10 (limite 1)
@@ -111,3 +123,28 @@
 - Evitar payload completo de formularios.
 - Mascarar dados sensiveis quando necessario.
 - Limitar retencao local/remota por politica definida.
+
+## Refatoracao de seguranca aplicada (2026-02-22)
+- Redacao central de dados sensiveis em observabilidade:
+  - arquivo: `src/services/securityRedaction.ts`
+  - mascara automaticamente token, email, cpf, cnpj e telefone.
+- Hardening de logs:
+  - `src/services/loggerService.ts` agora persiste `detalhes` redigidos.
+  - `src/services/loggerLocal.ts` redige payload antes de salvar/exportar.
+  - `src/services/AuditService.ts` redige `old_data/new_data`.
+- Hardening de captura de erros:
+  - `src/global-state/errorCatcher.ts`, `src/router/lazyWithBoundary.ts` e `src/components/errors/ErrorBoundary.tsx`
+  - evita dump cru de objetos de erro no console/log.
+
+## Refatoracao de manutencao de codigo aplicada (2026-02-22)
+- Reuso de persistencia local com limite:
+  - novo utilitario: `src/services/observabilityLocalStore.ts`
+  - centraliza append + corte de buffer local para logs e auditoria.
+- Regra de persistencia local consolidada:
+  - `src/services/observabilityConfig.ts` ganhou `shouldPersistLocalObservability`.
+  - remove duplicacao de condicao em `loggerService` e `AuditService`.
+- Padronizacao de sanitizacao de erro:
+  - `src/services/securityRedaction.ts` ganhou `sanitizeErrorMessage`.
+  - uso aplicado em `loggerService`, `loggerLocal` e `AuditService`.
+- Limpeza de codigo de roteamento lazy:
+  - `src/router/lazyWithBoundary.ts` remove `@ts-ignore` e evita duplicacao de fallback.

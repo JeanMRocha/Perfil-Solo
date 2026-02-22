@@ -68,6 +68,12 @@ export function shouldCaptureObservability(kind: ObservabilityKind): boolean {
   return shouldSample();
 }
 
+export function shouldPersistLocalObservability(
+  localDataMode = false,
+): boolean {
+  return isLocalObservabilityEnabled() || localDataMode || !isRemoteObservabilityEnabled();
+}
+
 export function shouldAutoDownloadLocalErrorLog(): boolean {
   return observabilityConfig.localAutoDownload;
 }

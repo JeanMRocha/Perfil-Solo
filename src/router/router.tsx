@@ -52,6 +52,9 @@ const KnowledgeHub = lazy(() => import('@views/Knowledge/KnowledgeHub'));
 const ThemePersonalization = lazy(
   () => import('@views/Config/ThemePersonalization'),
 );
+const RncCultivarSelector = lazy(
+  () => import('@views/Rnc/RncCultivarSelector'),
+);
 
 export const router = createBrowserRouter([
   {
@@ -82,7 +85,7 @@ export const router = createBrowserRouter([
       {
         path: 'user',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando central do usuario..." />}>
+          <Suspense fallback={<LoaderGlobal message="Carregando central do usuário..." />}>
             <UserCenter />
           </Suspense>
         ),
@@ -269,7 +272,7 @@ export const router = createBrowserRouter([
       {
         path: 'super/usuarios',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando gestao de usuarios..." />}>
+          <Suspense fallback={<LoaderGlobal message="Carregando gestao de usuários..." />}>
             <SuperModeGuard>
               <UserManagement />
             </SuperModeGuard>
@@ -314,7 +317,7 @@ export const router = createBrowserRouter([
           {
             index: true,
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando analises..." />}>
+              <Suspense fallback={<LoaderGlobal message="Carregando análises..." />}>
                 <DashboardAnaliseSolo />
               </Suspense>
             ),
@@ -375,5 +378,15 @@ export const router = createBrowserRouter([
         ),
       },
     ],
+  },
+  {
+    path: '/rnc/cultivares/selector',
+    element: (
+      <Suspense fallback={<LoaderGlobal message="Carregando seletor RNC..." />}>
+        <ProtectedPath redirectUrl="/auth">
+          <RncCultivarSelector />
+        </ProtectedPath>
+      </Suspense>
+    ),
   },
 ]);

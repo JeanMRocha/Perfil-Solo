@@ -41,12 +41,12 @@ const PALETTE_FIELDS: PaletteField[] = [
   { label: 'Texto padrao', section: 'typography', key: 'body' },
   { label: 'Botao principal fundo', section: 'actions', key: 'primaryButtonBackground' },
   { label: 'Botao principal texto', section: 'actions', key: 'primaryButtonText' },
-  { label: 'Credito comprado (anel)', section: 'credits', key: 'ringPurchased' },
-  { label: 'Credito promocional (anel)', section: 'credits', key: 'ringPromotional' },
-  { label: 'Credito consumido (anel)', section: 'credits', key: 'ringConsumed' },
-  { label: 'Credito comprado (texto)', section: 'credits', key: 'textPurchased' },
-  { label: 'Credito promocional (texto)', section: 'credits', key: 'textPromotional' },
-  { label: 'Credito consumido (texto)', section: 'credits', key: 'textConsumed' },
+  { label: 'Crédito comprado (anel)', section: 'credits', key: 'ringPurchased' },
+  { label: 'Crédito promocional (anel)', section: 'credits', key: 'ringPromotional' },
+  { label: 'Crédito consumido (anel)', section: 'credits', key: 'ringConsumed' },
+  { label: 'Crédito comprado (texto)', section: 'credits', key: 'textPurchased' },
+  { label: 'Crédito promocional (texto)', section: 'credits', key: 'textPromotional' },
+  { label: 'Crédito consumido (texto)', section: 'credits', key: 'textConsumed' },
 ];
 
 function getColorValue(palette: BrandPalette, section: SectionKey, key: string): string {

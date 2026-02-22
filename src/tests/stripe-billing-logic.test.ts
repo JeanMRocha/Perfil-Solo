@@ -36,7 +36,7 @@ describe('Stripe billing logic (edge shared)', () => {
     expect(typeof payload.updated_at).toBe('string');
   });
 
-  it('buildProfileSubscriptionUpdate força free quando assinatura nao esta ativa', () => {
+  it('buildProfileSubscriptionUpdate força free quando assinatura não esta ativa', () => {
     const payload = buildProfileSubscriptionUpdate({
       status: 'canceled',
       planId: 'enterprise',

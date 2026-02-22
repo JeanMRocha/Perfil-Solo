@@ -11,11 +11,19 @@ import type {
 } from '../../../services/creditsService';
 import type { InAppPurchaseReceipt } from '../../../services/inAppPurchasesService';
 import type { RegisteredUser } from '../../../services/usersRegistryService';
+import type { BillingPlanId } from '../../../modules/billing';
+import type {
+  BillingLedgerEntry,
+  BillingLedgerEntryType,
+  BillingStats,
+} from '../../../services/billingPlanService';
+import type { BillingCatalogConfig } from '../../../services/billingCatalogService';
 
 export type TransactionFlowFilter = 'all' | 'entry' | 'exit';
 export type UserBalanceFilter = 'all' | 'with_balance' | 'zero_balance';
 export type RequestStatusFilter = 'all' | CreditPurchaseRequest['status'];
 export type ReceiptTypeFilter = 'all' | InAppPurchaseReceipt['purchase_type'];
+export type BillingLedgerTypeFilter = 'all' | BillingLedgerEntryType;
 
 export interface UserRow {
   id: string;
@@ -117,4 +125,43 @@ export interface ReceiptsTabProps {
   onReceiptDateFromChange: (value: string) => void;
   onReceiptDateToChange: (value: string) => void;
   onClearReceiptFilters: () => void;
+}
+
+export interface MonetizationTabProps {
+  users: RegisteredUser[];
+  selectedUserId: string;
+  selectedPlanId: BillingPlanId;
+  topupReais: number | '';
+  stats: BillingStats;
+  rows: BillingLedgerEntry[];
+  userById: Map<string, { name: string; email: string }>;
+  userFilter: string;
+  typeFilter: BillingLedgerTypeFilter;
+  dateFrom: string;
+  dateTo: string;
+  onSelectedUserChange: (value: string) => void;
+  onSelectedPlanChange: (value: BillingPlanId) => void;
+  onTopupReaisChange: (value: number | '') => void;
+  onUserFilterChange: (value: string) => void;
+  onTypeFilterChange: (value: BillingLedgerTypeFilter) => void;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
+  onClearFilters: () => void;
+  onApplyPlan: () => void;
+  onGenerateInvoice: () => void;
+  onTopupCredits: () => void;
+  onRefund: (row: BillingLedgerEntry) => void;
+  catalogConfig: BillingCatalogConfig;
+  onCatalogPlanBasePriceChange: (planId: BillingPlanId, value: number | '') => void;
+  onCatalogFeatureChange: (
+    featureId: 'properties' | 'talhoes' | 'analises',
+    patch: {
+      included_free?: number | '';
+      included_premium?: number | '';
+      extra_unit_price_cents?: number | '';
+    },
+  ) => void;
+  onSaveCatalogConfig: () => void;
+  onResetCatalogConfig: () => void;
+  formatMoney: (cents: number) => string;
 }

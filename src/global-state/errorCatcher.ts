@@ -1,5 +1,6 @@
 import { registrarLogLocal } from '@services/loggerLocal';
 import { isObservabilityKindEnabled } from '@services/observabilityConfig';
+import { redactSensitiveData, sanitizeTextForLogs } from '@services/securityRedaction';
 
 /**
  * 🌍 Captura global de erros fora do ciclo do React.
@@ -14,11 +15,14 @@ export function initGlobalErrorCatcher() {
 
   window.addEventListener('error', (event) => {
     const err = event.error || new Error(event.message);
-    console.error('🔥 Erro global detectado:', err);
+    console.error(
+      '🔥 Erro global detectado:',
+      sanitizeTextForLogs(err?.message || event.message),
+    );
 
     registrarLogLocal({
       tipo: 'error',
-      mensagem: err.message || 'Erro global desconhecido',
+      mensagem: sanitizeTextForLogs(err.message || 'Erro global desconhecido'),
       origem: window.location.pathname,
       arquivo: 'global',
       stack: err.stack,
@@ -32,17 +36,20 @@ export function initGlobalErrorCatcher() {
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    console.error('⚠️ Rejeição não tratada:', event.reason);
+    const reasonText = sanitizeTextForLogs(
+      event.reason?.message || event.reason || 'Promise rejeitada sem tratamento',
+    );
+    console.error('⚠️ Rejeição não tratada:', reasonText);
 
     registrarLogLocal({
       tipo: 'error',
-      mensagem: event.reason?.message || 'Promise rejeitada sem tratamento',
+      mensagem: reasonText,
       origem: window.location.pathname,
       arquivo: 'global',
       stack: event.reason?.stack,
       detalhes: {
         tipo: 'unhandledrejection',
-        motivo: event.reason,
+        motivo: redactSensitiveData(event.reason),
       },
     });
   });

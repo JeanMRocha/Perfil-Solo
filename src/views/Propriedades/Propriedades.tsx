@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from '@nanostores/react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Badge,
   Button,
   Card,
-  ColorInput,
   Container,
   Divider,
   Grid,
   Group,
-  Modal,
-  NumberInput,
   Skeleton,
-  Stack,
   Table,
   Text,
   TextInput,
@@ -30,6 +27,11 @@ import PageHeader from '../../components/PageHeader';
 import PropertyFullModal, {
   type PropertyFullModalSubmitPayload,
 } from '../../components/Propriedades/PropertyFullModal';
+import {
+  exportPropertySnapshotToPdf,
+  openPropertyDeleteGuardModal,
+  openTalhaoDeleteGuardModal,
+} from '../../components/Propriedades/PropertyDeleteGuardModal';
 import TalhaoDetailModal from '../../components/Propriedades/TalhaoDetailModal';
 import { $currUser } from '../../global-state/user';
 import { isLocalDataMode } from '../../services/dataProvider';
@@ -42,27 +44,19 @@ import {
   fetchTalhoesByProperty,
   fetchTalhoesByProperties,
   updatePropertyForUser,
-  updateTalhaoForProperty,
 } from '../../services/propertyMapService';
+import { loadPropertyDeletionSnapshot } from '../../services/propertySnapshotService';
 import type { Property, Talhao } from '../../types/property';
 
 type PropertyRow = Property & { talhoesCount: number };
 type PropertyModalMode = 'create' | 'edit';
-type TalhaoModalMode = 'create' | 'edit';
 type AreaSummaryRow = {
   categoryId: string;
   categoryName: string;
   areaHa: number;
 };
 
-const DEFAULT_TALHAO_COLOR = '#81C784';
 const SKELETON_ROW_COUNT = 4;
-
-function asOptionalNumber(value: number | string | null): number | undefined {
-  if (value == null || value === '') return undefined;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : undefined;
-}
 
 function formatAreaHa(value: number): string {
   return value.toLocaleString('pt-BR', {
@@ -72,6 +66,8 @@ function formatAreaHa(value: number): string {
 }
 
 export default function Propriedades() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const user = useStore($currUser);
   const currentUserId = user?.id ?? (isLocalDataMode ? 'local-user' : null);
 
@@ -92,22 +88,14 @@ export default function Propriedades() {
   const [propertyModalMode, setPropertyModalMode] = useState<PropertyModalMode | null>(null);
   const [savingProperty, setSavingProperty] = useState(false);
 
-  const [talhaoModalMode, setTalhaoModalMode] = useState<TalhaoModalMode | null>(null);
-  const [talhaoDraft, setTalhaoDraft] = useState({
-    nome: '',
-    area_ha: '' as number | string,
-    tipo_solo: '',
-    color: DEFAULT_TALHAO_COLOR,
-  });
-  const [savingTalhao, setSavingTalhao] = useState(false);
   const [talhaoDetailOpened, setTalhaoDetailOpened] = useState(false);
 
-  const loadProperties = useCallback(async () => {
+  const loadProperties = useCallback(async (): Promise<PropertyRow[]> => {
     if (!currentUserId) {
       setPropertyRows([]);
       setSelectedPropertyId(null);
       setLoadingProperties(false);
-      return;
+      return [];
     }
 
     setLoadingProperties(true);
@@ -134,15 +122,17 @@ export default function Propriedades() {
         if (prev && withTalhoes.some((row) => row.id === prev)) return prev;
         return withTalhoes[0]?.id ?? null;
       });
+      return withTalhoes;
     } catch (err: any) {
       setPropertiesLoadError(
-        err?.message ?? 'Nao foi possivel carregar as propriedades.',
+        err?.message ?? 'Não foi possível carregar as propriedades.',
       );
       notifications.show({
         title: 'Falha ao carregar propriedades',
-        message: err?.message ?? 'Nao foi possivel carregar as propriedades.',
+        message: err?.message ?? 'Não foi possível carregar as propriedades.',
         color: 'red',
       });
+      return [];
     } finally {
       setLoadingProperties(false);
     }
@@ -167,11 +157,11 @@ export default function Propriedades() {
     } catch (err: any) {
       setTalhoes([]);
       setTalhoesLoadError(
-        err?.message ?? 'Nao foi possivel carregar os talhoes da propriedade.',
+        err?.message ?? 'Não foi possível carregar os talhões da propriedade.',
       );
       notifications.show({
-        title: 'Falha ao carregar talhoes',
-        message: err?.message ?? 'Nao foi possivel carregar os talhoes da propriedade.',
+        title: 'Falha ao carregar talhões',
+        message: err?.message ?? 'Não foi possível carregar os talhões da propriedade.',
         color: 'red',
       });
     } finally {
@@ -186,6 +176,69 @@ export default function Propriedades() {
   useEffect(() => {
     void loadTalhoes();
   }, [loadTalhoes]);
+
+  const clearRouteIntent = useCallback(() => {
+    navigate({ pathname: location.pathname, search: '' }, { replace: true });
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!location.search) return;
+
+    const params = new URLSearchParams(location.search);
+    const mode = String(params.get('mode') ?? '').trim().toLowerCase();
+    if (!mode) return;
+
+    if (mode === 'create') {
+      setPropertyModalMode('create');
+      clearRouteIntent();
+      return;
+    }
+
+    if (mode !== 'edit') {
+      clearRouteIntent();
+      return;
+    }
+
+    if (loadingProperties) return;
+
+    if (propertyRows.length === 0) {
+      setPropertyModalMode('create');
+      clearRouteIntent();
+      return;
+    }
+
+    const requestedPropertyId = String(params.get('propertyId') ?? '').trim();
+    const availablePropertyIds = new Set(propertyRows.map((row) => row.id));
+    let targetPropertyId: string | null = null;
+
+    if (requestedPropertyId && availablePropertyIds.has(requestedPropertyId)) {
+      targetPropertyId = requestedPropertyId;
+    } else if (selectedPropertyId && availablePropertyIds.has(selectedPropertyId)) {
+      targetPropertyId = selectedPropertyId;
+    } else {
+      targetPropertyId = propertyRows[0]?.id ?? null;
+    }
+
+    if (!targetPropertyId) {
+      setPropertyModalMode('create');
+      clearRouteIntent();
+      return;
+    }
+
+    if (selectedPropertyId !== targetPropertyId) {
+      setSelectedPropertyId(targetPropertyId);
+      return;
+    }
+
+    setPropertyModalMode('edit');
+    clearRouteIntent();
+  }, [
+    clearRouteIntent,
+    loadingProperties,
+    location.search,
+    propertyRows,
+    selectedPropertyId,
+  ]);
 
   const filteredProperties = useMemo(() => {
     const search = propertySearch.trim().toLowerCase();
@@ -247,7 +300,7 @@ export default function Propriedades() {
     if (selectedPropertyTalhoesArea > 0) {
       groups.set('talhoes', {
         categoryId: 'talhoes',
-        categoryName: 'Talhoes',
+        categoryName: 'Talhões',
         areaHa: selectedPropertyTalhoesArea,
       });
     }
@@ -262,7 +315,6 @@ export default function Propriedades() {
       selectedPropertyAreaSummary.reduce((sum, item) => sum + item.areaHa, 0),
     [selectedPropertyAreaSummary],
   );
-
   const openPropertyCreate = () => {
     setPropertyModalMode('create');
   };
@@ -279,18 +331,28 @@ export default function Propriedades() {
 
   const saveProperty = async (payload: PropertyFullModalSubmitPayload) => {
     if (!currentUserId) return;
+    const nome = payload.nome.trim();
+    if (!nome) {
+      notifications.show({
+        title: 'Nome obrigatorio',
+        message: 'Informe o nome da propriedade para salvar.',
+        color: 'yellow',
+      });
+      return;
+    }
 
     try {
       setSavingProperty(true);
       if (propertyModalMode === 'create') {
         const created = await createPropertyForUser(
           currentUserId,
-          payload.nome,
+          nome,
           payload.contact,
           payload.patch,
         );
         await loadProperties();
         setSelectedPropertyId(created.id);
+
         notifications.show({
           title: 'Propriedade criada',
           message: `${created.nome} cadastrada com sucesso.`,
@@ -299,7 +361,7 @@ export default function Propriedades() {
       } else if (propertyModalMode === 'edit' && selectedPropertyId) {
         const updated = await updatePropertyForUser(
           selectedPropertyId,
-          payload.nome,
+          nome,
           payload.contact,
           payload.patch,
         );
@@ -311,11 +373,13 @@ export default function Propriedades() {
           color: 'green',
         });
       }
-      setPropertyModalMode(null);
+      if (propertyModalMode === 'create') {
+        setPropertyModalMode(null);
+      }
     } catch (err: any) {
       notifications.show({
         title: 'Falha ao salvar propriedade',
-        message: err?.message ?? 'Nao foi possivel salvar a propriedade.',
+        message: err?.message ?? 'Não foi possível salvar a propriedade.',
         color: 'red',
       });
     } finally {
@@ -325,143 +389,104 @@ export default function Propriedades() {
 
   const removeProperty = async () => {
     if (!selectedPropertyId || !selectedProperty) return;
-    const confirmed = window.confirm(
-      `Excluir a propriedade "${selectedProperty.nome}"? Isso removera tambem talhoes e analises vinculadas.`,
-    );
-    if (!confirmed) return;
-
     try {
-      await deletePropertyForUser(selectedPropertyId);
-      await loadProperties();
-      notifications.show({
-        title: 'Propriedade excluida',
-        message: 'Propriedade removida com sucesso.',
-        color: 'green',
+      const property = selectedProperty;
+      const propertyId = selectedPropertyId;
+      const propertySnapshot = await loadPropertyDeletionSnapshot(property);
+
+      openPropertyDeleteGuardModal({
+        propertyName: property.nome,
+        talhoesCount: propertySnapshot.talhoes.length,
+        analysesCount: propertySnapshot.analyses.length,
+        onConfirm: async ({ exportPdf }) => {
+          try {
+            if (exportPdf) {
+              exportPropertySnapshotToPdf(propertySnapshot);
+            }
+
+            await deletePropertyForUser(propertyId);
+            await loadProperties();
+            notifications.show({
+              title: 'Propriedade excluida',
+              message: 'Propriedade removida com sucesso.',
+              color: 'green',
+            });
+            return true;
+          } catch (err: any) {
+            notifications.show({
+              title: 'Falha ao excluir propriedade',
+              message: err?.message ?? 'Não foi possível excluir a propriedade.',
+              color: 'red',
+            });
+            return false;
+          }
+        },
       });
     } catch (err: any) {
       notifications.show({
-        title: 'Falha ao excluir propriedade',
-        message: err?.message ?? 'Nao foi possivel excluir a propriedade.',
+        title: 'Falha ao preparar exclusao',
+        message: err?.message ?? 'Não foi possível carregar os dados da propriedade.',
         color: 'red',
       });
     }
   };
 
-  const openTalhaoCreate = () => {
+  const openTalhaoCreate = async () => {
     if (!selectedPropertyId) return;
-    setTalhaoModalMode('create');
-    setTalhaoDraft({
-      nome: '',
-      area_ha: '',
-      tipo_solo: '',
-      color: DEFAULT_TALHAO_COLOR,
-    });
+    try {
+      const defaultName = `Novo talhao ${talhoes.length + 1}`;
+      const created = await createTalhaoForProperty({
+        propertyId: selectedPropertyId,
+        nome: defaultName,
+      });
+      await loadTalhoes();
+      await loadProperties();
+      setSelectedTalhaoId(created.id);
+      setTalhaoDetailOpened(true);
+      notifications.show({
+        title: 'Talhão criado',
+        message: `${created.nome} criado. Complete os dados no detalhamento.`,
+        color: 'green',
+      });
+    } catch (err: any) {
+      notifications.show({
+        title: 'Falha ao criar talhão',
+        message: err?.message ?? 'Não foi possível iniciar o cadastro do talhão.',
+        color: 'red',
+      });
+    }
   };
 
   const openTalhaoEdit = () => {
     if (!selectedTalhao) return;
-    setTalhaoModalMode('edit');
-    setTalhaoDraft({
-      nome: selectedTalhao.nome,
-      area_ha:
-        selectedTalhao.area_ha == null ? '' : String(selectedTalhao.area_ha),
-      tipo_solo: selectedTalhao.tipo_solo ?? '',
-      color: selectedTalhao.cor_identificacao ?? DEFAULT_TALHAO_COLOR,
-    });
+    setTalhaoDetailOpened(true);
   };
 
-  const closeTalhaoModal = (force = false) => {
-    if (savingTalhao && !force) return;
-    setTalhaoModalMode(null);
-    setTalhaoDraft({
-      nome: '',
-      area_ha: '',
-      tipo_solo: '',
-      color: DEFAULT_TALHAO_COLOR,
-    });
-  };
-
-  const saveTalhao = async () => {
-    const nome = talhaoDraft.nome.trim();
-    if (!nome) {
-      notifications.show({
-        title: 'Nome obrigatorio',
-        message: 'Informe o nome do talhao.',
-        color: 'yellow',
-      });
-      return;
-    }
-    if (!selectedPropertyId) return;
-
-    try {
-      setSavingTalhao(true);
-      if (talhaoModalMode === 'create') {
-        const created = await createTalhaoForProperty({
-          propertyId: selectedPropertyId,
-          nome,
-          area_ha: asOptionalNumber(talhaoDraft.area_ha),
-          tipo_solo: talhaoDraft.tipo_solo.trim() || undefined,
-          color: talhaoDraft.color,
-        });
-        await loadTalhoes();
-        await loadProperties();
-        setSelectedTalhaoId(created.id);
-        notifications.show({
-          title: 'Talhao criado',
-          message: `${created.nome} cadastrado com sucesso.`,
-          color: 'green',
-        });
-      } else if (talhaoModalMode === 'edit' && selectedTalhaoId) {
-        const updated = await updateTalhaoForProperty({
-          talhaoId: selectedTalhaoId,
-          nome,
-          area_ha: asOptionalNumber(talhaoDraft.area_ha),
-          tipo_solo: talhaoDraft.tipo_solo.trim() || undefined,
-          color: talhaoDraft.color,
-        });
-        await loadTalhoes();
-        setSelectedTalhaoId(updated.id);
-        notifications.show({
-          title: 'Talhao atualizado',
-          message: `${updated.nome} atualizado com sucesso.`,
-          color: 'green',
-        });
-      }
-      closeTalhaoModal(true);
-    } catch (err: any) {
-      notifications.show({
-        title: 'Falha ao salvar talhao',
-        message: err?.message ?? 'Nao foi possivel salvar o talhao.',
-        color: 'red',
-      });
-    } finally {
-      setSavingTalhao(false);
-    }
-  };
-
-  const removeTalhao = async () => {
+  const removeTalhao = () => {
     if (!selectedTalhaoId || !selectedTalhao) return;
-    const confirmed = window.confirm(
-      `Excluir o talhao "${selectedTalhao.nome}"? Analises vinculadas ao talhao tambem serao removidas.`,
-    );
-    if (!confirmed) return;
-
-    try {
-      await deleteTalhaoForProperty(selectedTalhaoId);
-      await loadTalhoes();
-      await loadProperties();
-      notifications.show({
-        title: 'Talhao excluido',
-        message: 'Talhao removido com sucesso.',
-        color: 'green',
-      });
-    } catch (err: any) {
-      notifications.show({
-        title: 'Falha ao excluir talhao',
-        message: err?.message ?? 'Nao foi possivel excluir o talhao.',
-        color: 'red',
-      });
-    }
+    openTalhaoDeleteGuardModal({
+      talhaoName: selectedTalhao.nome,
+      onConfirm: async () => {
+        try {
+          await deleteTalhaoForProperty(selectedTalhaoId);
+          await loadTalhoes();
+          await loadProperties();
+          notifications.show({
+            title: 'Talhão excluido',
+            message: 'Talhão removido com sucesso.',
+            color: 'green',
+          });
+          return true;
+        } catch (err: any) {
+          notifications.show({
+            title: 'Falha ao excluir talhão',
+            message: err?.message ?? 'Não foi possível excluir o talhão.',
+            color: 'red',
+          });
+          return false;
+        }
+      },
+    });
   };
 
   const openTalhaoDetail = () => {
@@ -485,7 +510,7 @@ export default function Propriedades() {
 
   return (
     <Container size="xl" mt="md">
-      <PageHeader title="Propriedades e Talhoes" />
+      <PageHeader title="Propriedades e Talhões" />
       <Text c="dimmed" mb="md">
         Fluxo padrao: primeiro selecione na listagem, depois edite ou detalhe.
       </Text>
@@ -510,63 +535,11 @@ export default function Propriedades() {
           await loadProperties();
           setSelectedTalhaoId(talhaoId);
         }}
+        onDeleted={async () => {
+          await loadTalhoes();
+          await loadProperties();
+        }}
       />
-
-      <Modal
-        opened={talhaoModalMode !== null}
-        onClose={closeTalhaoModal}
-        title={talhaoModalMode === 'create' ? 'Cadastrar talhao' : 'Editar talhao'}
-        centered
-      >
-        <Stack>
-          <TextInput
-            label="Nome do talhao"
-            value={talhaoDraft.nome}
-            onChange={(event) => {
-              const nextValue = event.currentTarget?.value ?? '';
-              setTalhaoDraft((prev) => ({ ...prev, nome: nextValue }));
-            }}
-            data-autofocus
-          />
-          <NumberInput
-            label="Area (ha)"
-            value={talhaoDraft.area_ha}
-            min={0}
-            decimalScale={2}
-            onChange={(value) =>
-              setTalhaoDraft((prev) => ({ ...prev, area_ha: value == null ? '' : String(value) }))
-            }
-          />
-          <TextInput
-            label="Tipo de solo"
-            placeholder="Argiloso, medio, arenoso..."
-            value={talhaoDraft.tipo_solo}
-            onChange={(event) => {
-              const nextValue = event.currentTarget?.value ?? '';
-              setTalhaoDraft((prev) => ({
-                ...prev,
-                tipo_solo: nextValue,
-              }));
-            }}
-          />
-          <ColorInput
-            label="Cor de identificacao"
-            value={talhaoDraft.color}
-            onChange={(value) =>
-              setTalhaoDraft((prev) => ({ ...prev, color: value }))
-            }
-            format="hex"
-          />
-          <Group justify="flex-end">
-            <Button variant="light" color="gray" onClick={() => closeTalhaoModal()}>
-              Cancelar
-            </Button>
-            <Button onClick={saveTalhao} loading={savingTalhao}>
-              Salvar
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
 
       <Grid gutter="md">
         <Grid.Col span={{ base: 12, lg: 6 }}>
@@ -766,7 +739,7 @@ export default function Propriedades() {
             <Group mb="sm">
               <TextInput
                 leftSection={<IconSearch size={14} />}
-                placeholder="Buscar por nome do talhao"
+                placeholder="Buscar por nome do talhão"
                 value={talhaoSearch}
                 onChange={(event) => setTalhaoSearch(event.currentTarget?.value ?? '')}
                 style={{ flex: 1 }}

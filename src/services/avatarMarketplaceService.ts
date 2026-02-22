@@ -82,7 +82,7 @@ export function getRuralAvatarCatalog(): RuralAvatarIcon[] {
 
 export function getUserAvatarInventory(userId: string): UserAvatarInventory {
   const normalized = normalizeUserId(userId);
-  if (!normalized) throw new Error('Usuario invalido para avatar.');
+  if (!normalized) throw new Error('Usuário inválido para avatar.');
 
   const rows = readInventories();
   const idx = rows.findIndex((row) => row.user_id === normalized);
@@ -140,9 +140,9 @@ export function selectRuralAvatarIcon(
 ): UserAvatarInventory {
   const current = getUserAvatarInventory(userId);
   const normalizedIcon = String(iconId ?? '').trim();
-  if (!normalizedIcon) throw new Error('Icone invalido.');
+  if (!normalizedIcon) throw new Error('Ícone inválido.');
   if (!current.unlocked_icon_ids.includes(normalizedIcon)) {
-    throw new Error('Icone ainda nao desbloqueado.');
+    throw new Error('Ícone ainda não desbloqueado.');
   }
 
   const next: UserAvatarInventory = {
@@ -160,10 +160,10 @@ export function unlockRuralAvatarIcon(
 ): UserAvatarInventory {
   const current = getUserAvatarInventory(userId);
   const normalizedIcon = String(iconId ?? '').trim();
-  if (!normalizedIcon) throw new Error('Icone invalido.');
+  if (!normalizedIcon) throw new Error('Ícone inválido.');
 
   const icon = RURAL_AVATAR_CATALOG.find((row) => row.id === normalizedIcon);
-  if (!icon) throw new Error('Icone nao encontrado.');
+  if (!icon) throw new Error('Ícone não encontrado.');
   if (current.unlocked_icon_ids.includes(icon.id)) {
     return selectRuralAvatarIcon(userId, icon.id);
   }
@@ -187,7 +187,7 @@ export function unlockRuralAvatarIcon(
       credit_transaction_id: tx.id,
     });
     void createNotification(userId, {
-      title: 'Compra de icone confirmada',
+      title: 'Compra de ícone confirmada',
       message: `Compra concluida: ${icon.label}. Comprovante ${receipt.receipt_number}.`,
       level: 'success',
     }).catch(() => undefined);

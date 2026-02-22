@@ -79,7 +79,7 @@ export default function TwoFactorSecurityCard() {
       setEnabled(status.enabled);
       setConfirmedAt(status.confirmed_at);
       notifications.show({
-        title: 'Seguranca atualizada',
+        title: 'Segurança atualizada',
         message: status.enabled
           ? 'Fator de 2 etapas ativado.'
           : 'Fator de 2 etapas desativado.',
@@ -87,7 +87,7 @@ export default function TwoFactorSecurityCard() {
       });
     } catch (error: any) {
       notifications.show({
-        title: 'Nao foi possivel alterar',
+        title: 'Não foi possível alterar',
         message: String(error?.message ?? 'Falha ao atualizar 2 etapas.'),
         color: 'red',
       });
@@ -102,14 +102,14 @@ export default function TwoFactorSecurityCard() {
         reason: 'login',
       });
       notifications.show({
-        title: 'Codigo enviado',
+        title: 'Código enviado',
         message: `Use o codigo de teste: ${challenge.debug_code}`,
         color: 'blue',
       });
     } catch (error: any) {
       notifications.show({
-        title: 'Falha ao enviar codigo',
-        message: String(error?.message ?? 'Nao foi possivel enviar codigo.'),
+        title: 'Falha ao enviar código',
+        message: String(error?.message ?? 'Não foi possível enviar código.'),
         color: 'red',
       });
     } finally {
@@ -143,8 +143,8 @@ export default function TwoFactorSecurityCard() {
       });
     } catch (error: any) {
       notifications.show({
-        title: 'Codigo invalido',
-        message: String(error?.message ?? 'Nao foi possivel confirmar identidade.'),
+        title: 'Código inválido',
+        message: String(error?.message ?? 'Não foi possível confirmar identidade.'),
         color: 'red',
       });
     } finally {
@@ -153,12 +153,12 @@ export default function TwoFactorSecurityCard() {
   };
 
   return (
-    <Card withBorder radius="md" p="md" mb="md">
-      <Stack gap="sm">
-        <Group justify="space-between" align="center">
+    <Card withBorder radius="md" p="sm" mb="xs">
+      <Stack gap="xs">
+        <Group justify="space-between" align="start" wrap="wrap">
           <div>
-            <Title order={5}>Seguranca: fator de 2 etapas</Title>
-            <Text size="sm" c="dimmed">
+            <Title order={6}>Seguranca: fator de 2 etapas</Title>
+            <Text size="xs" c="dimmed">
               Por padrao fica desativado e so pode ser ativado apos confirmacao de identidade.
             </Text>
           </div>
@@ -171,7 +171,7 @@ export default function TwoFactorSecurityCard() {
         </Group>
 
         {confirmedAt ? (
-          <Text size="sm" c="dimmed">
+          <Text size="xs" c="dimmed">
             Identidade confirmada em: {confirmedLabel}
           </Text>
         ) : (
@@ -179,7 +179,7 @@ export default function TwoFactorSecurityCard() {
             <Text size="sm" c="yellow.7">
               Confirme identidade para habilitar o 2 etapas.
             </Text>
-            <Group align="end" wrap="wrap">
+            <Group align="end" wrap="wrap" gap="xs">
               <Button size="xs" variant="light" loading={sendingCode} onClick={() => void handleSendCode()}>
                 Enviar codigo
               </Button>
@@ -188,7 +188,7 @@ export default function TwoFactorSecurityCard() {
                 placeholder="000000"
                 value={code}
                 onChange={(event) => setCode(event.currentTarget.value)}
-                w={160}
+                w={140}
               />
               <Button size="xs" loading={verifyingCode} onClick={() => void handleConfirmIdentity()}>
                 Confirmar

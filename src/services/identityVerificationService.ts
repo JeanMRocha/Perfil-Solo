@@ -215,26 +215,26 @@ export function verifyIdentityChallengeCode(input: {
   const reason = input.reason;
 
   if (!email || !code) {
-    throw new Error('Email e codigo sao obrigatorios para verificacao.');
+    throw new Error('Email e código sao obrigatorios para verificacao.');
   }
 
   const rows = readChallenges();
   const index = rows.findIndex((row) => row.email === email && row.reason === reason);
   if (index < 0) {
-    throw new Error('Nao existe codigo pendente para este email.');
+    throw new Error('Não existe código pendente para este email.');
   }
 
   const target = rows[index];
   if (isExpired(target)) {
     removeChallenge(email, reason);
-    throw new Error('Codigo expirado. Solicite um novo codigo.');
+    throw new Error('Código expirado. Solicite um novo código.');
   }
 
   if (target.code !== code) {
     const nextAttempts = target.attempts + 1;
     if (nextAttempts >= MAX_ATTEMPTS) {
       removeChallenge(email, reason);
-      throw new Error('Limite de tentativas excedido. Solicite um novo codigo.');
+      throw new Error('Limite de tentativas excedido. Solicite um novo código.');
     }
 
     rows[index] = {
@@ -292,7 +292,7 @@ export function isTwoFactorEnabledForEmail(email: string): boolean {
 export function markTwoFactorActivationConfirmed(email: string): TwoFactorSecurityStatus {
   const normalized = normalizeEmail(email);
   if (!normalized) {
-    throw new Error('Email invalido para confirmar 2 etapas.');
+    throw new Error('Email inválido para confirmar 2 etapas.');
   }
 
   const rows = readTwoFactorSettings();
@@ -319,7 +319,7 @@ export function setTwoFactorEnabledForEmail(
 ): TwoFactorSecurityStatus {
   const normalized = normalizeEmail(email);
   if (!normalized) {
-    throw new Error('Email invalido para configurar 2 etapas.');
+    throw new Error('Email inválido para configurar 2 etapas.');
   }
 
   const rows = readTwoFactorSettings();

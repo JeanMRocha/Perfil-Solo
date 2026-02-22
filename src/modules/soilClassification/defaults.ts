@@ -1,0 +1,95 @@
+import type { SoilClassificationRequest } from '@services/soilClassificationContractService';
+
+export function createDefaultSoilClassificationRequest(): SoilClassificationRequest {
+  return {
+    meta: {
+      engine_version: '1.0',
+      source: 'manual',
+      lab_name: null,
+      lab_method_p: 'nao_informado',
+      units: {
+        cations: 'cmolc_dm3',
+        p: 'mg_dm3',
+        mo: 'percent',
+        texture: 'percent',
+      },
+      location: {
+        country: 'BR',
+        state: null,
+        municipality: null,
+        biome_hint: null,
+      },
+    },
+    lab_layers: [
+      {
+        top_cm: 0,
+        bottom_cm: 20,
+        texture: {
+          clay_pct: null,
+          sand_pct: null,
+          silt_pct: null,
+        },
+        chem: {
+          ph_h2o: null,
+          ph_kcl: null,
+          ca: null,
+          mg: null,
+          k: null,
+          na: null,
+          al: null,
+          h_al: null,
+          p: null,
+          om_pct: null,
+          c_org_pct: null,
+          ec_dS_m: null,
+        },
+      },
+      {
+        top_cm: 20,
+        bottom_cm: 60,
+        texture: {
+          clay_pct: null,
+          sand_pct: null,
+          silt_pct: null,
+        },
+        chem: {
+          ph_h2o: null,
+          ph_kcl: null,
+          ca: null,
+          mg: null,
+          k: null,
+          na: null,
+          al: null,
+          h_al: null,
+          p: null,
+          om_pct: null,
+          c_org_pct: null,
+          ec_dS_m: null,
+        },
+      },
+    ],
+    field: {
+      profile_depth_cm: null,
+      contact_rock_cm: null,
+      high_gravel_stoniness: 'unknown',
+      water_saturation: 'never',
+      gley_matrix: 'unknown',
+      mottles: 'unknown',
+      plinthite_or_petroplinthite: 'unknown',
+      petroplinthite_continuous: 'unknown',
+      seasonal_cracks: 'unknown',
+      slickensides: 'unknown',
+      eluvial_E_horizon: 'unknown',
+      dense_planic_layer_Bpl: 'unknown',
+      fluvial_stratification: 'unknown',
+      histic_thickness_cm: 0,
+      morph_diag: {
+        has_Bw: 'unknown',
+        has_Bt: 'unknown',
+        has_Bi: 'unknown',
+        has_Bn: 'unknown',
+        has_A_chernozemic: 'unknown',
+      },
+    },
+  };
+}

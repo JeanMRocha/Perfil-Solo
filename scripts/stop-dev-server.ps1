@@ -5,21 +5,36 @@ param(
 $ErrorActionPreference = "SilentlyContinue"
 $projectDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $projectToken = Split-Path -Leaf $projectDir
-$watchdogScript = "keep-dev-server.ps1"
+$watchdogScriptPath = (Resolve-Path (Join-Path $PSScriptRoot "keep-dev-server.ps1")).Path
 
 $watchdogs = Get-CimInstance Win32_Process |
   Where-Object {
     ($_.Name -eq "pwsh.exe" -or $_.Name -eq "powershell.exe") -and
-    $_.CommandLine -like "*$watchdogScript*"
+    $_.CommandLine -and
+    $_.CommandLine -like "*$watchdogScriptPath*"
   }
 
 foreach ($proc in $watchdogs) {
   Stop-Process -Id $proc.ProcessId -Force
 }
 
+$devLaunchers = Get-CimInstance Win32_Process |
+  Where-Object {
+    $_.Name -eq "cmd.exe" -and
+    $_.CommandLine -and
+    $_.CommandLine -like "*npm run dev*" -and
+    $_.CommandLine -like "*$projectToken*" -and
+    $_.CommandLine -like "*--port $Port*"
+  }
+
+foreach ($proc in $devLaunchers) {
+  Stop-Process -Id $proc.ProcessId -Force
+}
+
 $devNodes = Get-CimInstance Win32_Process |
   Where-Object {
     $_.Name -eq "node.exe" -and
+    $_.CommandLine -and
     $_.CommandLine -like "*vite*" -and
     $_.CommandLine -like "*$projectToken*" -and
     $_.CommandLine -like "*--port $Port*"

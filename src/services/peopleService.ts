@@ -235,7 +235,7 @@ export async function updatePerson(
 ): Promise<PersonRecord> {
   const rows = readAll();
   const index = findById(rows, personId);
-  if (index < 0) throw new Error('Pessoa nao encontrada.');
+  if (index < 0) throw new Error('Pessoa não encontrada.');
 
   const current = rows[index];
   const nextNameRaw =
@@ -278,7 +278,7 @@ export async function ensurePersonType(
   const normalizedType = normalizePersonType(type);
   const rows = readAll();
   const index = findById(rows, personId);
-  if (index < 0) throw new Error('Pessoa nao encontrada.');
+  if (index < 0) throw new Error('Pessoa não encontrada.');
 
   const current = rows[index];
   if (current.types.includes(normalizedType)) return current;
@@ -296,7 +296,7 @@ export async function removePersonType(
 ): Promise<PersonRecord | null> {
   const rows = readAll();
   const index = findById(rows, personId);
-  if (index < 0) throw new Error('Pessoa nao encontrada.');
+  if (index < 0) throw new Error('Pessoa não encontrada.');
 
   const current = rows[index];
   const normalizedType = normalizePersonType(type);
@@ -332,7 +332,7 @@ export async function upsertUserProfilePerson(input: {
 }): Promise<PersonRecord> {
   const normalizedUserId = normalizeText(input.userId);
   if (!normalizedUserId) {
-    throw new Error('Usuario invalido para sincronizar pessoa de perfil.');
+    throw new Error('Usuário inválido para sincronizar pessoa de perfil.');
   }
 
   const byType = await listPeopleByType(normalizedUserId, 'user_profile');
@@ -363,7 +363,7 @@ export async function upsertUserProfilePerson(input: {
 
   return createPerson({
     userId: normalizedUserId,
-    name: normalizeText(input.name) || 'Usuario',
+    name: normalizeText(input.name) || 'Usuário',
     types: ['user_profile'],
     contact,
   });

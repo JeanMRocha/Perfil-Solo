@@ -80,7 +80,7 @@ export default function ContactInfoModal({
   const emailError = useMemo(() => {
     const email = draft.email?.trim();
     if (!email) return null;
-    return /^\S+@\S+\.\S+$/.test(email) ? null : 'Email invalido.';
+    return /^\S+@\S+\.\S+$/.test(email) ? null : 'Email inválido.';
   }, [draft.email]);
 
   const saveDisabled = Boolean(emailError) || saving;
@@ -147,7 +147,7 @@ export default function ContactInfoModal({
         />
 
         <TextInput
-          label="URL/usuario da rede"
+          label="URL/usuário da rede"
           placeholder="https://instagram.com/empresa ou @empresa"
           value={draft.socialUrl}
           onChange={(event) =>
@@ -156,8 +156,8 @@ export default function ContactInfoModal({
         />
 
         <TextInput
-          label="Endereco"
-          placeholder="Rua, numero, bairro, cidade"
+          label="Endereço"
+          placeholder="Rua, número, bairro, cidade"
           value={draft.address}
           onChange={(event) =>
             setDraft((prev) => ({ ...prev, address: event.currentTarget.value }))

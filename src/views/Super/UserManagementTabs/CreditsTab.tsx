@@ -37,7 +37,7 @@ export default function CreditsTab({
             <>
               <Group grow align="end">
                 <NumberInput
-                  label="Valor da operacao"
+                  label="Valor da operação"
                   min={1}
                   value={operationAmount}
                   onChange={(value) => onOperationAmountChange(typeof value === 'number' ? value : '')}

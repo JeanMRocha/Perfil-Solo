@@ -13,6 +13,7 @@ export type GamificationEventType =
   | 'visit_dashboard'
   | 'visit_user_center'
   | 'profile_saved'
+  | 'property_created'
   | 'person_created'
   | 'analysis_created'
   | 'report_generated';
@@ -46,7 +47,7 @@ const DAILY_MISSION_POOL: MissionTemplate[] = [
   {
     id: 'user_center_visit',
     title: 'Central em dia',
-    description: 'Abra a Central do Usuario pelo menos 1 vez.',
+    description: 'Abra a Central do Usuário pelo menos 1 vez.',
     event_type: 'visit_user_center',
     target: 1,
     reward_xp: 10,
@@ -60,6 +61,14 @@ const DAILY_MISSION_POOL: MissionTemplate[] = [
     reward_xp: 22,
   },
   {
+    id: 'property_registry',
+    title: 'Primeira propriedade do dia',
+    description: 'Cadastre 1 propriedade para evoluir sua jornada.',
+    event_type: 'property_created',
+    target: 1,
+    reward_xp: 28,
+  },
+  {
     id: 'people_registry',
     title: 'Cadastro de pessoa',
     description: 'Cadastre pelo menos 1 pessoa no modulo Pessoas.',
@@ -68,6 +77,10 @@ const DAILY_MISSION_POOL: MissionTemplate[] = [
     reward_xp: 24,
   },
 ];
+
+const EVENT_BASE_XP: Partial<Record<GamificationEventType, number>> = {
+  property_created: 12,
+};
 
 export interface GamificationDailyMission {
   id: string;
@@ -216,6 +229,7 @@ function normalizeMission(raw: Partial<GamificationDailyMission>): GamificationD
     eventType !== 'visit_dashboard' &&
     eventType !== 'visit_user_center' &&
     eventType !== 'profile_saved' &&
+    eventType !== 'property_created' &&
     eventType !== 'person_created' &&
     eventType !== 'analysis_created' &&
     eventType !== 'report_generated'
@@ -275,6 +289,13 @@ function xpNeededForLevel(level: number): number {
   return 80 + (normalizedLevel - 1) * 40;
 }
 
+function resolveEventBaseXp(eventType: GamificationEventType): number {
+  const mapped = EVENT_BASE_XP[eventType] ?? 0;
+  const normalized = Math.round(Number(mapped));
+  if (!Number.isFinite(normalized)) return 0;
+  return Math.max(0, normalized);
+}
+
 function resolveLevelProgress(xpTotalInput: number): GamificationLevelProgress {
   const xpTotal = Math.max(0, Math.round(xpTotalInput));
   let level = 1;
@@ -309,6 +330,7 @@ function parseEventCounters(
     'visit_dashboard',
     'visit_user_center',
     'profile_saved',
+    'property_created',
     'person_created',
     'analysis_created',
     'report_generated',
@@ -505,7 +527,7 @@ async function notifyStreakMilestone(userId: string, streakDays: number): Promis
 export function getGamificationState(userId: string): GamificationState {
   const normalizedUserId = normalizeUserId(userId);
   if (!normalizedUserId) {
-    throw new Error('Usuario invalido para gamificacao.');
+    throw new Error('Usuário inválido para gamificacao.');
   }
 
   const allStates = readAllStates();
@@ -529,7 +551,7 @@ export async function trackGamificationEvent(
 ): Promise<TrackGamificationResult> {
   const normalizedUserId = normalizeUserId(userId);
   if (!normalizedUserId) {
-    throw new Error('Usuario invalido para gamificacao.');
+    throw new Error('Usuário inválido para gamificacao.');
   }
 
   const allStates = readAllStates();
@@ -553,6 +575,7 @@ export async function trackGamificationEvent(
   }
 
   const previousLevel = resolveLevelProgress(state.xp_total).level;
+  xpGained += resolveEventBaseXp(eventType);
   state.events_count[eventType] = (state.events_count[eventType] ?? 0) + 1;
   changed = true;
 

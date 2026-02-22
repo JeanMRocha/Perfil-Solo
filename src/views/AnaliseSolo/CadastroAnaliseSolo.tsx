@@ -23,7 +23,6 @@ import {
   Title,
   UnstyledButton,
 } from '@mantine/core';
-import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from '@nanostores/react';
@@ -36,6 +35,10 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import ContactInfoModal from '../../components/modals/ContactInfoModal';
+import {
+  exportPropertySnapshotToPdf,
+  openPropertyDeleteGuardModal,
+} from '../../components/Propriedades/PropertyDeleteGuardModal';
 import { analisesMock, AnaliseSolo } from '../../data/analisesMock';
 import { getSoilParams, summarizeRanges } from '../../services/soilParamsService';
 import { $currUser } from '../../global-state/user';
@@ -60,6 +63,7 @@ import {
   type LaboratoryRecord,
 } from '../../services/laboratoriesService';
 import { getSystemBrand } from '../../services/systemConfigService';
+import { loadPropertyDeletionSnapshot } from '../../services/propertySnapshotService';
 import type { Property, Talhao } from '../../types/property';
 import {
   getPrimaryEmail,
@@ -86,7 +90,7 @@ type InspectRow = {
 };
 
 const MODULE_OPTIONS: { value: ModuleKey; label: string }[] = [
-  { value: 'analise', label: 'Analise' },
+  { value: 'analise', label: 'Análise' },
   { value: 'calagem', label: 'Calagem' },
   { value: 'gessagem', label: 'Gessagem' },
   { value: 'adubacao', label: 'Adubacao' },
@@ -168,7 +172,7 @@ const DETAIL_LIBRARY: Record<
       why: 'Deficiencias pequenas podem causar perdas silenciosas relevantes.',
       steps: [
         'Validar se o laboratorio reportou todos os micros da rotina.',
-        'Mapear deficiencias com maior impacto no talhao.',
+        'Mapear deficiencias com maior impacto no talhão.',
         'Programar correcao gradativa e novo monitoramento.',
       ],
     },
@@ -180,7 +184,7 @@ const DETAIL_LIBRARY: Record<
       steps: [
         'Conferir V1 atual e V2 alvo adotado para a cultura.',
         'Validar dose final por PRNT real do corretivo.',
-        'Ajustar logistica de aplicacao por talhao.',
+        'Ajustar logistica de aplicacao por talhão.',
       ],
     },
     c2: {
@@ -208,7 +212,7 @@ const DETAIL_LIBRARY: Record<
       why: 'Gesso corrige limitacoes em profundidade e melhora raiz.',
       steps: [
         'Conferir NG e textura para definir viabilidade.',
-        'Cruzar com historico de chuva e resposta da area.',
+        'Cruzar com histórico de chuva e resposta da area.',
         'Programar aplicacao no melhor timing operacional.',
       ],
     },
@@ -227,13 +231,13 @@ const DETAIL_LIBRARY: Record<
       steps: [
         'Ler alertas do motor para restricoes de dose.',
         'Definir plano de monitoramento apos aplicacao.',
-        'Revalidar necessidade no proximo ciclo de analise.',
+        'Revalidar necessidade no próximo ciclo de análise.',
       ],
     },
   },
   adubacao: {
     d1: {
-      context: 'Resumo da recomendacao NPK por talhao.',
+      context: 'Resumo da recomendacao NPK por talhão.',
       why: 'NPK direciona retorno produtivo e previsibilidade de custo.',
       steps: [
         'Classificar nutriente prioritario para curto prazo.',
@@ -246,7 +250,7 @@ const DETAIL_LIBRARY: Record<
       why: 'Mostra racional tecnico e evita recomendacao de caixa-preta.',
       steps: [
         'Auditar ajustes aplicados por faixa ideal.',
-        'Comparar com historico da propriedade.',
+        'Comparar com histórico da propriedade.',
         'Registrar excecoes tecnicas no laudo final.',
       ],
     },
@@ -373,9 +377,9 @@ function formatDateTimeLabel(dateLike: string | null): string {
 }
 
 function formatLaboratorioLabel(value: unknown): string {
-  if (typeof value !== 'string') return 'Nao informado';
+  if (typeof value !== 'string') return 'Não informado';
   const normalized = value.trim();
-  return normalized.length > 0 ? normalized : 'Nao informado';
+  return normalized.length > 0 ? normalized : 'Não informado';
 }
 
 function formatCurrency(value: number): string {
@@ -616,8 +620,8 @@ export default function CadastroAnaliseSolo() {
       }
     } catch (err: any) {
       notifications.show({
-        title: 'Falha ao carregar historico',
-        message: err?.message ?? 'Nao foi possivel carregar o historico da area.',
+        title: 'Falha ao carregar histórico',
+        message: err?.message ?? 'Não foi possível carregar o histórico da area.',
         color: 'red',
       });
     } finally {
@@ -651,7 +655,7 @@ export default function CadastroAnaliseSolo() {
     } catch (err: any) {
       notifications.show({
         title: 'Falha ao carregar listagem',
-        message: err?.message ?? 'Nao foi possivel carregar as analises cadastradas.',
+        message: err?.message ?? 'Não foi possível carregar as análises cadastradas.',
         color: 'red',
       });
     } finally {
@@ -684,7 +688,7 @@ export default function CadastroAnaliseSolo() {
       } catch (err: any) {
         notifications.show({
           title: 'Falha ao carregar propriedades',
-          message: err?.message ?? 'Nao foi possivel carregar propriedades.',
+          message: err?.message ?? 'Não foi possível carregar propriedades.',
           color: 'red',
         });
       } finally {
@@ -716,8 +720,8 @@ export default function CadastroAnaliseSolo() {
         });
       } catch (err: any) {
         notifications.show({
-          title: 'Falha ao carregar talhoes',
-          message: err?.message ?? 'Nao foi possivel carregar os talhoes.',
+          title: 'Falha ao carregar talhões',
+          message: err?.message ?? 'Não foi possível carregar os talhões.',
           color: 'red',
         });
       } finally {
@@ -797,7 +801,7 @@ export default function CadastroAnaliseSolo() {
         if (!alive) return;
         notifications.show({
           title: 'Falha ao aplicar faixas',
-          message: 'Nao foi possivel carregar os parametros da cultura.',
+          message: 'Não foi possível carregar os parametros da cultura.',
           color: 'red',
         });
       }
@@ -889,7 +893,7 @@ export default function CadastroAnaliseSolo() {
             ? `Faixa ideal: ${ideal[0]} - ${ideal[1]} ${DEFAULT_UNITS[key] ?? ''}`
             : 'Sem faixa ideal configurada.',
           action: status === 'ok'
-            ? 'Manter manejo e acompanhar historico.'
+            ? 'Manter manejo e acompanhar histórico.'
             : status === 'critical'
               ? 'Priorizar correcao deste indicador no plano.'
               : 'Recalibrar dose e reavaliar em nova coleta.',
@@ -904,7 +908,7 @@ export default function CadastroAnaliseSolo() {
           label: 'Micronutrientes',
           value: 'Sem dados',
           status: 'info',
-          description: 'Nao ha dados dessa categoria nesta amostra.',
+          description: 'Não ha dados dessa categoria nesta amostra.',
           action: 'Solicitar inclusao desses parametros no laudo.',
         });
       }
@@ -1002,7 +1006,7 @@ export default function CadastroAnaliseSolo() {
             value: `${formatValue(ca, 2)} cmolc/dm3`,
             status: ca < 0.5 ? 'critical' : 'ok',
             description: 'Baixo Ca em profundidade indica resposta a gesso.',
-            action: 'Validar diagnostico com historico da area.',
+            action: 'Validar diagnostico com histórico da area.',
           },
           {
             id: 'g-argila',
@@ -1218,8 +1222,8 @@ export default function CadastroAnaliseSolo() {
   const openAnalysisDetailFromList = () => {
     if (!selectedAnalysisRow) {
       notifications.show({
-        title: 'Selecione uma analise',
-        message: 'Escolha uma analise da listagem para abrir o detalhamento.',
+        title: 'Selecione uma análise',
+        message: 'Escolha uma análise da listagem para abrir o detalhamento.',
         color: 'yellow',
       });
       return;
@@ -1275,7 +1279,7 @@ export default function CadastroAnaliseSolo() {
     if (!propertyModalMode || !currentUserId) return;
     if (propertyDraftError) {
       notifications.show({
-        title: 'Nome invalido',
+        title: 'Nome inválido',
         message: propertyDraftError,
         color: 'yellow',
       });
@@ -1319,7 +1323,7 @@ export default function CadastroAnaliseSolo() {
           propertyModalMode === 'create'
             ? 'Falha ao criar propriedade'
             : 'Falha ao editar propriedade',
-        message: err?.message ?? 'Nao foi possivel concluir a operacao.',
+        message: err?.message ?? 'Não foi possível concluir a operação.',
         color: 'red',
       });
     } finally {
@@ -1359,7 +1363,7 @@ export default function CadastroAnaliseSolo() {
     } catch (err: any) {
       notifications.show({
         title: 'Falha ao salvar contato',
-        message: err?.message ?? 'Nao foi possivel salvar o contato da propriedade.',
+        message: err?.message ?? 'Não foi possível salvar o contato da propriedade.',
         color: 'red',
       });
     } finally {
@@ -1370,44 +1374,54 @@ export default function CadastroAnaliseSolo() {
   const handleDeleteProperty = () => {
     if (!selectedPropertyId || !selectedProperty || !currentUserId) return;
 
-    modals.openConfirmModal({
-      title: 'Excluir propriedade',
-      centered: true,
-      labels: { confirm: 'Excluir agora', cancel: 'Cancelar' },
-      confirmProps: { color: 'red' },
-      children: (
-        <Stack gap={6}>
-          <Text size="sm">
-            A propriedade <b>{selectedProperty.nome}</b> sera removida com os talhoes e analises vinculados.
-          </Text>
-          <Text size="xs" c="dimmed">
-            Talhoes detectados atualmente: {talhoes.length}
-          </Text>
-        </Stack>
-      ),
-      onConfirm: async () => {
-        try {
-          setLoadingLinks(true);
-          await deletePropertyForUser(selectedPropertyId);
-          const loaded = await fetchOrCreateUserProperties(currentUserId);
-          setProperties(loaded);
-          setSelectedPropertyId(loaded[0]?.id ?? null);
-          notifications.show({
-            title: 'Propriedade excluida',
-            message: 'A propriedade e os dados vinculados foram removidos.',
-            color: 'green',
-          });
-        } catch (err: any) {
-          notifications.show({
-            title: 'Falha ao excluir propriedade',
-            message: err?.message ?? 'Nao foi possivel excluir a propriedade.',
-            color: 'red',
-          });
-        } finally {
-          setLoadingLinks(false);
-        }
-      },
-    });
+    const property = selectedProperty;
+    const propertyId = selectedPropertyId;
+
+    void (async () => {
+      try {
+        const propertySnapshot = await loadPropertyDeletionSnapshot(property);
+
+        openPropertyDeleteGuardModal({
+          propertyName: property.nome,
+          talhoesCount: propertySnapshot.talhoes.length,
+          analysesCount: propertySnapshot.analyses.length,
+          onConfirm: async ({ exportPdf }) => {
+            try {
+              setLoadingLinks(true);
+              if (exportPdf) {
+                exportPropertySnapshotToPdf(propertySnapshot);
+              }
+
+              await deletePropertyForUser(propertyId);
+              const loaded = await fetchOrCreateUserProperties(currentUserId);
+              setProperties(loaded);
+              setSelectedPropertyId(loaded[0]?.id ?? null);
+              notifications.show({
+                title: 'Propriedade excluida',
+                message: 'A propriedade e os dados vinculados foram removidos.',
+                color: 'green',
+              });
+              return true;
+            } catch (err: any) {
+              notifications.show({
+                title: 'Falha ao excluir propriedade',
+                message: err?.message ?? 'Não foi possível excluir a propriedade.',
+                color: 'red',
+              });
+              return false;
+            } finally {
+              setLoadingLinks(false);
+            }
+          },
+        });
+      } catch (err: any) {
+        notifications.show({
+          title: 'Falha ao preparar exclusao',
+          message: err?.message ?? 'Não foi possível carregar os dados da propriedade.',
+          color: 'red',
+        });
+      }
+    })();
   };
 
   const saveLinkedAnalysis = async () => {
@@ -1415,7 +1429,7 @@ export default function CadastroAnaliseSolo() {
     if (!selectedPropertyId || !selectedTalhaoId) {
       notifications.show({
         title: 'Vinculo incompleto',
-        message: 'Selecione propriedade e talhao antes de salvar.',
+        message: 'Selecione propriedade e talhão antes de salvar.',
         color: 'yellow',
       });
       return;
@@ -1480,14 +1494,14 @@ export default function CadastroAnaliseSolo() {
       await refreshHistory();
       await refreshAnalysisList();
       notifications.show({
-        title: 'Analise salva',
-        message: 'Analise vinculada ao talhao com sucesso.',
+        title: 'Análise salva',
+        message: 'Análise vinculada ao talhão com sucesso.',
         color: 'green',
       });
     } catch (err: any) {
       notifications.show({
-        title: 'Falha ao salvar analise',
-        message: err?.message ?? 'Nao foi possivel salvar a analise.',
+        title: 'Falha ao salvar análise',
+        message: err?.message ?? 'Não foi possível salvar a análise.',
         color: 'red',
       });
     } finally {
@@ -1601,7 +1615,7 @@ export default function CadastroAnaliseSolo() {
 
             <Grid.Col span={{ base: 12, md: 3 }}>
               <Select
-                label="Talhao"
+                label="Talhão"
                 value={selectedTalhaoId}
                 data={talhaoOptions}
                 onChange={(value) => {
@@ -1842,7 +1856,7 @@ export default function CadastroAnaliseSolo() {
               onChange={setSelectedOrderLabId}
               searchable
               clearable
-              nothingFoundMessage="Cadastre laboratorios em Configuracoes > Laboratorios"
+              nothingFoundMessage="Cadastre laboratorios em Configurações > Laboratorios"
             />
             <NumberInput
               label="Quantidade de amostras"
@@ -1939,7 +1953,7 @@ export default function CadastroAnaliseSolo() {
         </Group>
 
         <Text c="rgba(255,255,255,0.85)" fw={600} size="sm" mt={8}>
-          Propriedade: {selectedProperty?.nome ?? 'nao selecionada'} | Talhao: {selectedTalhao?.nome ?? 'nao selecionado'}
+          Propriedade: {selectedProperty?.nome ?? 'não selecionada'} | Talhao: {selectedTalhao?.nome ?? 'não selecionado'}
         </Text>
       </Card>
 
@@ -2177,7 +2191,7 @@ export default function CadastroAnaliseSolo() {
                             hideControls
                             size="xs"
                             w={110}
-                            styles={{ input: { backgroundColor: '#fff' } }}
+                            styles={{ input: { backgroundColor: '#eaf2ec' } }}
                           />
                         ) : (
                           <Badge color={statusColor(row.status)} variant="light" size="lg">

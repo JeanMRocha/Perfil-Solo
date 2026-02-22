@@ -1,13 +1,19 @@
 import { isLocalDataMode } from '@services/dataProvider';
 import { supabaseClient } from '@sb/supabaseClient';
-import { storageReadJson, storageWriteJson } from './safeLocalStorage';
+import { appendBoundedLocalJsonList } from './observabilityLocalStore';
 import {
-  isLocalObservabilityEnabled,
-  isRemoteObservabilityEnabled,
+  redactSensitiveData,
+  sanitizeErrorMessage,
+  sanitizeTextForLogs,
+} from './securityRedaction';
+import {
   shouldCaptureObservability,
+  shouldPersistLocalObservability,
+  isRemoteObservabilityEnabled,
 } from './observabilityConfig';
 
 const LOCAL_LOG_KEY = 'perfilsolo_local_logs';
+const MAX_LOCAL_LOGS = 500;
 
 export interface LogEvento {
   tipo: 'error' | 'warning' | 'info';
@@ -17,25 +23,15 @@ export interface LogEvento {
   detalhes?: Record<string, any>;
 }
 
-function appendLocalLog(entry: Record<string, any>) {
-  try {
-    const parsed = storageReadJson<Record<string, any>[]>(LOCAL_LOG_KEY, []);
-    parsed.push(entry);
-    storageWriteJson(LOCAL_LOG_KEY, parsed.slice(-500));
-  } catch {
-    // Mantem fluxo principal sem quebrar em caso de localStorage indisponivel.
-  }
-}
-
 export async function registrarLog(evento: LogEvento) {
   if (!shouldCaptureObservability('event')) return;
 
   const data = {
     tipo: evento.tipo,
-    mensagem: evento.mensagem,
-    origem: evento.origem || window.location.pathname,
+    mensagem: sanitizeTextForLogs(evento.mensagem),
+    origem: sanitizeTextForLogs(evento.origem || window.location.pathname),
     usuario_id: evento.usuario_id || null,
-    detalhes: evento.detalhes || {},
+    detalhes: redactSensitiveData(evento.detalhes || {}),
     timestamp: new Date().toISOString(),
   };
 
@@ -43,20 +39,25 @@ export async function registrarLog(evento: LogEvento) {
   console.table(data);
   console.groupEnd();
 
-  const shouldPersistLocal =
-    isLocalObservabilityEnabled() || isLocalDataMode || !isRemoteObservabilityEnabled();
+  const shouldPersistLocal = shouldPersistLocalObservability(isLocalDataMode);
 
   if (shouldPersistLocal) {
-    appendLocalLog(data);
+    appendBoundedLocalJsonList(LOCAL_LOG_KEY, data, MAX_LOCAL_LOGS);
     if (!isRemoteObservabilityEnabled()) return;
   }
 
   try {
     const { error } = await supabaseClient.from('logs_sistema').insert([data]);
     if (error) {
-      console.warn('Falha ao enviar log para o Supabase:', error.message);
+      console.warn(
+        'Falha ao enviar log para o Supabase:',
+        sanitizeErrorMessage(error),
+      );
     }
   } catch (err) {
-    console.error('Erro interno no loggerService:', err);
+    console.error(
+      'Erro interno no loggerService:',
+      sanitizeErrorMessage(err),
+    );
   }
 }

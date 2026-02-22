@@ -46,14 +46,14 @@ const TEMP_PROGRESS_NOTIFICATIONS: TemporaryNotificationTemplate[] = [
   {
     title: 'Missao em progresso: propriedades',
     message:
-      'Definir mapa de propriedades e talhoes como base de jogo. Esta missao e temporaria e pode mudar por fase.',
+      'Definir mapa de propriedades e talhões como base de jogo. Esta missao e temporaria e pode mudar por fase.',
     level: 'info',
     expires_in_days: 30,
   },
   {
-    title: 'Missao em progresso: analises',
+    title: 'Missao em progresso: análises',
     message:
-      'Conectar o fluxo de analises ao novo painel gamificado. Notificacao temporaria para acompanhamento da fase.',
+      'Conectar o fluxo de análises ao novo painel gamificado. Notificacao temporaria para acompanhamento da fase.',
     level: 'info',
     expires_in_days: 30,
   },
@@ -206,7 +206,7 @@ export async function createNotification(
 ): Promise<AppNotification> {
   const normalizedUserId = cleanText(userId, 120, '');
   if (!normalizedUserId) {
-    throw new Error('Usuario invalido para notificacao.');
+    throw new Error('Usuário inválido para notificacao.');
   }
 
   const rows = readRows(normalizedUserId);

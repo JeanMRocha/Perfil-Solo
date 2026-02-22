@@ -166,7 +166,7 @@ export default function PessoasHub({
     const name = draftName.trim();
     if (name.length < 3) {
       notifications.show({
-        title: 'Nome invalido',
+        title: 'Nome inválido',
         message: 'Use pelo menos 3 caracteres para o nome da pessoa.',
         color: 'yellow',
       });
@@ -217,7 +217,7 @@ export default function PessoasHub({
     } catch (err: any) {
       notifications.show({
         title: 'Falha ao salvar pessoa',
-        message: err?.message ?? 'Nao foi possivel salvar pessoa.',
+        message: err?.message ?? 'Não foi possível salvar pessoa.',
         color: 'red',
       });
     } finally {
@@ -241,7 +241,7 @@ export default function PessoasHub({
     } catch (err: any) {
       notifications.show({
         title: 'Falha ao excluir pessoa',
-        message: err?.message ?? 'Nao foi possivel excluir pessoa.',
+        message: err?.message ?? 'Não foi possível excluir pessoa.',
         color: 'red',
       });
     }
@@ -264,7 +264,7 @@ export default function PessoasHub({
     } catch (err: any) {
       notifications.show({
         title: 'Falha ao salvar contato',
-        message: err?.message ?? 'Nao foi possivel salvar contato.',
+        message: err?.message ?? 'Não foi possível salvar contato.',
         color: 'red',
       });
     } finally {

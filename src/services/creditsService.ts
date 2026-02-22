@@ -7,6 +7,7 @@ import {
   createNotification,
   type AppNotificationLevel,
 } from './notificationsService';
+import { convertMoneyCentsToCredits } from '../modules/billing';
 import { storageGetRaw, storageWriteJson } from './safeLocalStorage';
 
 export type CreditTransactionType =
@@ -14,10 +15,14 @@ export type CreditTransactionType =
   | 'admin_grant'
   | 'admin_remove'
   | 'icon_purchase'
+  | 'store_purchase'
+  | 'referral_reward'
   | 'refund'
   | 'purchase_approved'
   | 'ad_reward'
-  | 'engagement_reward';
+  | 'engagement_reward'
+  | 'money_conversion'
+  | 'billing_refund_adjustment';
 
 export interface CreditWallet {
   user_id: string;
@@ -208,7 +213,7 @@ const DEFAULT_ENGAGEMENT_RULES: Record<CreditEngagementRuleId, CreditEngagementR
   signup: {
     id: 'signup',
     label: 'Cadastro da conta',
-    description: 'Primeiro cadastro validado do usuario.',
+    description: 'Primeiro cadastro validado do usuário.',
     credits: 10,
     max_claims_per_user: 1,
     enabled: true,
@@ -223,8 +228,8 @@ const DEFAULT_ENGAGEMENT_RULES: Record<CreditEngagementRuleId, CreditEngagementR
   },
   profile_address: {
     id: 'profile_address',
-    label: 'Endereco preenchido',
-    description: 'Perfil com endereco principal completo.',
+    label: 'Endereço preenchido',
+    description: 'Perfil com endereço principal completo.',
     credits: 10,
     max_claims_per_user: 1,
     enabled: true,
@@ -239,8 +244,8 @@ const DEFAULT_ENGAGEMENT_RULES: Record<CreditEngagementRuleId, CreditEngagementR
   },
   talhao_created: {
     id: 'talhao_created',
-    label: 'Talhao cadastrado',
-    description: 'Recompensa por cada talhao criado.',
+    label: 'Talhão cadastrado',
+    description: 'Recompensa por cada talhão criado.',
     credits: 2,
     max_claims_per_user: 100,
     enabled: true,
@@ -249,25 +254,25 @@ const DEFAULT_ENGAGEMENT_RULES: Record<CreditEngagementRuleId, CreditEngagementR
 
 export const CREDIT_PACKAGES: CreditPackage[] = [
   {
-    id: 'pack_50',
-    label: 'Pacote 50',
-    credits: 50,
-    price_cents: 1900,
-    price_label: 'R$ 19,00',
+    id: 'pack_40',
+    label: 'Pacote 40',
+    credits: convertMoneyCentsToCredits(2000),
+    price_cents: 2000,
+    price_label: 'R$ 20,00',
   },
   {
-    id: 'pack_120',
-    label: 'Pacote 120',
-    credits: 120,
-    price_cents: 3900,
-    price_label: 'R$ 39,00',
+    id: 'pack_100',
+    label: 'Pacote 100',
+    credits: convertMoneyCentsToCredits(5000),
+    price_cents: 5000,
+    price_label: 'R$ 50,00',
   },
   {
-    id: 'pack_300',
-    label: 'Pacote 300',
-    credits: 300,
-    price_cents: 8900,
-    price_label: 'R$ 89,00',
+    id: 'pack_240',
+    label: 'Pacote 240',
+    credits: convertMoneyCentsToCredits(12000),
+    price_cents: 12000,
+    price_label: 'R$ 120,00',
   },
 ];
 
@@ -345,7 +350,7 @@ function dispatchCreditsUpdated(userId?: string): void {
 function persistJsonOrThrow<T>(key: string, value: T): void {
   const saved = storageWriteJson(key, value);
   if (!saved) {
-    throw new Error('Falha ao persistir dados locais de creditos.');
+    throw new Error('Falha ao persistir dados locais de créditos.');
   }
 }
 function readWallets(): CreditWallet[] {
@@ -688,7 +693,7 @@ function findWalletIndex(rows: CreditWallet[], userId: string): number {
 
 function ensureWallet(userId: string): CreditWallet {
   const normalized = normalizeUserId(userId);
-  if (!normalized) throw new Error('Usuario invalido.');
+  if (!normalized) throw new Error('Usuário inválido.');
 
   const wallets = readWallets();
   const idx = findWalletIndex(wallets, normalized);
@@ -712,11 +717,11 @@ function applyDelta(
   options?: { created_by?: string; reference_id?: string },
 ): CreditTransaction {
   const normalizedUserId = normalizeUserId(userId);
-  if (!normalizedUserId) throw new Error('Usuario invalido.');
+  if (!normalizedUserId) throw new Error('Usuário inválido.');
 
   const amount = Math.round(parseNumber(delta));
   if (!Number.isFinite(amount) || amount === 0) {
-    throw new Error('Delta de credito invalido.');
+    throw new Error('Delta de crédito inválido.');
   }
 
   const wallets = readWallets();
@@ -732,7 +737,7 @@ function applyDelta(
 
   const nextBalance = current.balance + amount;
   if (nextBalance < 0) {
-    throw new Error('Creditos insuficientes.');
+    throw new Error('Créditos insuficientes.');
   }
 
   const nextWallet: CreditWallet = {
@@ -777,7 +782,7 @@ function buildCreditNotificationPayload(
 ): { title: string; message: string; level: AppNotificationLevel } | null {
   if (tx.type === 'admin_grant') {
     return {
-      title: 'Creditos adicionados',
+      title: 'Créditos adicionados',
       message: `Voce recebeu ${Math.abs(tx.amount)} ${creditUnitLabel(
         tx.amount,
       )}. Saldo atual: ${tx.balance_after}. Motivo: ${tx.description}.`,
@@ -787,7 +792,7 @@ function buildCreditNotificationPayload(
 
   if (tx.type === 'admin_remove') {
     return {
-      title: 'Creditos removidos',
+      title: 'Créditos removidos',
       message: `Foram removidos ${Math.abs(tx.amount)} ${creditUnitLabel(
         tx.amount,
       )}. Saldo atual: ${tx.balance_after}. Motivo: ${tx.description}.`,
@@ -797,7 +802,7 @@ function buildCreditNotificationPayload(
 
   if (tx.type === 'refund') {
     return {
-      title: 'Ressarcimento de creditos',
+      title: 'Ressarcimento de créditos',
       message: `Voce recebeu ${Math.abs(tx.amount)} ${creditUnitLabel(
         tx.amount,
       )} de ressarcimento. Saldo atual: ${tx.balance_after}.`,
@@ -807,7 +812,7 @@ function buildCreditNotificationPayload(
 
   if (tx.type === 'purchase_approved') {
     return {
-      title: 'Compra de creditos aprovada',
+      title: 'Compra de créditos aprovada',
       message: `Compra aprovada com ${Math.abs(tx.amount)} ${creditUnitLabel(
         tx.amount,
       )} adicionados. Saldo atual: ${tx.balance_after}.`,
@@ -822,6 +827,46 @@ function buildCreditNotificationPayload(
         tx.amount,
       )}. Saldo atual: ${tx.balance_after}. ${tx.description}.`,
       level: 'success',
+    };
+  }
+
+  if (tx.type === 'referral_reward') {
+    return {
+      title: 'Bonus de indicacao',
+      message: `Voce recebeu ${Math.abs(tx.amount)} ${creditUnitLabel(
+        tx.amount,
+      )}. Saldo atual: ${tx.balance_after}.`,
+      level: 'success',
+    };
+  }
+
+  if (tx.type === 'store_purchase') {
+    return {
+      title: 'Compra na loja interna',
+      message: `Foram consumidos ${Math.abs(tx.amount)} ${creditUnitLabel(
+        tx.amount,
+      )}. Saldo atual: ${tx.balance_after}.`,
+      level: 'info',
+    };
+  }
+
+  if (tx.type === 'money_conversion') {
+    return {
+      title: 'Créditos comprados',
+      message: `Conversao financeira concluida com ${Math.abs(tx.amount)} ${creditUnitLabel(
+        tx.amount,
+      )}. Saldo atual: ${tx.balance_after}.`,
+      level: 'success',
+    };
+  }
+
+  if (tx.type === 'billing_refund_adjustment') {
+    return {
+      title: 'Ajuste por estorno',
+      message: `Foram removidos ${Math.abs(tx.amount)} ${creditUnitLabel(
+        tx.amount,
+      )} devido a estorno financeiro. Saldo atual: ${tx.balance_after}.`,
+      level: 'warning',
     };
   }
 
@@ -864,7 +909,7 @@ function getPackagePriceById(packageId: string): number {
 function increaseCouponRedemptionCount(couponId: string): CreditCoupon {
   const rows = readCoupons();
   const idx = rows.findIndex((row) => row.id === couponId);
-  if (idx < 0) throw new Error('Cupom nao encontrado.');
+  if (idx < 0) throw new Error('Cupom não encontrado.');
   const next: CreditCoupon = {
     ...rows[idx],
     redeemed_count: rows[idx].redeemed_count + 1,
@@ -947,7 +992,7 @@ export function ensureInitialCreditsForUser(userId: string): void {
       normalized,
       initialCredits,
       'initial_grant',
-      'Credito inicial apos cadastro',
+      'Crédito inicial apos cadastro',
     );
   } else {
     ensureWallet(normalized);
@@ -1027,7 +1072,7 @@ export function claimCreditEngagementReward(input: {
   if (!rule.enabled) {
     return {
       awarded: false,
-      reason: 'Regra desativada pelo super usuario.',
+      reason: 'Regra desativada pelo super usuário.',
       rule: { ...rule },
       remaining_claims: remainingBefore,
     };
@@ -1036,7 +1081,7 @@ export function claimCreditEngagementReward(input: {
   if (rule.credits <= 0) {
     return {
       awarded: false,
-      reason: 'Regra sem creditos configurados.',
+      reason: 'Regra sem créditos configurados.',
       rule: { ...rule },
       remaining_claims: remainingBefore,
     };
@@ -1053,7 +1098,7 @@ export function claimCreditEngagementReward(input: {
     if (duplicateByReference) {
       return {
         awarded: false,
-        reason: 'Referencia ja recompensada para este usuario.',
+        reason: 'Referencia ja recompensada para este usuário.',
         rule: { ...rule },
         remaining_claims: remainingBefore,
       };
@@ -1063,7 +1108,7 @@ export function claimCreditEngagementReward(input: {
   if (maxClaims != null && claimedCount >= maxClaims) {
     return {
       awarded: false,
-      reason: 'Limite da regra atingido para este usuario.',
+      reason: 'Limite da regra atingido para este usuário.',
       rule: { ...rule },
       remaining_claims: 0,
     };
@@ -1221,13 +1266,18 @@ export function grantCreditsToUser(
   amount: number,
   description: string,
   createdBy?: string,
+  options?: {
+    type?: CreditTransactionType;
+    reference_id?: string;
+  },
 ): CreditTransaction {
+  const type = options?.type ?? 'admin_grant';
   return applyDelta(
     userId,
     Math.abs(Math.round(parseNumber(amount))),
-    'admin_grant',
-    description || 'Credito concedido por administrador',
-    { created_by: createdBy },
+    type,
+    description || 'Crédito concedido por administrador',
+    { created_by: createdBy, reference_id: options?.reference_id },
   );
 }
 
@@ -1243,7 +1293,7 @@ export function removeCreditsFromUser(
     userId,
     -normalizedAmount,
     type,
-    description || 'Debito de credito',
+    description || 'Debito de crédito',
     { created_by: createdBy },
   );
 }
@@ -1282,12 +1332,12 @@ export function refundCreditTransaction(
   const normalizedUserId = normalizeUserId(userId);
   const needle = String(transactionId ?? '').trim();
   if (!normalizedUserId || !needle) {
-    throw new Error('Transacao invalida para ressarcimento.');
+    throw new Error('Transacao inválida para ressarcimento.');
   }
 
   const transactions = listCreditTransactionsForUser(normalizedUserId);
   const target = transactions.find((row) => row.id === needle);
-  if (!target) throw new Error('Transacao nao encontrada.');
+  if (!target) throw new Error('Transacao não encontrada.');
   if (target.amount >= 0) {
     throw new Error('Somente debitos podem ser ressarcidos.');
   }
@@ -1318,10 +1368,10 @@ export function createCreditCoupon(input: {
   created_by?: string;
 }): CreditCoupon {
   const code = normalizeCouponCode(input.code);
-  if (!code) throw new Error('Informe um codigo de cupom.');
+  if (!code) throw new Error('Informe um código de cupom.');
 
   const existing = findCouponByCode(code);
-  if (existing) throw new Error('Ja existe um cupom com este codigo.');
+  if (existing) throw new Error('Ja existe um cupom com este código.');
 
   const type: CreditCouponType = input.type === 'fixed' ? 'fixed' : 'percent';
   const value = parseNumber(input.value);
@@ -1340,7 +1390,7 @@ export function createCreditCoupon(input: {
   const expiresAt = parseIsoOrNull(input.expires_at);
 
   if (input.expires_at && !expiresAt) {
-    throw new Error('Data de expiracao invalida para o cupom.');
+    throw new Error('Data de expiracao inválida para o cupom.');
   }
 
   const now = nowIso();
@@ -1371,11 +1421,11 @@ export function listCreditCoupons(): CreditCoupon[] {
 
 export function setCreditCouponActive(couponId: string, active: boolean): CreditCoupon {
   const needle = String(couponId ?? '').trim();
-  if (!needle) throw new Error('Cupom invalido.');
+  if (!needle) throw new Error('Cupom inválido.');
 
   const rows = readCoupons();
   const idx = rows.findIndex((row) => row.id === needle);
-  if (idx < 0) throw new Error('Cupom nao encontrado.');
+  if (idx < 0) throw new Error('Cupom não encontrado.');
 
   const next: CreditCoupon = {
     ...rows[idx],
@@ -1416,7 +1466,7 @@ export function validateCouponForPackage(input: {
   if (!coupon) {
     return {
       valid: false,
-      message: 'Cupom nao encontrado.',
+      message: 'Cupom não encontrado.',
       original_price_cents: packagePriceCents,
       discount_cents: 0,
       final_price_cents: packagePriceCents,
@@ -1465,7 +1515,7 @@ export function validateCouponForPackage(input: {
   if (packagePriceCents <= 0) {
     return {
       valid: false,
-      message: 'Este pacote nao permite desconto no momento.',
+      message: 'Este pacote não permite desconto no momento.',
       coupon,
       original_price_cents: packagePriceCents,
       discount_cents: 0,
@@ -1506,7 +1556,7 @@ export function createCreditPurchaseRequest(input: {
   const email = normalizeEmail(input.auth_email);
   const packageId = String(input.package_id ?? '').trim();
   if (!userId || !email || !packageId) {
-    throw new Error('Dados invalidos para criar solicitacao de compra.');
+    throw new Error('Dados invalidos para criar solicitação de compra.');
   }
 
   const packageRow = findCreditPackageById(packageId);
@@ -1528,7 +1578,7 @@ export function createCreditPurchaseRequest(input: {
     });
 
     if (!validation.valid || !validation.coupon) {
-      throw new Error(validation.message || 'Cupom invalido para este pacote.');
+      throw new Error(validation.message || 'Cupom inválido para este pacote.');
     }
 
     couponCode = validation.coupon.code;
@@ -1585,15 +1635,15 @@ export function reviewCreditPurchaseRequest(
   reviewNote?: string,
 ): CreditPurchaseRequest {
   const needle = String(requestId ?? '').trim();
-  if (!needle) throw new Error('Solicitacao invalida.');
+  if (!needle) throw new Error('Solicitação inválida.');
 
   const requests = readPurchaseRequests();
   const idx = requests.findIndex((row) => row.id === needle);
-  if (idx < 0) throw new Error('Solicitacao nao encontrada.');
+  if (idx < 0) throw new Error('Solicitação não encontrada.');
 
   const target = requests[idx];
   if (target.status !== 'pending') {
-    throw new Error('Solicitacao ja processada.');
+    throw new Error('Solicitação ja processada.');
   }
 
   const next: CreditPurchaseRequest = {
@@ -1660,7 +1710,7 @@ export function getAdRewardAvailabilityForUser(userId: string): CreditAdRewardAv
   if (!normalized) {
     return {
       allowed: false,
-      reason: 'Usuario invalido para recompensa.',
+      reason: 'Usuário inválido para recompensa.',
       remaining_today: 0,
       config,
     };
@@ -1669,7 +1719,7 @@ export function getAdRewardAvailabilityForUser(userId: string): CreditAdRewardAv
   if (!config.enabled) {
     return {
       allowed: false,
-      reason: 'Recompensa por propaganda desativada pelo super usuario.',
+      reason: 'Recompensa por propaganda desativada pelo super usuário.',
       remaining_today: 0,
       config,
     };
@@ -1720,7 +1770,7 @@ export function claimAdRewardCredits(
   actorUserId?: string,
 ): CreditTransaction {
   const normalized = normalizeUserId(userId);
-  if (!normalized) throw new Error('Usuario invalido para resgate.');
+  if (!normalized) throw new Error('Usuário inválido para resgate.');
 
   const availability = getAdRewardAvailabilityForUser(normalized);
   if (!availability.allowed) {

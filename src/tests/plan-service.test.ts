@@ -20,29 +20,31 @@ describe('PlanService', () => {
     const pro = PlanService.getLimits('pro');
     const enterprise = PlanService.getLimits('enterprise');
 
-    expect(free.analysisLimit).toBe(5);
-    expect(pro.analysisLimit).toBe(50);
-    expect(enterprise.analysisLimit).toBe(Infinity);
+    expect(free.analysisLimit).toBe(50);
+    expect(pro.analysisLimit).toBe(500);
+    expect(enterprise.analysisLimit).toBe(500);
+    expect(free.propertiesLimit).toBe(1);
+    expect(pro.propertiesLimit).toBe(5);
   });
 
-  it('faz fallback para plano free quando plano e invalido', () => {
+  it('faz fallback para plano free quando plano e inválido', () => {
     const limits = PlanService.getLimits('legacy' as any);
-    expect(limits.analysisLimit).toBe(5);
-    expect(limits.pdfImportLimit).toBe(2);
+    expect(limits.analysisLimit).toBe(50);
+    expect(limits.pdfImportLimit).toBe(5);
   });
 
   it('canImportPdf respeita limite de uso do plano', () => {
     const freeAtLimit = buildProfile({
       plan_id: 'free',
-      plan_usage: { pdf_imports_count: 2, analysis_count: 0, credits_remaining: 0 },
+      plan_usage: { pdf_imports_count: 5, analysis_count: 0, credits_remaining: 0 },
     });
     const freeBelowLimit = buildProfile({
       plan_id: 'free',
-      plan_usage: { pdf_imports_count: 1, analysis_count: 0, credits_remaining: 0 },
+      plan_usage: { pdf_imports_count: 4, analysis_count: 0, credits_remaining: 0 },
     });
     const proAtLimit = buildProfile({
       plan_id: 'pro',
-      plan_usage: { pdf_imports_count: 20, analysis_count: 0, credits_remaining: 0 },
+      plan_usage: { pdf_imports_count: 50, analysis_count: 0, credits_remaining: 0 },
     });
 
     expect(PlanService.canImportPdf(freeAtLimit)).toBe(false);
@@ -50,7 +52,7 @@ describe('PlanService', () => {
     expect(PlanService.canImportPdf(proAtLimit)).toBe(false);
   });
 
-  it('canImportPdf usa plano da subscription quando plan_id principal nao existe', () => {
+  it('canImportPdf usa plano da subscription quando plan_id principal não existe', () => {
     const profile = buildProfile({
       subscription: {
         plan_id: 'pro',
@@ -58,7 +60,7 @@ describe('PlanService', () => {
         current_period_end: new Date().toISOString(),
         cancel_at_period_end: false,
       },
-      plan_usage: { pdf_imports_count: 19, analysis_count: 0, credits_remaining: 0 },
+      plan_usage: { pdf_imports_count: 49, analysis_count: 0, credits_remaining: 0 },
     });
 
     expect(PlanService.canImportPdf(profile)).toBe(true);

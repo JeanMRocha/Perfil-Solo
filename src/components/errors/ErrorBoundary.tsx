@@ -16,6 +16,10 @@ import {
 } from '@tabler/icons-react';
 import { registrarLogLocal } from '@services/loggerLocal';
 import { shouldCaptureObservability } from '@services/observabilityConfig';
+import {
+  redactSensitiveData,
+  sanitizeTextForLogs,
+} from '@services/securityRedaction';
 
 /**
  * 🌿 ErrorBoundary - PerfilSolo
@@ -108,12 +112,12 @@ export class ErrorBoundary extends Component<Props, State> {
     const err = normalizeToError(errorLike);
 
     const logDetalhado = {
-      message: err.message,
-      stack: err.stack,
+      message: sanitizeTextForLogs(err.message),
+      stack: sanitizeTextForLogs(err.stack ?? ''),
       componente: info?.componentStack,
       caminho: typeof window !== 'undefined' ? window.location.pathname : '',
       data: new Date().toISOString(),
-      raw: this.state?.errorInfo?.raw ?? (err as any).__raw,
+      raw: redactSensitiveData(this.state?.errorInfo?.raw ?? (err as any).__raw),
       userAgent:
         typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
     };
@@ -121,10 +125,10 @@ export class ErrorBoundary extends Component<Props, State> {
     // 🔊 Console estruturado (sem interpolar objeto em string)
     // Evita "Cannot convert object to primitive value"
     console.groupCollapsed('🚨 [ErrorBoundary]');
-    console.error('🧩 Mensagem:', err.message);
+    console.error('🧩 Mensagem:', sanitizeTextForLogs(err.message));
     console.error('📍 Caminho:', logDetalhado.caminho);
     console.error('🕒 Data:', logDetalhado.data);
-    console.error('🪴 Stack:', info?.componentStack);
+    console.error('🪴 Stack:', sanitizeTextForLogs(info?.componentStack ?? ''));
     console.error('🔹 Raw:', logDetalhado.raw);
     console.groupEnd();
 
@@ -135,18 +139,20 @@ export class ErrorBoundary extends Component<Props, State> {
       const { registrarLog } = await import('@services/loggerService');
       await registrarLog({
         tipo: 'error',
-        mensagem: err.message,
+        mensagem: sanitizeTextForLogs(err.message),
         detalhes: logDetalhado,
       });
     } catch (erroFallback) {
       console.warn(
         '⚠️ Falha ao registrar log remoto, usando fallback local.',
-        erroFallback,
+        sanitizeTextForLogs(
+          erroFallback instanceof Error ? erroFallback.message : erroFallback,
+        ),
       );
       try {
         await registrarLogLocal({
           tipo: 'error',
-          mensagem: err.message,
+          mensagem: sanitizeTextForLogs(err.message),
           origem:
             typeof window !== 'undefined' ? window.location.pathname : 'N/A',
           arquivo: 'ErrorBoundary.tsx',
@@ -154,7 +160,12 @@ export class ErrorBoundary extends Component<Props, State> {
           detalhes: logDetalhado,
         });
       } catch (erroLocal) {
-        console.error('❌ Falha também no logger local:', erroLocal);
+        console.error(
+          '❌ Falha também no logger local:',
+          sanitizeTextForLogs(
+            erroLocal instanceof Error ? erroLocal.message : erroLocal,
+          ),
+        );
       }
     }
   }

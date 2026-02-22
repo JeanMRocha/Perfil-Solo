@@ -15,7 +15,7 @@ export default function Settings() {
     if (!isLocalDataMode) return;
 
     const confirmed = window.confirm(
-      'Isso vai apagar todos os dados locais (propriedades, talhoes, analises, regras de cultura e laboratorios). Deseja continuar?',
+      'Isso vai apagar todos os dados locais (propriedades, talhões, análises, regras de cultura e laboratorios). Deseja continuar?',
     );
 
     if (!confirmed) return;
@@ -32,7 +32,7 @@ export default function Settings() {
     } catch (error) {
       notifications.show({
         title: 'Falha ao resetar',
-        message: 'Nao foi possivel limpar o banco local. Tente novamente.',
+        message: 'Não foi possível limpar o banco local. Tente novamente.',
         color: 'red',
       });
     } finally {
@@ -42,7 +42,7 @@ export default function Settings() {
 
   return (
     <Container size="md" mt="xl">
-      <PageHeader title="Configuracoes" />
+      <PageHeader title="Configurações" />
 
       <Tabs defaultValue="billing" variant="outline" mt="md">
         <Tabs.List>

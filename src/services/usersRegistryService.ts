@@ -53,8 +53,8 @@ function normalizeEmail(input: string): string {
 function normalizeName(input: string, email: string): string {
   const cleaned = String(input ?? '').trim();
   if (cleaned) return cleaned;
-  const fallback = email.split('@')[0] ?? 'Usuario';
-  return fallback || 'Usuario';
+  const fallback = email.split('@')[0] ?? 'Usuário';
+  return fallback || 'Usuário';
 }
 
 export function listRegisteredUsers(): RegisteredUser[] {
@@ -75,7 +75,7 @@ export function registerOrUpdateUserAccount(input: {
   const id = String(input.id ?? '').trim();
   const email = normalizeEmail(input.email);
   if (!id || !email) {
-    throw new Error('ID e email sao obrigatorios para registrar usuario.');
+    throw new Error('ID e email sao obrigatorios para registrar usuário.');
   }
 
   const now = new Date().toISOString();

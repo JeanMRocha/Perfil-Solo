@@ -53,16 +53,16 @@ type AulaSistema = {
 const aulasSistema: AulaSistema[] = [
   {
     id: 'propriedades',
-    title: 'Cadastro de Propriedades e Talhoes',
+    title: 'Cadastro de Propriedades e Talhões',
     summary:
-      'Como organizar a base da fazenda, vincular talhoes e preparar para analises.',
+      'Como organizar a base da fazenda, vincular talhões e preparar para análises.',
     path: '/propriedades',
     videoEmbedUrl: 'https://www.youtube.com/embed/aqz-KE-bpKQ',
     iconGuide: [
       {
         key: 'propriedades',
         label: 'Propriedades',
-        description: 'Abre o cadastro base de propriedade e talhoes.',
+        description: 'Abre o cadastro base de propriedade e talhões.',
       },
       {
         key: 'dashboard',
@@ -71,28 +71,28 @@ const aulasSistema: AulaSistema[] = [
       },
       {
         key: 'configuracoes',
-        label: 'Configuracoes',
+        label: 'Configurações',
         description: 'Permite ajustar preferencias gerais do ambiente.',
       },
     ],
     steps: [
       'Cadastre a propriedade principal.',
-      'Adicione talhoes com nomes padrao da operacao.',
-      'Valide contatos e dados para vincular analises futuras.',
+      'Adicione talhões com nomes padrao da operação.',
+      'Valide contatos e dados para vincular análises futuras.',
     ],
   },
   {
     id: 'analises',
-    title: 'Fluxo de Analises de Solo',
+    title: 'Fluxo de Análises de Solo',
     summary:
-      'Da selecao do talhao ao salvamento da analise com recomendacoes tecnicas.',
+      'Da selecao do talhão ao salvamento da análise com recomendacoes tecnicas.',
     path: '/analise-solo',
     videoEmbedUrl: 'https://www.youtube.com/embed/ScMzIvxBSi4',
     iconGuide: [
       {
         key: 'analises',
-        label: 'Analises de Solo',
-        description: 'Tela principal para cadastro e leitura das analises.',
+        label: 'Análises de Solo',
+        description: 'Tela principal para cadastro e leitura das análises.',
       },
       {
         key: 'notificacoes',
@@ -106,8 +106,8 @@ const aulasSistema: AulaSistema[] = [
       },
     ],
     steps: [
-      'Selecione propriedade e talhao.',
-      'Preencha ou importe os valores da analise.',
+      'Selecione propriedade e talhão.',
+      'Preencha ou importe os valores da análise.',
       'Revise calagem, gessagem e adubacao antes de salvar.',
     ],
   },

@@ -1,5 +1,11 @@
 import { shouldAutoDownloadLocalErrorLog, shouldCaptureObservability } from './observabilityConfig';
-import { storageReadJson, storageWriteJson } from './safeLocalStorage';
+import { appendBoundedLocalJsonList } from './observabilityLocalStore';
+import { storageReadJson } from './safeLocalStorage';
+import {
+  redactSensitiveData,
+  sanitizeErrorMessage,
+  sanitizeTextForLogs,
+} from './securityRedaction';
 
 const LOCAL_ERROR_LOG_KEY = 'perfilsolo_local_error_reports_v1';
 const MAX_LOCAL_ERROR_LOGS = 300;
@@ -20,18 +26,28 @@ interface StoredLogDetalhado extends LogDetalhado {
 }
 
 function buildStoredLog(input: LogDetalhado): StoredLogDetalhado {
+  const sanitized = redactSensitiveData(input);
   return {
-    ...input,
+    ...sanitized,
+    mensagem: sanitizeTextForLogs(sanitized.mensagem),
+    origem: sanitizeTextForLogs(sanitized.origem ?? ''),
+    arquivo: sanitizeTextForLogs(sanitized.arquivo ?? ''),
+    stack: sanitizeTextForLogs(sanitized.stack ?? ''),
+    detalhes: redactSensitiveData(sanitized.detalhes ?? {}),
     timestamp: new Date().toISOString(),
-    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-    url: typeof window !== 'undefined' ? window.location.href : '',
+    userAgent:
+      typeof navigator !== 'undefined'
+        ? sanitizeTextForLogs(navigator.userAgent)
+        : '',
+    url:
+      typeof window !== 'undefined'
+        ? sanitizeTextForLogs(window.location.href)
+        : '',
   };
 }
 
 function appendLocalLog(log: StoredLogDetalhado) {
-  const rows = storageReadJson<StoredLogDetalhado[]>(LOCAL_ERROR_LOG_KEY, []);
-  rows.push(log);
-  storageWriteJson(LOCAL_ERROR_LOG_KEY, rows.slice(-MAX_LOCAL_ERROR_LOGS));
+  appendBoundedLocalJsonList(LOCAL_ERROR_LOG_KEY, log, MAX_LOCAL_ERROR_LOGS);
 }
 
 function formatLogAsMarkdown(log: StoredLogDetalhado): string {
@@ -41,12 +57,12 @@ function formatLogAsMarkdown(log: StoredLogDetalhado): string {
     `- Data: ${new Date(log.timestamp).toLocaleString()}`,
     `- Tipo: ${log.tipo}`,
     `- Mensagem: ${log.mensagem}`,
-    `- Origem: ${log.origem || 'nao informada'}`,
-    `- Arquivo: ${log.arquivo || 'nao informado'}`,
+    `- Origem: ${log.origem || 'não informada'}`,
+    `- Arquivo: ${log.arquivo || 'não informado'}`,
     '',
     '## Stack',
     '```',
-    log.stack || 'Stack nao disponivel',
+    log.stack || 'Stack não disponivel',
     '```',
     '',
     '## Detalhes',
@@ -97,7 +113,10 @@ export async function registrarLogLocal(log: LogDetalhado) {
 
     console.log('[loggerLocal] log registrado localmente.');
   } catch (err) {
-    console.error('[loggerLocal] falha ao registrar log local:', err);
+    console.error(
+      '[loggerLocal] falha ao registrar log local:',
+      sanitizeErrorMessage(err),
+    );
   }
 }
 

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#eef4e7" />
+      <stop offset="100%" stop-color="#dde7d6" />
+    </linearGradient>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M60 0H0V60" fill="none" stroke="#c5d3bf" stroke-width="1" opacity="0.45" />
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="600" fill="url(#bg)" />
+  <rect width="1200" height="600" fill="url(#grid)" />
+
+  <g fill="none" stroke="#b7c8b0" stroke-width="2" opacity="0.55">
+    <path d="M0 120 C220 60, 360 210, 560 140 C730 80, 930 200, 1200 120" />
+    <path d="M0 220 C180 160, 420 290, 620 220 C830 150, 1030 280, 1200 220" />
+    <path d="M0 320 C210 250, 430 380, 650 310 C880 240, 1020 350, 1200 320" />
+    <path d="M0 430 C220 360, 430 500, 660 420 C900 340, 1030 460, 1200 430" />
+    <path d="M0 520 C240 460, 450 600, 700 520 C920 450, 1060 560, 1200 520" />
+  </g>
+
+  <g fill="#c6d6bf" opacity="0.6">
+    <ellipse cx="180" cy="100" rx="65" ry="30" />
+    <ellipse cx="350" cy="470" rx="90" ry="36" />
+    <ellipse cx="880" cy="140" rx="80" ry="34" />
+    <ellipse cx="1020" cy="510" rx="95" ry="38" />
+  </g>
+
+  <g opacity="0.75">
+    <circle cx="1110" cy="90" r="28" fill="#f4f6f1" stroke="#8ea58b" stroke-width="2" />
+    <path d="M1110 66 L1115 88 L1110 85 L1105 88 Z" fill="#5f7b63" />
+    <text x="1110" y="120" text-anchor="middle" fill="#5f7b63" font-size="18" font-family="Arial, sans-serif">N</text>
+  </g>
+</svg>

@@ -1,0 +1,223 @@
+:root {
+  --ui-card-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  --ui-card-shadow-hover: 0 18px 32px rgba(15, 23, 42, 0.2);
+  --ui-button-shadow: 0 10px 18px rgba(15, 23, 42, 0.2);
+  --ui-button-shadow-hover: 0 16px 28px rgba(15, 23, 42, 0.3);
+  --ui-button-shadow-active: 0 8px 14px rgba(15, 23, 42, 0.2);
+  --ui-button-stroke-strong: rgba(12, 19, 33, 0.74);
+  --ui-button-stroke-soft: rgba(12, 19, 33, 0.32);
+  --ui-button-float-highlight: rgba(74, 222, 128, 0.42);
+  --ui-button-focus-ring: rgba(16, 185, 129, 0.38);
+  --ui-surface-border: rgba(100, 116, 139, 0.45);
+  --ui-surface-divider: rgba(100, 116, 139, 0.5);
+  --ui-surface-card-top: #e2e8e3;
+  --ui-surface-card-bottom: #d8e0da;
+  --ui-surface-paper-top: #e1e8e2;
+  --ui-surface-paper-bottom: #d7dfd9;
+  --ui-surface-tab-active: #dde6df;
+  --ui-surface-page-top: #dbe3dd;
+  --ui-surface-page-bottom: #d1dbd4;
+}
+
+[data-mantine-color-scheme='dark'] {
+  --ui-card-shadow: 0 12px 24px rgba(2, 6, 23, 0.5);
+  --ui-card-shadow-hover: 0 18px 34px rgba(2, 6, 23, 0.68);
+  --ui-button-shadow: 0 10px 18px rgba(2, 6, 23, 0.5);
+  --ui-button-shadow-hover: 0 16px 28px rgba(2, 6, 23, 0.65);
+  --ui-button-shadow-active: 0 8px 14px rgba(2, 6, 23, 0.5);
+  --ui-button-stroke-strong: rgba(255, 255, 255, 0.6);
+  --ui-button-stroke-soft: rgba(4, 10, 24, 0.82);
+  --ui-button-float-highlight: rgba(45, 212, 191, 0.4);
+  --ui-button-focus-ring: rgba(45, 212, 191, 0.32);
+  --ui-surface-border: rgba(71, 85, 105, 0.55);
+  --ui-surface-divider: rgba(71, 85, 105, 0.6);
+  --ui-surface-card-top: rgba(15, 23, 42, 0.35);
+  --ui-surface-card-bottom: rgba(15, 23, 42, 0.24);
+  --ui-surface-paper-top: rgba(15, 23, 42, 0.34);
+  --ui-surface-paper-bottom: rgba(15, 23, 42, 0.23);
+  --ui-surface-tab-active: rgba(30, 41, 59, 0.88);
+  --ui-surface-page-top: #141923;
+  --ui-surface-page-bottom: #0f172a;
+}
+
+[data-mantine-color-scheme='light'] {
+  --mantine-color-white: #e2e8e3;
+  --mantine-color-body: #dbe3dd;
+  --mantine-color-default: #d7dfd9;
+  --mantine-color-default-border: #afc0b3;
+}
+
+[data-mantine-color-scheme='light'] body,
+[data-mantine-color-scheme='light'] #root,
+[data-mantine-color-scheme='light'] .mantine-AppShell-main {
+  background: linear-gradient(180deg, var(--ui-surface-page-top) 0%, var(--ui-surface-page-bottom) 100%);
+}
+
+.mantine-Card-root {
+  border-color: var(--ui-surface-border);
+  background: linear-gradient(180deg, var(--ui-surface-card-top) 0%, var(--ui-surface-card-bottom) 100%);
+  box-shadow: var(--ui-card-shadow);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.mantine-Card-root:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--ui-card-shadow-hover);
+}
+
+.mantine-Button-root {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  box-shadow: var(--ui-button-shadow);
+  transition:
+    transform 150ms ease,
+    box-shadow 160ms ease,
+    filter 180ms ease;
+}
+
+.mantine-Button-inner {
+  position: relative;
+  z-index: 2;
+}
+
+.mantine-Button-root::before {
+  content: '';
+  position: absolute;
+  inset: -70%;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 72%, var(--ui-button-float-highlight), rgba(0, 0, 0, 0) 62%);
+  opacity: 0;
+  transform: translateY(20px) scale(0.78);
+  transition: opacity 200ms ease, transform 240ms ease;
+}
+
+.mantine-Button-root::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0) 28%, rgba(255, 255, 255, 0.38) 50%, rgba(255, 255, 255, 0) 72%);
+  opacity: 0;
+  transform: translateX(-130%);
+}
+
+.mantine-Button-root:not([data-disabled]):not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ui-button-shadow-hover);
+  filter: saturate(1.08);
+}
+
+.mantine-Button-root:not([data-disabled]):not(:disabled):hover::before {
+  opacity: 1;
+  transform: translateY(-1px) scale(1);
+  animation: button-floating-highlight 1800ms ease-in-out infinite;
+}
+
+.mantine-Button-root:not([data-disabled]):not(:disabled):hover::after {
+  opacity: 0.85;
+  animation: button-sheen 940ms ease;
+}
+
+.mantine-Button-root:not([data-disabled]):not(:disabled):active {
+  transform: translateY(1px) scale(0.986);
+  box-shadow: var(--ui-button-shadow-active);
+}
+
+.mantine-Button-root:not([data-disabled]):not(:disabled):active::before {
+  opacity: 1;
+  transform: translateY(-2px) scale(1.12);
+}
+
+.mantine-Button-root:focus-visible {
+  box-shadow: var(--ui-button-shadow-hover), 0 0 0 3px var(--ui-button-focus-ring);
+}
+
+.mantine-Button-root[data-variant='filled'] .mantine-Button-label,
+.mantine-Button-root[data-variant='gradient'] .mantine-Button-label {
+  -webkit-text-stroke: 0.38px var(--ui-button-stroke-strong);
+  text-shadow:
+    0 1px 1px var(--ui-button-stroke-strong),
+    0 0 0.6px var(--ui-button-stroke-strong);
+}
+
+.mantine-Button-root:is(
+    [data-variant='light'],
+    [data-variant='subtle'],
+    [data-variant='outline'],
+    [data-variant='default'],
+    [data-variant='transparent'],
+    [data-variant='white']
+  )
+  .mantine-Button-label {
+  -webkit-text-stroke: 0.32px var(--ui-button-stroke-soft);
+  text-shadow:
+    0 0 1px var(--ui-button-stroke-soft),
+    0 0 2px var(--ui-button-stroke-soft);
+}
+
+.mantine-Tabs-list {
+  border-bottom-color: var(--ui-surface-divider);
+}
+
+.mantine-Divider-root {
+  border-top-color: var(--ui-surface-divider);
+}
+
+[data-mantine-color-scheme='light'] .mantine-Tabs-tab[data-active='true'] {
+  border-color: var(--ui-surface-border);
+  background: var(--ui-surface-tab-active);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
+[data-mantine-color-scheme='light'] .mantine-Paper-root {
+  border-color: var(--ui-surface-border);
+  background: linear-gradient(180deg, var(--ui-surface-paper-top) 0%, var(--ui-surface-paper-bottom) 100%);
+}
+
+[data-mantine-color-scheme='light'] :is(
+    .mantine-Modal-content,
+    .mantine-Drawer-content,
+    .mantine-Popover-dropdown,
+    .mantine-Menu-dropdown
+  ) {
+  background: linear-gradient(180deg, #e2e8e3 0%, #d8e0da 100%);
+  border-color: var(--ui-surface-border);
+}
+
+@keyframes button-floating-highlight {
+  0%,
+  100% {
+    transform: translateY(4px) scale(0.92);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.05);
+  }
+}
+
+@keyframes button-sheen {
+  from {
+    transform: translateX(-130%);
+  }
+  to {
+    transform: translateX(130%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mantine-Card-root,
+  .mantine-Button-root,
+  .mantine-Button-root::before,
+  .mantine-Button-root::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .mantine-Card-root:hover,
+  .mantine-Button-root:not([data-disabled]):not(:disabled):hover,
+  .mantine-Button-root:not([data-disabled]):not(:disabled):active {
+    transform: none !important;
+  }
+}

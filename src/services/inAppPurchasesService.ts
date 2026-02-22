@@ -1,6 +1,10 @@
 import { storageReadJson, storageWriteJson } from './safeLocalStorage';
 
-export type InAppPurchaseType = 'avatar_icon';
+export type InAppPurchaseType =
+  | 'avatar_icon'
+  | 'store_quota'
+  | 'store_bundle'
+  | 'store_service';
 
 export interface InAppPurchaseReceipt {
   id: string;
@@ -33,6 +37,14 @@ function parsePositiveInt(input: unknown, fallback: number): number {
   const rounded = Math.round(parsed);
   if (rounded <= 0) return fallback;
   return rounded;
+}
+
+function normalizePurchaseType(input: unknown): InAppPurchaseType {
+  const raw = String(input ?? '').trim();
+  if (raw === 'store_quota') return 'store_quota';
+  if (raw === 'store_bundle') return 'store_bundle';
+  if (raw === 'store_service') return 'store_service';
+  return 'avatar_icon';
 }
 
 function makeId(prefix: string): string {
@@ -73,7 +85,7 @@ function readRows(): InAppPurchaseReceipt[] {
       id: String(row.id),
       receipt_number: String(row.receipt_number ?? makeReceiptNumber()),
       user_id: normalizeUserId(String(row.user_id)),
-      purchase_type: row.purchase_type === 'avatar_icon' ? row.purchase_type : 'avatar_icon',
+      purchase_type: normalizePurchaseType(row.purchase_type),
       item_id: String(row.item_id ?? ''),
       item_label: String(row.item_label ?? 'Compra interna'),
       quantity: parsePositiveInt(row.quantity, 1),
@@ -111,16 +123,16 @@ export function createInAppPurchaseReceipt(input: {
   credit_transaction_id?: string;
 }): InAppPurchaseReceipt {
   const userId = normalizeUserId(input.user_id);
-  if (!userId) throw new Error('Usuario invalido para comprovante.');
+  if (!userId) throw new Error('Usuário inválido para comprovante.');
 
   const itemLabel = String(input.item_label ?? '').trim();
-  if (!itemLabel) throw new Error('Item invalido para comprovante.');
+  if (!itemLabel) throw new Error('Item inválido para comprovante.');
 
   const created: InAppPurchaseReceipt = {
     id: makeId('iapr'),
     receipt_number: makeReceiptNumber(),
     user_id: userId,
-    purchase_type: input.purchase_type === 'avatar_icon' ? input.purchase_type : 'avatar_icon',
+    purchase_type: normalizePurchaseType(input.purchase_type),
     item_id: String(input.item_id ?? '').trim(),
     item_label: itemLabel,
     quantity: parsePositiveInt(input.quantity, 1),

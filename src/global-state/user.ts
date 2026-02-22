@@ -3,6 +3,7 @@ import { atom, onMount } from 'nanostores';
 import { isLocalDataMode } from '@services/dataProvider';
 import { registerAndEnsureUserCredits } from '@services/creditsService';
 import { clearTwoFactorVerificationSession } from '@services/identityVerificationService';
+import { registerLoginHistoryEntry } from '@services/loginHistoryService';
 import { supabaseClient } from '@sb/supabaseClient';
 
 const LOCAL_AUTH_EMAIL_KEY = 'perfilsolo_local_auth_email';
@@ -17,8 +18,8 @@ function makeLocalUserId(email: string): string {
 
 function makeLocalDisplayName(email: string): string {
   const normalized = normalizeEmail(email);
-  const left = normalized.split('@')[0] ?? 'Usuario';
-  return left || 'Usuario';
+  const left = normalized.split('@')[0] ?? 'Usuário';
+  return left || 'Usuário';
 }
 
 function buildLocalUser(email: string): User {
@@ -65,7 +66,13 @@ export function signInLocal(email?: string): User {
   registerAndEnsureUserCredits({
     id: localUser.id,
     email: localUser.email ?? normalized,
-    name: String(localUser.user_metadata?.name ?? 'Usuario Local'),
+    name: String(localUser.user_metadata?.name ?? 'Usuário Local'),
+  });
+  registerLoginHistoryEntry({
+    user_id: localUser.id,
+    email: localUser.email ?? normalized,
+    provider: 'local',
+    source: 'local_signin',
   });
   $currUser.set(localUser);
   return localUser;
@@ -93,6 +100,16 @@ onMount($currUser, () => {
     const { data: sub } = supabaseClient.auth.onAuthStateChange(
       (event: string, session: any) => {
         console.log('[auth] onAuthStateChange:', event);
+        const eventName = String(event ?? '').trim().toLowerCase();
+        const sessionUser = session?.user;
+        if (eventName === 'signed_in' && sessionUser?.id) {
+          registerLoginHistoryEntry({
+            user_id: String(sessionUser.id),
+            email: String(sessionUser.email ?? ''),
+            provider: 'supabase',
+            source: 'supabase_signed_in',
+          });
+        }
         $currUser.set(session?.user ?? null);
       },
     );

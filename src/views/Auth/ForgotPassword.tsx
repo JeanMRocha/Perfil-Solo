@@ -26,7 +26,7 @@ export default function ForgotPassword() {
       const normalizedEmail = String(email ?? '').trim().toLowerCase();
       if (!isValidEmail(normalizedEmail)) {
         notifications.show({
-          title: 'Email invalido',
+          title: 'Email inválido',
           message: 'Informe um email valido para recuperar a conta.',
           color: 'red',
         });
@@ -39,7 +39,7 @@ export default function ForgotPassword() {
       });
 
       notifications.show({
-        title: 'Codigo enviado',
+        title: 'Código enviado',
         message: `Verificacao enviada para ${normalizedEmail}. Codigo de teste: ${challenge.debug_code}`,
         color: 'blue',
       });
@@ -47,7 +47,7 @@ export default function ForgotPassword() {
     } catch (error: any) {
       notifications.show({
         title: 'Falha no envio',
-        message: String(error?.message ?? 'Nao foi possivel enviar o codigo.'),
+        message: String(error?.message ?? 'Não foi possível enviar o código.'),
         color: 'red',
       });
     } finally {
@@ -75,7 +75,7 @@ export default function ForgotPassword() {
       notifications.show({
         title: 'Identidade confirmada',
         message: isLocalDataMode
-          ? 'Verificacao concluida no modo local. Contate o super usuario para redefinir senha.'
+          ? 'Verificacao concluida no modo local. Contate o super usuário para redefinir senha.'
           : 'Link de recuperacao enviado para o email cadastrado.',
         color: 'green',
       });
@@ -83,7 +83,7 @@ export default function ForgotPassword() {
     } catch (error: any) {
       notifications.show({
         title: 'Falha na verificacao',
-        message: String(error?.message ?? 'Nao foi possivel validar o codigo.'),
+        message: String(error?.message ?? 'Não foi possível validar o código.'),
         color: 'red',
       });
     } finally {
@@ -101,7 +101,7 @@ export default function ForgotPassword() {
 
         <TextInput
           label="E-mail cadastrado"
-          placeholder="usuario@email.com"
+          placeholder="usuário@email.com"
           value={email}
           onChange={(e) => setEmail(e.currentTarget.value)}
           disabled={step === 'done'}
@@ -109,8 +109,8 @@ export default function ForgotPassword() {
 
         {step === 'verify' ? (
           <TextInput
-            label="Codigo de verificacao"
-            placeholder="Digite o codigo enviado"
+            label="Código de verificacao"
+            placeholder="Digite o código enviado"
             value={code}
             onChange={(e) => setCode(e.currentTarget.value)}
           />

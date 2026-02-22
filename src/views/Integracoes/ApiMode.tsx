@@ -34,7 +34,7 @@ type ApiParamDoc = {
 type ApiEndpointDoc = {
   method: 'GET' | 'POST';
   path: string;
-  release: 'MVP' | 'Proximo ciclo';
+  release: 'MVP' | 'Próximo ciclo';
   description: string;
   creditsPerRequest: number;
   params: ApiParamDoc[];
@@ -69,7 +69,7 @@ const endpointRows: ApiEndpointDoc[] = [
     method: 'GET',
     path: '/propriedades',
     release: 'MVP',
-    description: 'Lista propriedades vinculadas ao usuario autenticado.',
+    description: 'Lista propriedades vinculadas ao usuário autenticado.',
     creditsPerRequest: 1,
     params: [
       { name: 'limit', type: 'number', required: 'nao', description: 'Quantidade maxima por pagina.' },
@@ -86,7 +86,7 @@ const endpointRows: ApiEndpointDoc[] = [
     method: 'GET',
     path: '/talhoes',
     release: 'MVP',
-    description: 'Retorna talhoes com filtro opcional por propriedade.',
+    description: 'Retorna talhões com filtro opcional por propriedade.',
     creditsPerRequest: 1,
     params: [
       { name: 'propriedade_id', type: 'string', required: 'nao', description: 'Filtra por propriedade.' },
@@ -94,26 +94,26 @@ const endpointRows: ApiEndpointDoc[] = [
     ],
     responseExample: `{
   "data": [
-    { "id": "talhao_01", "nome": "Talhao Norte", "propriedade_id": "prop_01" }
+    { "id": "talhao_01", "nome": "Talhão Norte", "propriedade_id": "prop_01" }
   ]
 }`,
   },
   {
     method: 'POST',
     path: '/analises',
-    release: 'Proximo ciclo',
-    description: 'Envia analises para processamento e armazenamento.',
+    release: 'Próximo ciclo',
+    description: 'Envia análises para processamento e armazenamento.',
     creditsPerRequest: 3,
     params: [
       { name: 'propriedade_id', type: 'string', required: 'sim', description: 'ID da propriedade.' },
-      { name: 'talhao_id', type: 'string', required: 'sim', description: 'ID do talhao.' },
+      { name: 'talhao_id', type: 'string', required: 'sim', description: 'ID do talhão.' },
       { name: 'ph', type: 'number', required: 'sim', description: 'Valor de pH da amostra.' },
       { name: 'p_mg_dm3', type: 'number', required: 'sim', description: 'Fosforo em mg/dm3.' },
     ],
     responseExample: `{
   "id": "an_9830",
   "status": "queued",
-  "message": "Analise recebida para processamento."
+  "message": "Análise recebida para processamento."
 }`,
   },
 ];

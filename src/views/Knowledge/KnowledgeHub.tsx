@@ -28,20 +28,20 @@ type KnowledgeLesson = {
 const lessons: KnowledgeLesson[] = [
   {
     id: 'coleta-solo',
-    title: 'Como coletar analise de solo',
+    title: 'Como coletar análise de solo',
     objective: 'Padronizar coleta para reduzir erro de interpretacao.',
     summary:
-      'Defina profundidade, numero de subamostras e separacao por talhao para formar uma amostra representativa.',
+      'Defina profundidade, número de subamostras e separacao por talhão para formar uma amostra representativa.',
     videoEmbedUrl: 'https://www.youtube.com/embed/i6XPz7r5VJ0',
     keyPoints: [
-      'Separar a area por manejo e historico semelhante.',
+      'Separar a area por manejo e histórico semelhante.',
       'Evitar bordaduras, beira de estrada e pontos anormais.',
       'Usar profundidade padrao e identificar corretamente cada amostra.',
     ],
   },
   {
     id: 'interpretacao-valores',
-    title: 'Como interpretar valores da analise',
+    title: 'Como interpretar valores da análise',
     objective: 'Transformar dados laboratoriais em decisao tecnica pratica.',
     summary:
       'Leia faixa ideal por nutriente, risco de limitacao e prioridade de correcao para o cultivo atual.',
@@ -54,7 +54,7 @@ const lessons: KnowledgeLesson[] = [
   },
   {
     id: 'conversao-unidades',
-    title: 'Conversao de unidades no campo',
+    title: 'Conversão de unidades no campo',
     objective: 'Evitar erro operacional em recomendacoes e dosagens.',
     summary:
       'Aplicar conversoes mais usadas entre mg/dm3, cmolc/dm3, mmolc/dm3 e kg/ha conforme necessidade.',
@@ -62,7 +62,7 @@ const lessons: KnowledgeLesson[] = [
     keyPoints: [
       'Conferir sempre unidade original do laboratorio.',
       'Padronizar unidade antes de comparar historicos.',
-      'Documentar a conversao usada no relatorio tecnico.',
+      'Documentar a conversão usada no relatorio tecnico.',
     ],
   },
 ];

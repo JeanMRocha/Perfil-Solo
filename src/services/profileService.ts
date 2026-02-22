@@ -7,8 +7,10 @@ export const PROFILE_UPDATED_EVENT = 'perfilsolo-profile-updated';
 
 export interface ProducerProfile {
   id: string;
+  tipo_pessoa: 'pf' | 'pj';
   razao_social: string;
   nome_exibicao: string;
+  cargo_profissao: string;
   website: string;
   cpf: string;
   cnpj: string;
@@ -66,8 +68,10 @@ function baseProducer(): ProducerProfile {
 
   return {
     id: '107',
+    tipo_pessoa: 'pj',
     razao_social: company || name,
     nome_exibicao: company || name,
+    cargo_profissao: '',
     website: '',
     cpf: '',
     cnpj: '',

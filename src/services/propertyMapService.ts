@@ -1,8 +1,13 @@
 import { supabaseClient } from '../supabase/supabaseClient';
 import type { Property, Talhao } from '../types/property';
+import type {
+  SoilClassificationRequest,
+  SoilResultResponse,
+} from './soilClassificationContractService';
 import {
   type ContactInfo,
 } from '../types/contact';
+import { getPropertyAccessPolicyForUser } from './billingPlanService';
 import { isLocalDataMode } from './dataProvider';
 import {
   type AnalysisRow,
@@ -12,6 +17,7 @@ import {
   createPropertyLocal,
   createTalhaoLocal,
   getAnalysesByProperty,
+  getAnalysesByProperties,
   getAnalysesByTalhao,
   getPropertyByIdLocal,
   getPropertiesByUser,
@@ -22,6 +28,8 @@ import {
   updatePropertyLocal,
 } from './localDb';
 import { claimCreditEngagementReward } from './creditsService';
+import { trackGamificationEvent } from './gamificationService';
+import { assertStoreQuotaAvailable } from './appStoreService';
 
 export type MapPoint = {
   x: number;
@@ -31,6 +39,24 @@ export type MapPoint = {
 export type TalhaoGeometry = {
   points: MapPoint[];
   exclusionZones: MapPoint[][];
+  mapReference?: TalhaoMapReference | null;
+  soilClassification?: TalhaoSoilClassificationSnapshot | null;
+  currentCulture?: string | null;
+};
+
+export type TalhaoSoilClassificationSnapshot = {
+  request: SoilClassificationRequest;
+  response: SoilResultResponse;
+  applied_at: string;
+};
+
+export type TalhaoMapReference = {
+  center: {
+    lat: number;
+    lon: number;
+  };
+  zoom: number;
+  layerId?: string;
 };
 
 export type TalhaoTechnicalStatus =
@@ -51,6 +77,12 @@ export type PersistedAnalysisInput = Omit<
 >;
 
 const DEFAULT_TALHAO_COLOR = '#81C784';
+
+function applyPropertyVisibilityPolicy(userId: string, rows: Property[]): Property[] {
+  const policy = getPropertyAccessPolicyForUser(userId);
+  if (!policy.restricted_to_first_property) return rows;
+  return rows.slice(0, 1);
+}
 
 function toDateLike(value: unknown): string | null {
   if (typeof value === 'string' && value.length > 0) return value;
@@ -113,7 +145,7 @@ export function statusToLabel(status: TalhaoTechnicalStatus): string {
   if (status === 'critical') return 'Critico';
   if (status === 'attention') return 'Atencao';
   if (status === 'good') return 'Saudavel';
-  return 'Sem analise';
+  return 'Sem análise';
 }
 
 function parsePointArray(value: unknown): MapPoint[] {
@@ -129,9 +161,58 @@ function parsePointArray(value: unknown): MapPoint[] {
     .filter((point): point is MapPoint => point !== null);
 }
 
+function parseMapReference(value: unknown): TalhaoMapReference | null {
+  if (!value || typeof value !== 'object') return null;
+  const bag = value as {
+    center?: { lat?: unknown; lon?: unknown } | null;
+    zoom?: unknown;
+    layerId?: unknown;
+  };
+  const lat = Number(bag.center?.lat);
+  const lon = Number(bag.center?.lon);
+  const zoom = Number(bag.zoom);
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) return null;
+  if (!Number.isFinite(lon) || lon < -180 || lon > 180) return null;
+  if (!Number.isFinite(zoom) || zoom < 1 || zoom > 22) return null;
+  const layerId =
+    typeof bag.layerId === 'string' && bag.layerId.trim().length > 0
+      ? bag.layerId
+      : undefined;
+  return {
+    center: { lat, lon },
+    zoom: Math.round(zoom),
+    layerId,
+  };
+}
+
+function parseSoilClassificationSnapshot(
+  value: unknown,
+): TalhaoSoilClassificationSnapshot | null {
+  if (!value || typeof value !== 'object') return null;
+  const bag = value as {
+    request?: unknown;
+    response?: unknown;
+    applied_at?: unknown;
+  };
+  if (!bag.request || !bag.response || typeof bag.applied_at !== 'string') {
+    return null;
+  }
+  return {
+    request: bag.request as SoilClassificationRequest,
+    response: bag.response as SoilResultResponse,
+    applied_at: bag.applied_at,
+  };
+}
+
+function parseOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 export function parseTalhaoGeometry(coordenadas?: string | null): TalhaoGeometry {
   if (!coordenadas) {
-    return { points: [], exclusionZones: [] };
+    return { points: [], exclusionZones: [], mapReference: null };
   }
 
   try {
@@ -140,6 +221,7 @@ export function parseTalhaoGeometry(coordenadas?: string | null): TalhaoGeometry
       return {
         points: parsePointArray(parsed),
         exclusionZones: [],
+        mapReference: null,
       };
     }
 
@@ -147,25 +229,34 @@ export function parseTalhaoGeometry(coordenadas?: string | null): TalhaoGeometry
       const bag = parsed as {
         points?: unknown;
         exclusionZones?: unknown;
+        mapReference?: unknown;
+        soilClassification?: unknown;
+        currentCulture?: unknown;
       };
       return {
         points: parsePointArray(bag.points),
         exclusionZones: Array.isArray(bag.exclusionZones)
           ? bag.exclusionZones.map((zone) => parsePointArray(zone)).filter((zone) => zone.length >= 3)
           : [],
+        mapReference: parseMapReference(bag.mapReference),
+        soilClassification: parseSoilClassificationSnapshot(bag.soilClassification),
+        currentCulture: parseOptionalString(bag.currentCulture),
       };
     }
   } catch {
     // fallback below
   }
 
-  return { points: [], exclusionZones: [] };
+  return { points: [], exclusionZones: [], mapReference: null };
 }
 
 export function serializeTalhaoGeometry(geometry: TalhaoGeometry): string {
   return JSON.stringify({
     points: geometry.points,
     exclusionZones: geometry.exclusionZones,
+    mapReference: geometry.mapReference ?? undefined,
+    soilClassification: geometry.soilClassification ?? undefined,
+    currentCulture: parseOptionalString(geometry.currentCulture) ?? undefined,
   });
 }
 
@@ -186,6 +277,14 @@ function toPositiveArea(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
   return parsed;
+}
+
+function normalizeRequiredPropertyName(input: string): string {
+  const normalized = String(input ?? '').trim();
+  if (!normalized) {
+    throw new Error('Informe o nome da propriedade.');
+  }
+  return normalized;
 }
 
 function sumTalhoesArea(talhoes: Talhao[]): number {
@@ -260,7 +359,7 @@ export async function fetchOrCreateUserProperties(
 ): Promise<Property[]> {
   if (isLocalDataMode) {
     const list = await getPropertiesByUser(userId);
-    if (list.length > 0) return list;
+    if (list.length > 0) return applyPropertyVisibilityPolicy(userId, list);
     const created = await createPropertyLocal({
       userId,
       nome: 'Minha Propriedade',
@@ -275,7 +374,9 @@ export async function fetchOrCreateUserProperties(
     .order('created_at', { ascending: true });
 
   if (error) throw error;
-  if (Array.isArray(data) && data.length > 0) return data as Property[];
+  if (Array.isArray(data) && data.length > 0) {
+    return applyPropertyVisibilityPolicy(userId, data as Property[]);
+  }
 
   const { data: created, error: insertError } = await (supabaseClient as any)
     .from('properties')
@@ -290,30 +391,61 @@ export async function fetchOrCreateUserProperties(
   return [created as Property];
 }
 
+export async function fetchUserProperties(
+  userId: string,
+): Promise<Property[]> {
+  if (isLocalDataMode) {
+    const rows = await getPropertiesByUser(userId);
+    return applyPropertyVisibilityPolicy(userId, rows);
+  }
+
+  const { data, error } = await (supabaseClient as any)
+    .from('properties')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+  return applyPropertyVisibilityPolicy(userId, data as Property[]);
+}
+
 export async function createPropertyForUser(
   userId: string,
   nome: string,
   contact?: ContactInfo,
   patch?: Partial<Property>,
 ): Promise<Property> {
+  const normalizedName = normalizeRequiredPropertyName(nome);
+  await assertStoreQuotaAvailable({
+    user_id: userId,
+    resource: 'properties',
+    required_units: 1,
+  });
+
   if (isLocalDataMode) {
-    const created = await createPropertyLocal({ userId, nome, contact, patch });
+    const created = await createPropertyLocal({
+      userId,
+      nome: normalizedName,
+      contact,
+      patch,
+    });
     claimCreditEngagementReward({
       user_id: userId,
       rule_id: 'property_created',
       created_by: userId,
       reference_id: created.id,
     });
+    void trackGamificationEvent(userId, 'property_created').catch(() => null);
     return created;
   }
 
   const basePayload: Record<string, unknown> = {
     user_id: userId,
-    nome,
+    nome: normalizedName,
   };
   if (patch?.cidade !== undefined) basePayload.cidade = patch.cidade;
   if (patch?.estado !== undefined) basePayload.estado = patch.estado;
-  if (patch?.total_area !== undefined) basePayload.total_area = patch.total_area;
 
   const extendedPayload: Record<string, unknown> = { ...basePayload };
   if (patch?.proprietario_principal !== undefined) {
@@ -325,12 +457,6 @@ export async function createPropertyForUser(
   if (patch?.fiscal !== undefined) {
     extendedPayload.fiscal = patch.fiscal;
   }
-  if (patch?.maquinas !== undefined) {
-    extendedPayload.maquinas = patch.maquinas;
-  }
-  if (patch?.galpoes !== undefined) {
-    extendedPayload.galpoes = patch.galpoes;
-  }
   if (patch?.area_allocations !== undefined) {
     extendedPayload.area_allocations = patch.area_allocations;
   }
@@ -339,8 +465,6 @@ export async function createPropertyForUser(
     patch?.proprietario_principal !== undefined ||
     patch?.documentos !== undefined ||
     patch?.fiscal !== undefined ||
-    patch?.maquinas !== undefined ||
-    patch?.galpoes !== undefined ||
     patch?.area_allocations !== undefined;
 
   const runInsert = (payload: Record<string, unknown>) =>
@@ -368,6 +492,7 @@ export async function createPropertyForUser(
     created_by: userId,
     reference_id: created.id,
   });
+  void trackGamificationEvent(userId, 'property_created').catch(() => null);
   return created;
 }
 
@@ -377,17 +502,23 @@ export async function updatePropertyForUser(
   contact?: ContactInfo,
   patch?: Partial<Property>,
 ): Promise<Property> {
+  const normalizedName = normalizeRequiredPropertyName(nome);
+
   if (isLocalDataMode) {
-    return updatePropertyLocal({ propertyId, nome, contact, patch });
+    return updatePropertyLocal({
+      propertyId,
+      nome: normalizedName,
+      contact,
+      patch,
+    });
   }
 
   const basePayload: Record<string, unknown> = {
-    nome,
+    nome: normalizedName,
     updated_at: new Date().toISOString(),
   };
   if (patch?.cidade !== undefined) basePayload.cidade = patch.cidade;
   if (patch?.estado !== undefined) basePayload.estado = patch.estado;
-  if (patch?.total_area !== undefined) basePayload.total_area = patch.total_area;
 
   const extendedPayload: Record<string, unknown> = { ...basePayload };
   if (patch?.proprietario_principal !== undefined) {
@@ -399,12 +530,6 @@ export async function updatePropertyForUser(
   if (patch?.fiscal !== undefined) {
     extendedPayload.fiscal = patch.fiscal;
   }
-  if (patch?.maquinas !== undefined) {
-    extendedPayload.maquinas = patch.maquinas;
-  }
-  if (patch?.galpoes !== undefined) {
-    extendedPayload.galpoes = patch.galpoes;
-  }
   if (patch?.area_allocations !== undefined) {
     extendedPayload.area_allocations = patch.area_allocations;
   }
@@ -413,8 +538,6 @@ export async function updatePropertyForUser(
     patch?.proprietario_principal !== undefined ||
     patch?.documentos !== undefined ||
     patch?.fiscal !== undefined ||
-    patch?.maquinas !== undefined ||
-    patch?.galpoes !== undefined ||
     patch?.area_allocations !== undefined;
 
   const runUpdate = (payload: Record<string, unknown>) =>
@@ -559,11 +682,35 @@ export async function fetchAnalysesByProperty(
   return (data ?? []) as AnalysisRow[];
 }
 
+export async function fetchAnalysesByProperties(
+  propertyIds: string[],
+): Promise<AnalysisRow[]> {
+  const normalizedIds = propertyIds
+    .map((id) => String(id ?? '').trim())
+    .filter((id) => id.length > 0);
+  if (normalizedIds.length === 0) return [];
+
+  if (isLocalDataMode) {
+    return getAnalysesByProperties(normalizedIds);
+  }
+
+  const { data, error } = await (supabaseClient as any)
+    .from('analises_solo')
+    .select('*')
+    .in('property_id', normalizedIds)
+    .order('data_amostragem', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as AnalysisRow[];
+}
+
 export async function createTalhaoForProperty(input: {
   propertyId: string;
   nome: string;
   points?: MapPoint[];
   exclusionZones?: MapPoint[][];
+  mapReference?: TalhaoMapReference | null;
   color?: string;
   area_ha?: number;
   tipo_solo?: string;
@@ -573,11 +720,26 @@ export async function createTalhaoForProperty(input: {
     data_inicio: string;
     data_fim: string;
     safra?: string;
+    fonte?: string;
   }[];
 }): Promise<Talhao> {
+  const property = await findPropertyByIdForSync(input.propertyId);
+  if (!property) {
+    throw new Error('Propriedade vinculada ao talhão não encontrada.');
+  }
+  const ownerUserId = String(property.user_id ?? '').trim();
+  if (ownerUserId) {
+    await assertStoreQuotaAvailable({
+      user_id: ownerUserId,
+      resource: 'talhoes',
+      required_units: 1,
+    });
+  }
+
   const coordenadasSvg = serializeTalhaoGeometry({
     points: input.points ?? [],
     exclusionZones: input.exclusionZones ?? [],
+    mapReference: input.mapReference ?? null,
   });
 
   if (isLocalDataMode) {
@@ -591,8 +753,6 @@ export async function createTalhaoForProperty(input: {
       historico_culturas: input.historico_culturas,
     });
     await syncPropertyTotalArea(input.propertyId);
-    const property = await findPropertyByIdForSync(input.propertyId);
-    const ownerUserId = String(property?.user_id ?? '').trim();
     if (ownerUserId) {
       claimCreditEngagementReward({
         user_id: ownerUserId,
@@ -621,8 +781,6 @@ export async function createTalhaoForProperty(input: {
   if (error) throw error;
   const created = data as Talhao;
   await syncPropertyTotalArea(input.propertyId);
-  const property = await findPropertyByIdForSync(input.propertyId);
-  const ownerUserId = String(property?.user_id ?? '').trim();
   if (ownerUserId) {
     claimCreditEngagementReward({
       user_id: ownerUserId,
@@ -638,24 +796,35 @@ export async function updateTalhaoForProperty(input: {
   talhaoId: string;
   nome: string;
   area_ha?: number;
-  tipo_solo?: string;
+  tipo_solo?: string | null;
   color?: string;
   points?: MapPoint[];
   exclusionZones?: MapPoint[][];
+  mapReference?: TalhaoMapReference | null;
+  soilClassification?: TalhaoSoilClassificationSnapshot | null;
+  currentCulture?: string | null;
   historico_culturas?: {
     cultura: string;
     cultivar?: string;
     data_inicio: string;
     data_fim: string;
     safra?: string;
+    fonte?: string;
   }[];
 }): Promise<Talhao> {
   const hasGeometryUpdate =
-    input.points !== undefined || input.exclusionZones !== undefined;
+    input.points !== undefined ||
+    input.exclusionZones !== undefined ||
+    input.mapReference !== undefined ||
+    input.soilClassification !== undefined ||
+    input.currentCulture !== undefined;
   const coordenadasSvg = hasGeometryUpdate
     ? serializeTalhaoGeometry({
         points: input.points ?? [],
         exclusionZones: input.exclusionZones ?? [],
+        mapReference: input.mapReference ?? null,
+        soilClassification: input.soilClassification ?? null,
+        currentCulture: input.currentCulture ?? undefined,
       })
     : undefined;
 
@@ -726,6 +895,11 @@ export async function deleteTalhaoForProperty(talhaoId: string): Promise<void> {
 export async function saveLinkedAnalysis(
   input: PersistedAnalysisInput,
 ): Promise<void> {
+  await assertStoreQuotaAvailable({
+    user_id: input.user_id,
+    resource: 'analises',
+    required_units: 1,
+  });
   await assertAnalysisLinkIntegrity(input);
 
   if (isLocalDataMode) {
@@ -750,26 +924,26 @@ async function assertAnalysisLinkIntegrity(
       getTalhaoByIdLocal(input.talhao_id),
     ]);
     if (!property) {
-      throw new Error('Propriedade vinculada a analise nao encontrada.');
+      throw new Error('Propriedade vinculada a análise não encontrada.');
     }
     if (!talhao) {
-      throw new Error('Talhao vinculado a analise nao encontrado.');
+      throw new Error('Talhão vinculado a análise não encontrado.');
     }
     if (property.user_id !== input.user_id) {
       throw new Error(
-        'Integridade invalida: usuario nao corresponde ao dono da propriedade.',
+        'Integridade inválida: usuário não corresponde ao dono da propriedade.',
       );
     }
     if (talhao.property_id !== input.property_id) {
       throw new Error(
-        'Integridade invalida: talhao nao pertence a propriedade informada.',
+        'Integridade inválida: talhão não pertence a propriedade informada.',
       );
     }
     if (
       input.laboratorio_id != null &&
       input.laboratorio_id.toString().trim().length === 0
     ) {
-      throw new Error('Integridade invalida: laboratorio_id vazio.');
+      throw new Error('Integridade inválida: laboratorio_id vazio.');
     }
     return;
   }
@@ -788,20 +962,20 @@ async function assertAnalysisLinkIntegrity(
   ]);
 
   if (propertyResult.error || !propertyResult.data) {
-    throw propertyResult.error ?? new Error('Propriedade vinculada nao encontrada.');
+    throw propertyResult.error ?? new Error('Propriedade vinculada não encontrada.');
   }
   if (talhaoResult.error || !talhaoResult.data) {
-    throw talhaoResult.error ?? new Error('Talhao vinculado nao encontrado.');
+    throw talhaoResult.error ?? new Error('Talhão vinculado não encontrado.');
   }
 
   if (propertyResult.data.user_id !== input.user_id) {
     throw new Error(
-      'Integridade invalida: usuario nao corresponde ao dono da propriedade.',
+      'Integridade inválida: usuário não corresponde ao dono da propriedade.',
     );
   }
   if (talhaoResult.data.property_id !== input.property_id) {
     throw new Error(
-      'Integridade invalida: talhao nao pertence a propriedade informada.',
+      'Integridade inválida: talhão não pertence a propriedade informada.',
     );
   }
 
@@ -813,12 +987,12 @@ async function assertAnalysisLinkIntegrity(
       .single();
 
     if (laboratorioResult.error || !laboratorioResult.data) {
-      throw laboratorioResult.error ?? new Error('Laboratorio vinculado nao encontrado.');
+      throw laboratorioResult.error ?? new Error('Laboratorio vinculado não encontrado.');
     }
 
     if (laboratorioResult.data.user_id !== input.user_id) {
       throw new Error(
-        'Integridade invalida: laboratorio nao pertence ao mesmo usuario da analise.',
+        'Integridade inválida: laboratorio não pertence ao mesmo usuário da análise.',
       );
     }
   }
