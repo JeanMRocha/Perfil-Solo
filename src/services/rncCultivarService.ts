@@ -35,7 +35,11 @@ export interface RncCultivarSearchResult {
 
 export interface RncCultivarSelectionPayload {
   cultura: string;
-  cultivar: string;
+  cultivar?: string;
+  especieNomeComum?: string;
+  especieNomeCientifico?: string;
+  grupoEspecie?: string;
+  rncDetailUrl?: string;
   dataInicio: string;
   dataFim: string;
   fonte: 'RNC-MAPA';
@@ -44,6 +48,33 @@ export interface RncCultivarSelectionPayload {
 export interface RncCultivarSelectionMessage {
   type: typeof RNC_CULTIVAR_SELECTED_EVENT;
   payload: RncCultivarSelectionPayload;
+}
+
+async function invokeEdgeSearchDirect(body: any): Promise<any> {
+  const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? '').trim();
+  const anonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? '').trim();
+  if (!supabaseUrl || !anonKey) {
+    throw new Error('Configuração Supabase ausente para consulta remota do RNC.');
+  }
+
+  const endpoint = `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/rnc-cultivar-search`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      String(payload?.error ?? `Falha ao consultar edge function do RNC (HTTP ${response.status}).`),
+    );
+  }
+  return payload;
 }
 
 const LOCAL_SAMPLE: RncCultivarRecord[] = [
@@ -122,56 +153,77 @@ export async function searchRncCultivars(params: {
   const page = Math.max(1, Number(params.page ?? 1) || 1);
   const pageSize = Math.min(200, Math.max(1, Number(params.pageSize ?? 50) || 50));
 
-  if (isLocalDataMode) {
-    const filtered = applyFilters(LOCAL_SAMPLE, params.filters);
-    const groups = Array.from(new Set(LOCAL_SAMPLE.map((row) => row.grupo_especie))).sort(
-      (a, b) => a.localeCompare(b, 'pt-BR'),
-    );
-    return {
-      source: 'local-sample',
-      items: paginate(filtered, page, pageSize),
-      page,
-      page_size: pageSize,
-      total: filtered.length,
-      groups,
-      fallback_used: false,
-      cache_updated_at: null,
-    };
-  }
-
-  const { data, error } = await (supabaseClient as any).functions.invoke(
-    'rnc-cultivar-search',
-    {
-      body: {
-        action: 'search',
-        filters: params.filters ?? {},
-        page,
-        pageSize,
-      },
-    },
-  );
-
-  if (error) {
-    throw new Error(
-      error?.message ??
-        'Falha ao consultar cultivares no RNC. Verifique a função edge rnc-cultivar-search.',
-    );
-  }
-
-  const response = data ?? {};
-  const items = Array.isArray(response.items) ? response.items : [];
-  const groups = Array.isArray(response.groups) ? response.groups : [];
-  return {
-    source: response.source === 'local-sample' ? 'local-sample' : 'rnc-mapa-cache',
-    items,
-    page: Number(response.page ?? page) || page,
-    page_size: Number(response.page_size ?? pageSize) || pageSize,
-    total: Number(response.total ?? items.length) || 0,
-    groups,
-    fallback_used: Boolean(response.fallback_used),
-    cache_updated_at:
-      typeof response.cache_updated_at === 'string' ? response.cache_updated_at : null,
+  const requestBody = {
+    action: 'search',
+    filters: params.filters ?? {},
+    page,
+    pageSize,
   };
+
+  try {
+    const { data, error } = await (supabaseClient as any).functions.invoke(
+      'rnc-cultivar-search',
+      { body: requestBody },
+    );
+
+    if (error) throw error;
+
+    const response = data ?? {};
+    const items = Array.isArray(response.items) ? response.items : [];
+    const groups = Array.isArray(response.groups) ? response.groups : [];
+    return {
+      source: response.source === 'local-sample' ? 'local-sample' : 'rnc-mapa-cache',
+      items,
+      page: Number(response.page ?? page) || page,
+      page_size: Number(response.page_size ?? pageSize) || pageSize,
+      total: Number(response.total ?? items.length) || 0,
+      groups,
+      fallback_used: Boolean(response.fallback_used),
+      cache_updated_at:
+        typeof response.cache_updated_at === 'string' ? response.cache_updated_at : null,
+    };
+  } catch {
+    // Em modo local, tentamos a edge function via fetch direto (anon key) para evitar
+    // limitar a consulta à amostra local.
+    if (isLocalDataMode) {
+      try {
+        const response = await invokeEdgeSearchDirect(requestBody);
+        const items = Array.isArray(response.items) ? response.items : [];
+        const groups = Array.isArray(response.groups) ? response.groups : [];
+        return {
+          source: response.source === 'local-sample' ? 'local-sample' : 'rnc-mapa-cache',
+          items,
+          page: Number(response.page ?? page) || page,
+          page_size: Number(response.page_size ?? pageSize) || pageSize,
+          total: Number(response.total ?? items.length) || 0,
+          groups,
+          fallback_used: Boolean(response.fallback_used),
+          cache_updated_at:
+            typeof response.cache_updated_at === 'string' ? response.cache_updated_at : null,
+        };
+      } catch {
+        // fallback final: amostra local
+        const filtered = applyFilters(LOCAL_SAMPLE, params.filters);
+        const groups = Array.from(new Set(LOCAL_SAMPLE.map((row) => row.grupo_especie))).sort(
+          (a, b) => a.localeCompare(b, 'pt-BR'),
+        );
+        return {
+          source: 'local-sample',
+          items: paginate(filtered, page, pageSize),
+          page,
+          page_size: pageSize,
+          total: filtered.length,
+          groups,
+          fallback_used: false,
+          cache_updated_at: null,
+        };
+      }
+    }
+
+    throw new Error(
+      'Falha ao consultar cultivares no RNC. Verifique a função edge rnc-cultivar-search.',
+    );
+  }
 }
 
 export async function forceSyncRncCultivars(): Promise<{
@@ -179,7 +231,11 @@ export async function forceSyncRncCultivars(): Promise<{
   synced_at?: string;
 }> {
   if (isLocalDataMode) {
-    return { total: LOCAL_SAMPLE.length };
+    const data = await invokeEdgeSearchDirect({ action: 'sync' });
+    return {
+      total: Number(data?.total ?? 0) || 0,
+      synced_at: typeof data?.synced_at === 'string' ? data.synced_at : undefined,
+    };
   }
 
   const { data, error } = await (supabaseClient as any).functions.invoke(

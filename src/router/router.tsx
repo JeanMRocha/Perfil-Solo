@@ -49,6 +49,7 @@ const UserManagement = lazy(() => import('@views/Super/UserManagement'));
 const ApiMode = lazy(() => import('@views/Integracoes/ApiMode'));
 const AulasHub = lazy(() => import('@views/Aulas/AulasHub'));
 const KnowledgeHub = lazy(() => import('@views/Knowledge/KnowledgeHub'));
+const SolosHub = lazy(() => import('@views/Solos/SolosHub'));
 const ThemePersonalization = lazy(
   () => import('@views/Config/ThemePersonalization'),
 );
@@ -308,6 +309,14 @@ export const router = createBrowserRouter([
         element: (
           <Suspense fallback={<LoaderGlobal message="Carregando conhecimento..." />}>
             <KnowledgeHub />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'solos',
+        element: (
+          <Suspense fallback={<LoaderGlobal message="Carregando solos..." />}>
+            <SolosHub />
           </Suspense>
         ),
       },

@@ -8,6 +8,7 @@ import {
   Loader,
   Pagination,
   ScrollArea,
+  SegmentedControl,
   Select,
   Stack,
   Table,
@@ -22,14 +23,16 @@ import {
   type RncCultivarFilters,
   type RncCultivarRecord,
   type RncCultivarSelectionMessage,
+  type RncCultivarSelectionPayload,
   searchRncCultivars,
 } from '../../services/rncCultivarService';
 
 const PAGE_SIZE = 25;
-type RncCultivarSelectorMode = 'popup' | 'catalog';
+type RncCultivarSelectorMode = 'popup' | 'catalog' | 'picker';
 
 interface RncCultivarSelectorProps {
   mode?: RncCultivarSelectorMode;
+  onSelect?: (payload: RncCultivarSelectionPayload) => void;
 }
 
 function normalizeMonth(value?: string | null): string {
@@ -70,13 +73,21 @@ function resolveSpeciesLabel(row: RncCultivarRecord | null): string {
 
 export default function RncCultivarSelector({
   mode = 'popup',
+  onSelect,
 }: RncCultivarSelectorProps) {
   const popupMode = mode === 'popup';
-  const [filters, setFilters] = useState<RncCultivarFilters>({
+  const pickerMode = mode === 'picker';
+  const initialFilters: RncCultivarFilters = {
     nomeComum: '',
     nomeCientifico: '',
     cultivar: '',
     grupoEspecie: 'Todos',
+  };
+  const [filters, setFilters] = useState<RncCultivarFilters>({
+    ...initialFilters,
+  });
+  const [appliedFilters, setAppliedFilters] = useState<RncCultivarFilters>({
+    ...initialFilters,
   });
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<RncCultivarRecord[]>([]);
@@ -89,6 +100,9 @@ export default function RncCultivarSelector({
   const [periodEnd, setPeriodEnd] = useState(defaultMonth());
   const [fallbackUsed, setFallbackUsed] = useState(false);
   const [cacheUpdatedAt, setCacheUpdatedAt] = useState<string | null>(null);
+  const [linkScope, setLinkScope] = useState<'species' | 'cultivar'>(() =>
+    mode === 'popup' ? 'cultivar' : 'species',
+  );
 
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil(total / PAGE_SIZE)),
@@ -108,7 +122,7 @@ export default function RncCultivarSelector({
       setLoading(true);
       try {
         const response = await searchRncCultivars({
-          filters,
+          filters: appliedFilters,
           page: targetPage,
           pageSize: PAGE_SIZE,
         });
@@ -139,7 +153,7 @@ export default function RncCultivarSelector({
         setLoading(false);
       }
     },
-    [filters],
+    [appliedFilters],
   );
 
   useEffect(() => {
@@ -147,17 +161,13 @@ export default function RncCultivarSelector({
   }, [page, runSearch]);
 
   const submitFilters = () => {
+    setAppliedFilters({ ...filters });
     setPage(1);
-    void runSearch(1);
   };
 
   const clearFilters = () => {
-    setFilters({
-      nomeComum: '',
-      nomeCientifico: '',
-      cultivar: '',
-      grupoEspecie: 'Todos',
-    });
+    setFilters({ ...initialFilters });
+    setAppliedFilters({ ...initialFilters });
     setSelected(null);
     setPage(1);
   };
@@ -170,7 +180,7 @@ export default function RncCultivarSelector({
   };
 
   const confirmSelection = () => {
-    if (!popupMode) return;
+    if (!popupMode && !pickerMode) return;
 
     if (!selected) {
       notifications.show({
@@ -200,15 +210,36 @@ export default function RncCultivarSelector({
       return;
     }
 
+    const selectedCultivar = String(selected.cultivar ?? '').trim();
+    if (linkScope === 'cultivar' && !selectedCultivar) {
+      notifications.show({
+        title: 'Cultivar indisponível',
+        message: 'A entrada selecionada não possui cultivar para refino.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    const payload: RncCultivarSelectionPayload = {
+      cultura: resolveSpeciesLabel(selected),
+      cultivar: linkScope === 'cultivar' ? selectedCultivar : undefined,
+      especieNomeComum: selected.especie_nome_comum,
+      especieNomeCientifico: selected.especie_nome_cientifico,
+      grupoEspecie: selected.grupo_especie,
+      rncDetailUrl: selected.rnc_detail_url,
+      dataInicio: start,
+      dataFim: end,
+      fonte: 'RNC-MAPA',
+    };
+
+    if (pickerMode) {
+      onSelect?.(payload);
+      return;
+    }
+
     const payloadMessage: RncCultivarSelectionMessage = {
       type: RNC_CULTIVAR_SELECTED_EVENT,
-      payload: {
-        cultura: resolveSpeciesLabel(selected),
-        cultivar: selected.cultivar || resolveSpeciesLabel(selected),
-        dataInicio: start,
-        dataFim: end,
-        fonte: 'RNC-MAPA',
-      },
+      payload,
     };
 
     if (window.opener && !window.opener.closed) {
@@ -229,12 +260,12 @@ export default function RncCultivarSelector({
       <Group justify="space-between" align="center">
         <div>
           <Title order={3}>
-            {popupMode
+            {popupMode || pickerMode
               ? 'Seleção de espécie/cultivar (RNC/MAPA)'
               : 'Consulta oficial de espécies e cultivares (RNC/MAPA)'}
           </Title>
           <Text size="sm" c="dimmed">
-            {popupMode
+            {popupMode || pickerMode
               ? 'Selecione uma entrada oficial do RNC para usar no talhão.'
               : 'Sem cadastro manual. Esta tela consulta e seleciona dados oficiais do RNC.'}
           </Text>
@@ -257,16 +288,18 @@ export default function RncCultivarSelector({
             <TextInput
               label="Nome comum (espécie)"
               value={filters.nomeComum ?? ''}
-              onChange={(event) =>
-                setFilters((prev) => ({ ...prev, nomeComum: event.currentTarget.value }))
-              }
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setFilters((prev) => ({ ...prev, nomeComum: value }));
+              }}
             />
             <TextInput
               label="Nome científico (espécie)"
               value={filters.nomeCientifico ?? ''}
-              onChange={(event) =>
-                setFilters((prev) => ({ ...prev, nomeCientifico: event.currentTarget.value }))
-              }
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setFilters((prev) => ({ ...prev, nomeCientifico: value }));
+              }}
             />
           </Group>
 
@@ -275,9 +308,10 @@ export default function RncCultivarSelector({
               label="Cultivar"
               placeholder="Com fallback de semelhantes"
               value={filters.cultivar ?? ''}
-              onChange={(event) =>
-                setFilters((prev) => ({ ...prev, cultivar: event.currentTarget.value }))
-              }
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setFilters((prev) => ({ ...prev, cultivar: value }));
+              }}
             />
             <Select
               label="Grupo da espécie"
@@ -310,8 +344,18 @@ export default function RncCultivarSelector({
       <Card withBorder p="sm">
         <Group justify="space-between" mb="xs">
           <Text fw={600}>Resultado ({total.toLocaleString('pt-BR')} registros)</Text>
-          {popupMode ? (
+          {popupMode || pickerMode ? (
             <Group gap="xs">
+              {pickerMode ? (
+                <SegmentedControl
+                  value={linkScope}
+                  onChange={(value) => setLinkScope(value as 'species' | 'cultivar')}
+                  data={[
+                    { label: 'Vincular espécie', value: 'species' },
+                    { label: 'Refinar com cultivar', value: 'cultivar' },
+                  ]}
+                />
+              ) : null}
               <TextInput
                 type="month"
                 label="Mês/ano inicial"
@@ -327,6 +371,12 @@ export default function RncCultivarSelector({
             </Group>
           ) : null}
         </Group>
+        {pickerMode ? (
+          <Text size="xs" c="dimmed" mb="xs">
+            Vínculo por espécie aplica regras gerais. Vínculo com cultivar aplica
+            prioridade para dados específicos da cultivar.
+          </Text>
+        ) : null}
 
         {loading ? (
           <Group justify="center" py="xl">
@@ -388,9 +438,11 @@ export default function RncCultivarSelector({
             >
               Abrir no RNC
             </Button>
-            {popupMode ? (
+            {popupMode || pickerMode ? (
               <Button disabled={!selected} onClick={confirmSelection}>
-                Usar no talhão ({formatMonth(periodStart)} - {formatMonth(periodEnd)})
+                {pickerMode
+                  ? `Vincular ${linkScope === 'cultivar' ? 'com cultivar' : 'espécie'} (${formatMonth(periodStart)} - ${formatMonth(periodEnd)})`
+                  : `Usar no talhão (${formatMonth(periodStart)} - ${formatMonth(periodEnd)})`}
               </Button>
             ) : null}
           </Group>

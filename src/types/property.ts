@@ -152,6 +152,12 @@ export interface TalhaoCulturePeriod {
     talhao_id: string;
     cultura: string;
     cultivar?: string;
+    especie_nome_comum?: string;
+    especie_nome_cientifico?: string;
+    grupo_especie?: string;
+    rnc_detail_url?: string;
+    technical_profile_id?: string;
+    technical_priority?: 'species' | 'cultivar';
     data_inicio: string;
     data_fim: string;
     observacoes?: string;
@@ -170,6 +176,12 @@ export interface Talhao {
     historico_culturas?: {
         cultura: string;
         cultivar?: string;
+        especie_nome_comum?: string;
+        especie_nome_cientifico?: string;
+        grupo_especie?: string;
+        rnc_detail_url?: string;
+        technical_profile_id?: string;
+        technical_priority?: 'species' | 'cultivar';
         data_inicio: string;
         data_fim: string;
         safra?: string;

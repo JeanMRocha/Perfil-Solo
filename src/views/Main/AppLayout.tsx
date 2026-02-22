@@ -10,6 +10,7 @@ import {
   IconBuildingFactory2,
   IconFileAnalytics,
   IconHome,
+  IconMap2,
   IconMapPin2,
   IconPackage,
   IconPlant2,
@@ -675,6 +676,11 @@ export default function AppLayout() {
       label: 'Culturas',
       path: '/cadastros/culturas/busca',
       icon: IconPlant2,
+    },
+    {
+      label: 'Solos',
+      path: '/solos',
+      icon: IconMap2,
     },
     {
       label: 'Laboratorios',

@@ -2,6 +2,7 @@ import { Drawer, NavLink, Stack, Switch } from '@mantine/core';
 import {
   IconApi,
   IconBell,
+  IconMap2,
   IconPhotoUp,
   IconPalette,
   IconSettings,
@@ -117,6 +118,12 @@ export default function MainDrawer({
           label="Loja do app"
           leftSection={<IconShoppingBag size={16} />}
           onClick={() => onGo('/marketplace')}
+          styles={navLinkStyles}
+        />
+        <NavLink
+          label="Solos"
+          leftSection={<IconMap2 size={16} />}
+          onClick={() => onGo('/solos')}
           styles={navLinkStyles}
         />
         <NavLink

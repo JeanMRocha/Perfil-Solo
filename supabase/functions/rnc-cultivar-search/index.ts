@@ -406,7 +406,11 @@ function getAdminClient() {
 }
 
 async function getCacheHealth(admin: ReturnType<typeof getAdminClient>) {
-  const [{ count, error: countError }, { data: latest, error: latestError }] =
+  const [
+    { count, error: countError },
+    { data: latest, error: latestError },
+    { count: emptyGroupCount, error: emptyGroupError },
+  ] =
     await Promise.all([
       admin.from('rnc_cultivars_cache').select('id', { count: 'exact', head: true }),
       admin
@@ -415,14 +419,20 @@ async function getCacheHealth(admin: ReturnType<typeof getAdminClient>) {
         .order('synced_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      admin
+        .from('rnc_cultivars_cache')
+        .select('id', { count: 'exact', head: true })
+        .or('grupo_especie.is.null,grupo_especie.eq.'),
     ]);
 
   if (countError) throw countError;
   if (latestError) throw latestError;
+  if (emptyGroupError) throw emptyGroupError;
 
   const total = Number(count ?? 0) || 0;
   const lastSyncedAt = latest?.synced_at ? new Date(latest.synced_at).getTime() : 0;
-  return { total, lastSyncedAt };
+  const missingGroupCount = Number(emptyGroupCount ?? 0) || 0;
+  return { total, lastSyncedAt, missingGroupCount };
 }
 
 async function runFullSync(admin: ReturnType<typeof getAdminClient>) {
@@ -461,10 +471,14 @@ async function ensureCacheReady(
   forceSync = false,
 ) {
   const health = await getCacheHealth(admin);
+  const missingGroupRatio =
+    health.total > 0 ? health.missingGroupCount / health.total : 0;
+  const groupCoverageLow = health.total > 0 && missingGroupRatio > 0.01;
   const stale =
     health.total === 0 ||
     !health.lastSyncedAt ||
-    Date.now() - health.lastSyncedAt > RNC_SYNC_INTERVAL_MS;
+    Date.now() - health.lastSyncedAt > RNC_SYNC_INTERVAL_MS ||
+    groupCoverageLow;
 
   if (!forceSync && !stale) return health;
 
@@ -548,19 +562,18 @@ serve(async (req) => {
   }
 
   try {
-    const auth = await ensureAuthenticatedUser(req);
-    if (auth.error || !auth.user) {
-      return new Response(JSON.stringify({ error: auth.error ?? 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const admin = getAdminClient();
     const body = await req.json();
     const action = String(body?.action ?? 'search').trim().toLowerCase();
+    const admin = getAdminClient();
 
     if (action === 'sync') {
+      const auth = await ensureAuthenticatedUser(req);
+      if (auth.error || !auth.user) {
+        return new Response(JSON.stringify({ error: auth.error ?? 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       if (!isLikelySuperUser(auth.user)) {
         return new Response(
           JSON.stringify({ error: 'Apenas super usuário pode forçar sincronização.' }),

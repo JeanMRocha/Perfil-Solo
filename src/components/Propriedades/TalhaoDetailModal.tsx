@@ -30,8 +30,8 @@ import {
   IconCheck,
   IconChevronDown,
   IconChevronUp,
+  IconCopy,
   IconDeviceFloppy,
-  IconExternalLink,
   IconHelpCircle,
   IconMap2,
   IconMapOff,
@@ -81,11 +81,12 @@ import type {
   SoilResultResponse,
 } from '../../services/soilClassificationContractService';
 import {
-  RNC_CULTIVAR_SELECTED_EVENT,
-  type RncCultivarSelectionMessage,
+  type RncCultivarSelectionPayload,
 } from '../../services/rncCultivarService';
+import { duplicateCultivarTechnicalProfile } from '../../services/cultivarTechnicalProfilesService';
 import { lazyWithBoundary } from '../../router/lazyWithBoundary';
 import { CRS, latLng } from 'leaflet';
+import RncCultivarSelector from '../../views/Rnc/RncCultivarSelector';
 
 const LazyGeoBackdropMap = lazyWithBoundary(
   () =>
@@ -112,6 +113,12 @@ type SelectedVertex =
 type CultureEntry = {
   cultura: string;
   cultivar?: string;
+  especie_nome_comum?: string;
+  especie_nome_cientifico?: string;
+  grupo_especie?: string;
+  rnc_detail_url?: string;
+  technical_profile_id?: string;
+  technical_priority?: 'species' | 'cultivar';
   data_inicio: string;
   data_fim: string;
   fonte?: string;
@@ -406,6 +413,7 @@ export default function TalhaoDetailModal({
   const [cultures, setCultures] = useState<CultureEntry[]>([]);
   const [availableSoils, setAvailableSoils] = useState<SoilCatalogEntry[]>([]);
   const [cultureModalOpened, setCultureModalOpened] = useState(false);
+  const [cultureLinkModalOpened, setCultureLinkModalOpened] = useState(false);
   const [cultureModalMode, setCultureModalMode] =
     useState<CultureModalMode>('edit');
   const [editingCultureIndex, setEditingCultureIndex] = useState<number | null>(
@@ -465,6 +473,12 @@ export default function TalhaoDetailModal({
       ? talhao.historico_culturas.map((item) => ({
           cultura: item.cultura ?? '',
           cultivar: item.cultivar ?? '',
+          especie_nome_comum: (item as any)?.especie_nome_comum ?? undefined,
+          especie_nome_cientifico: (item as any)?.especie_nome_cientifico ?? undefined,
+          grupo_especie: (item as any)?.grupo_especie ?? undefined,
+          rnc_detail_url: (item as any)?.rnc_detail_url ?? undefined,
+          technical_profile_id: (item as any)?.technical_profile_id ?? undefined,
+          technical_priority: (item as any)?.technical_priority ?? undefined,
           data_inicio: normalizeMonthYear(item.data_inicio ?? item.safra),
           data_fim: normalizeMonthYear(item.data_fim ?? item.safra),
           fonte: (item as any)?.fonte ?? undefined,
@@ -476,6 +490,7 @@ export default function TalhaoDetailModal({
     setCurrentCulture(persistedCurrentCulture || parsedCultures[0]?.cultura || '');
     setCultureDraft({ cultura: '', cultivar: '', data_inicio: '', data_fim: '' });
     setCultureModalOpened(false);
+    setCultureLinkModalOpened(false);
     setCultureModalMode('edit');
     setEditingCultureIndex(null);
     setSoilClassifierOpened(false);
@@ -764,6 +779,12 @@ export default function TalhaoDetailModal({
         historico_culturas: cultures.map((item) => ({
           cultura: item.cultura,
           cultivar: item.cultivar,
+          especie_nome_comum: item.especie_nome_comum,
+          especie_nome_cientifico: item.especie_nome_cientifico,
+          grupo_especie: item.grupo_especie,
+          rnc_detail_url: item.rnc_detail_url,
+          technical_profile_id: item.technical_profile_id,
+          technical_priority: item.technical_priority,
           data_inicio: item.data_inicio,
           data_fim: item.data_fim,
           fonte: item.fonte,
@@ -1018,24 +1039,71 @@ export default function TalhaoDetailModal({
     });
   };
 
-  const openRncCultivarSelectorWindow = () => {
-    const url = new URL('/rnc/cultivares/selector', window.location.origin);
-    const popup = window.open(
-      url.toString(),
-      'perfilsolo-rnc-cultivar-selector',
-      'popup=yes,width=1320,height=860,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes',
-    );
+  const openCultureLinkModal = () => {
+    setCultureLinkModalOpened(true);
+  };
 
-    if (!popup) {
+  const closeCultureLinkModal = () => {
+    setCultureLinkModalOpened(false);
+  };
+
+  const handleLinkCultureFromRnc = (payload: RncCultivarSelectionPayload) => {
+    const cultura = String(payload.cultura ?? '').trim();
+    const cultivar = String(payload.cultivar ?? '').trim();
+    const dataInicio = normalizeMonthYear(payload.dataInicio);
+    const dataFim = normalizeMonthYear(payload.dataFim);
+    if (!cultura || !dataInicio || !dataFim) {
       notifications.show({
-        title: 'Popup bloqueado',
-        message: 'Permita popups para abrir o seletor oficial de cultivares do RNC.',
+        title: 'Seleção incompleta',
+        message: 'A espécie e o período são obrigatórios para o vínculo.',
+        color: 'yellow',
+      });
+      return;
+    }
+    if (monthYearOrder(dataInicio) > monthYearOrder(dataFim)) {
+      notifications.show({
+        title: 'Período inválido',
+        message: 'O período selecionado é inválido.',
         color: 'yellow',
       });
       return;
     }
 
-    popup.focus();
+    const incomingRow: CultureEntry = {
+      cultura,
+      cultivar: cultivar || undefined,
+      especie_nome_comum: String(payload.especieNomeComum ?? '').trim() || cultura,
+      especie_nome_cientifico: String(payload.especieNomeCientifico ?? '').trim() || undefined,
+      grupo_especie: String(payload.grupoEspecie ?? '').trim() || undefined,
+      rnc_detail_url: String(payload.rncDetailUrl ?? '').trim() || undefined,
+      technical_priority: cultivar ? 'cultivar' : 'species',
+      data_inicio: dataInicio,
+      data_fim: dataFim,
+      fonte: payload.fonte,
+    };
+
+    setCultures((prev) => {
+      const existingIndex = prev.findIndex(
+        (item) =>
+          normalizeKey(item.cultura) === normalizeKey(incomingRow.cultura) &&
+          normalizeKey(item.cultivar ?? '') === normalizeKey(incomingRow.cultivar ?? ''),
+      );
+      if (existingIndex < 0) return [...prev, incomingRow];
+      return prev.map((item, index) => (index === existingIndex ? incomingRow : item));
+    });
+
+    if (!currentCulture.trim()) {
+      setCurrentCulture(cultura);
+    }
+
+    notifications.show({
+      title: 'Cultura vinculada',
+      message: cultivar
+        ? `${cultura} vinculada com refino da cultivar ${cultivar}.`
+        : `${cultura} vinculada por espécie (sem refino de cultivar).`,
+      color: 'green',
+    });
+    setCultureLinkModalOpened(false);
   };
 
   const openEditCultureModal = (index: number) => {
@@ -1076,7 +1144,7 @@ export default function TalhaoDetailModal({
     if (!cultura || !dataInicio || !dataFim) {
       notifications.show({
         title: 'Dados incompletos',
-        message: 'Informe cultura, mês/ano inicial e mês/ano final.',
+        message: 'Informe espécie, mês/ano inicial e mês/ano final.',
         color: 'yellow',
       });
       return;
@@ -1115,70 +1183,6 @@ export default function TalhaoDetailModal({
     setCultureModalOpened(false);
   };
 
-  useEffect(() => {
-    if (!opened) return;
-
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      const message = event.data as RncCultivarSelectionMessage | null;
-      if (!message || message.type !== RNC_CULTIVAR_SELECTED_EVENT) return;
-      const payload = message.payload;
-      if (!payload) return;
-
-      const cultura = String(payload.cultura ?? '').trim();
-      const cultivar = String(payload.cultivar ?? '').trim();
-      const dataInicio = normalizeMonthYear(payload.dataInicio);
-      const dataFim = normalizeMonthYear(payload.dataFim);
-      if (!cultura || !cultivar || !dataInicio || !dataFim) {
-        notifications.show({
-          title: 'Seleção incompleta',
-          message: 'A cultivar enviada pelo seletor do RNC está incompleta.',
-          color: 'yellow',
-        });
-        return;
-      }
-      if (monthYearOrder(dataInicio) > monthYearOrder(dataFim)) {
-        notifications.show({
-          title: 'Período inválido',
-          message: 'A seleção RNC retornou um período inválido.',
-          color: 'yellow',
-        });
-        return;
-      }
-
-      const incomingRow: CultureEntry = {
-        cultura,
-        cultivar,
-        data_inicio: dataInicio,
-        data_fim: dataFim,
-        fonte: payload.fonte,
-      };
-
-      setCultures((prev) => {
-        const existingIndex = prev.findIndex(
-          (item) =>
-            normalizeKey(item.cultura) === normalizeKey(incomingRow.cultura) &&
-            normalizeKey(item.cultivar ?? '') === normalizeKey(incomingRow.cultivar ?? ''),
-        );
-        if (existingIndex < 0) return [...prev, incomingRow];
-        return prev.map((item, index) => (index === existingIndex ? incomingRow : item));
-      });
-
-      if (!currentCulture.trim()) {
-        setCurrentCulture(cultura);
-      }
-
-      notifications.show({
-        title: 'Cultivar vinculada',
-        message: `${cultivar} (${cultura}) adicionada via RNC.`,
-        color: 'green',
-      });
-    };
-
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [opened, currentCulture]);
-
   const removeCulture = (index: number) => {
     setCultures((prev) => {
       const removed = prev[index];
@@ -1191,6 +1195,63 @@ export default function TalhaoDetailModal({
         setCurrentCulture(next[0]?.cultura ?? '');
       }
       return next;
+    });
+  };
+
+  const duplicateCultivarForTechnicalProfile = (index: number) => {
+    const row = cultures[index];
+    if (!row) return;
+
+    const especieNomeComum = String(
+      row.especie_nome_comum || row.cultura || '',
+    ).trim();
+    const especieNomeCientifico = String(row.especie_nome_cientifico || '').trim();
+    const grupoEspecie = String(row.grupo_especie || '').trim();
+    const cultivarNome = String(row.cultivar || '').trim();
+
+    if (!especieNomeComum) {
+      notifications.show({
+        title: 'Espécie inválida',
+        message: 'Não foi possível identificar a espécie para preparar os dados técnicos.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    if (!cultivarNome) {
+      notifications.show({
+        title: 'Cultivar ausente',
+        message: 'Selecione uma cultivar para duplicar dados técnicos específicos.',
+        color: 'yellow',
+      });
+      return;
+    }
+
+    const technicalProfile = duplicateCultivarTechnicalProfile({
+      especieNomeComum,
+      especieNomeCientifico,
+      grupoEspecie,
+      cultivarNome,
+      rncDetailUrl: row.rnc_detail_url,
+    });
+
+    setCultures((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              cultivar: technicalProfile.cultivar_nome,
+              technical_profile_id: technicalProfile.id,
+              technical_priority: 'cultivar',
+            }
+          : item,
+      ),
+    );
+
+    notifications.show({
+      title: 'Cultivar duplicada para edição técnica',
+      message: `${technicalProfile.cultivar_nome} preparada para receber seus dados de produção.`,
+      color: 'green',
     });
   };
 
@@ -1523,6 +1584,12 @@ export default function TalhaoDetailModal({
         historico_culturas: cultures.map((item) => ({
           cultura: item.cultura,
           cultivar: item.cultivar,
+          especie_nome_comum: item.especie_nome_comum,
+          especie_nome_cientifico: item.especie_nome_cientifico,
+          grupo_especie: item.grupo_especie,
+          rnc_detail_url: item.rnc_detail_url,
+          technical_profile_id: item.technical_profile_id,
+          technical_priority: item.technical_priority,
           data_inicio: item.data_inicio,
           data_fim: item.data_fim,
           fonte: item.fonte,
@@ -1614,11 +1681,15 @@ export default function TalhaoDetailModal({
             cultureDraft={cultureDraft}
             setCultureDraft={setCultureDraft}
             cultureModalOpened={cultureModalOpened}
+            cultureLinkModalOpened={cultureLinkModalOpened}
             closeCultureModal={closeCultureModal}
+            closeCultureLinkModal={closeCultureLinkModal}
             saveCultureDraft={saveCultureDraft}
-            openRncCultivarSelectorWindow={openRncCultivarSelectorWindow}
+            openCultureLinkModal={openCultureLinkModal}
+            handleLinkCultureFromRnc={handleLinkCultureFromRnc}
             openEditCultureModal={openEditCultureModal}
             removeCulture={removeCulture}
+            duplicateCultivarForTechnicalProfile={duplicateCultivarForTechnicalProfile}
             drawMode={drawMode}
             statusLabel={statusLabel}
             startMainDrawing={startMainDrawing}
@@ -1771,11 +1842,15 @@ function GridLayout(props: {
   cultureDraft: CultureEntry;
   setCultureDraft: (value: CultureEntry) => void;
   cultureModalOpened: boolean;
+  cultureLinkModalOpened: boolean;
   closeCultureModal: () => void;
+  closeCultureLinkModal: () => void;
   saveCultureDraft: () => void;
-  openRncCultivarSelectorWindow: () => void;
+  openCultureLinkModal: () => void;
+  handleLinkCultureFromRnc: (payload: RncCultivarSelectionPayload) => void;
   openEditCultureModal: (index: number) => void;
   removeCulture: (index: number) => void;
+  duplicateCultivarForTechnicalProfile: (index: number) => void;
   drawMode: DrawMode;
   statusLabel: string;
   startMainDrawing: () => void;
@@ -2011,16 +2086,13 @@ function GridLayout(props: {
             <Text fw={700}>Culturas do talhão</Text>
             <Badge color="grape">{props.cultures.length} registros</Badge>
           </Group>
-          <Tooltip label="Selecionar cultivar oficial no RNC">
-            <ActionIcon
-              aria-label="Selecionar cultivar no RNC"
-              color="green"
-              size="lg"
-              onClick={props.openRncCultivarSelectorWindow}
-            >
-              <IconExternalLink size={18} />
-            </ActionIcon>
-          </Tooltip>
+          <Button
+            size="xs"
+            leftSection={<IconPlus size={14} />}
+            onClick={props.openCultureLinkModal}
+          >
+            Vincular cultura e período
+          </Button>
         </Group>
 
         <Collapse in={cultureSectionOpened}>
@@ -2028,26 +2100,29 @@ function GridLayout(props: {
             <Card withBorder p="xs" style={{ flex: '1 1 clamp(220px, 28vw, 360px)' }}>
               <Stack gap={6}>
                 <Text fw={600} size="sm">
-                  Cultura atual
+                  Espécie atual
                 </Text>
                 <Select
-                  placeholder="Selecione a cultura atual"
+                  placeholder="Selecione a espécie ativa"
                   searchable
                   clearable
-                  nothingFoundMessage="Nenhuma cultura encontrada"
+                  nothingFoundMessage="Nenhuma espécie encontrada"
                   data={props.currentCultureOptions}
                   value={props.currentCulture || null}
                   onChange={(value) => props.setCurrentCulture(value ?? '')}
                 />
                 {currentCultureRow ? (
                   <Text size="xs" c="dimmed">
-                    {`Cultivar: ${currentCultureRow.cultivar || '-'} | Periodo: ${formatMonthYear(currentCultureRow.data_inicio)} a ${formatMonthYear(currentCultureRow.data_fim)}`}
+                    {`Refino por cultivar: ${currentCultureRow.cultivar || '-'} | Período: ${formatMonthYear(currentCultureRow.data_inicio)} a ${formatMonthYear(currentCultureRow.data_fim)}`}
                   </Text>
                 ) : (
                   <Text size="xs" c="dimmed">
-                    Sem cultura atual selecionada.
+                    Sem espécie ativa selecionada.
                   </Text>
                 )}
+                <Text size="xs" c="dimmed">
+                  Prioridade de referência para cálculos: cultivar quando informada; senão, espécie.
+                </Text>
               </Stack>
             </Card>
 
@@ -2060,10 +2135,11 @@ function GridLayout(props: {
                   <Table striped highlightOnHover withTableBorder>
                     <Table.Thead>
                       <Table.Tr>
-                        <Table.Th>Cultura</Table.Th>
-                        <Table.Th>Cultivar</Table.Th>
+                        <Table.Th>Espécie</Table.Th>
+                        <Table.Th>Cultivar (refino)</Table.Th>
                         <Table.Th>Período</Table.Th>
-                        <Table.Th>Fonte</Table.Th>
+                        <Table.Th>Prioridade</Table.Th>
+                        <Table.Th>Dados técnicos</Table.Th>
                         <Table.Th>Ações</Table.Th>
                       </Table.Tr>
                     </Table.Thead>
@@ -2077,9 +2153,32 @@ function GridLayout(props: {
                           <Table.Td>
                             {`${formatMonthYear(row.data_inicio)} a ${formatMonthYear(row.data_fim)}`}
                           </Table.Td>
-                          <Table.Td>{row.fonte || 'Manual legado'}</Table.Td>
+                          <Table.Td>
+                            {row.cultivar ? 'Cultivar' : 'Espécie'}
+                          </Table.Td>
+                          <Table.Td>
+                            {row.technical_profile_id
+                              ? 'Cultivar custom'
+                              : row.technical_priority === 'cultivar'
+                                ? 'Cultivar RNC'
+                                : 'Espécie'}
+                          </Table.Td>
                           <Table.Td>
                             <Group gap={6}>
+                              <Tooltip label="Duplicar cultivar para dados técnicos próprios">
+                                <ActionIcon
+                                  size="sm"
+                                  variant="light"
+                                  color="teal"
+                                  aria-label="Duplicar cultivar para dados técnicos"
+                                  onClick={() =>
+                                    props.duplicateCultivarForTechnicalProfile(index)
+                                  }
+                                  disabled={!row.cultivar}
+                                >
+                                  <IconCopy size={14} />
+                                </ActionIcon>
+                              </Tooltip>
                               <Tooltip label="Editar cultura/safra">
                                 <ActionIcon
                                   size="sm"
@@ -2127,13 +2226,13 @@ function GridLayout(props: {
       >
         <Stack>
           <TextInput
-            label="Cultura (RNC)"
+            label="Espécie (RNC)"
             value={props.cultureDraft.cultura}
             readOnly
           />
 
           <TextInput
-            label="Cultivar (RNC)"
+            label="Cultivar (RNC - refino)"
             value={props.cultureDraft.cultivar ?? ''}
             readOnly
           />
@@ -2187,6 +2286,19 @@ function GridLayout(props: {
             </Tooltip>
           </Group>
         </Stack>
+      </Modal>
+
+      <Modal
+        opened={props.cultureLinkModalOpened}
+        onClose={props.closeCultureLinkModal}
+        title="Vincular espécie/cultivar ao talhão"
+        centered
+        size="clamp(340px, 92vw, 1180px)"
+      >
+        <RncCultivarSelector
+          mode="picker"
+          onSelect={props.handleLinkCultureFromRnc}
+        />
       </Modal>
 
       <Card withBorder p="xs">

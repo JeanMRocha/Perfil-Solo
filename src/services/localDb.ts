@@ -314,6 +314,12 @@ export async function createTalhaoLocal(input: {
   historico_culturas?: {
     cultura: string;
     cultivar?: string;
+    especie_nome_comum?: string;
+    especie_nome_cientifico?: string;
+    grupo_especie?: string;
+    rnc_detail_url?: string;
+    technical_profile_id?: string;
+    technical_priority?: 'species' | 'cultivar';
     data_inicio: string;
     data_fim: string;
     safra?: string;
@@ -347,6 +353,12 @@ export async function updateTalhaoLocal(input: {
   historico_culturas?: {
     cultura: string;
     cultivar?: string;
+    especie_nome_comum?: string;
+    especie_nome_cientifico?: string;
+    grupo_especie?: string;
+    rnc_detail_url?: string;
+    technical_profile_id?: string;
+    technical_priority?: 'species' | 'cultivar';
     data_inicio: string;
     data_fim: string;
     safra?: string;
