@@ -1,13 +1,9 @@
-import {
-  AppShell,
-  Box,
-  Group,
-  Text,
-} from '@mantine/core';
+import { AppShell, Box, Group, Text } from '@mantine/core';
 import {
   IconBook2,
   IconBriefcase2,
   IconBuildingFactory2,
+  IconDatabase,
   IconFileAnalytics,
   IconHome,
   IconMap2,
@@ -81,13 +77,18 @@ import {
   trackGamificationEvent,
   type GamificationState,
 } from '../../services/gamificationService';
-import { isOwnerSuperUser } from '../../services/superAccessService';
+import {
+  isOwnerSuperUser,
+  debugSuperAccess,
+} from '../../services/superAccessService';
 import { getBrandPalette } from '../../mantine/brand';
 import HeaderBar from './components/HeaderBar';
 import MainDrawer from './components/MainDrawer';
 
 function normalizePlanLabel(input: unknown): string {
-  const raw = String(input ?? 'free').trim().toLowerCase();
+  const raw = String(input ?? 'free')
+    .trim()
+    .toLowerCase();
   if (!raw) return 'FREE';
   return raw.toUpperCase();
 }
@@ -132,9 +133,7 @@ function normalizeCredits(input: unknown): number {
   return Math.max(0, Math.round(parsed));
 }
 
-function deriveCreditsBreakdown(
-  rows: CreditTransaction[],
-): CreditsBreakdown {
+function deriveCreditsBreakdown(rows: CreditTransaction[]): CreditsBreakdown {
   return rows.reduce<CreditsBreakdown>(
     (acc, row) => {
       const amount = Number(row.amount);
@@ -205,7 +204,9 @@ export default function AppLayout() {
   const location = useLocation();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [notificationRows, setNotificationRows] = useState<AppNotification[]>([]);
+  const [notificationRows, setNotificationRows] = useState<AppNotification[]>(
+    [],
+  );
   const [notificationExpandedId, setNotificationExpandedId] = useState<
     string | null
   >(null);
@@ -217,19 +218,50 @@ export default function AppLayout() {
   const [avatarSrc, setAvatarSrc] = useState('');
   const [avatarEmoji, setAvatarEmoji] = useState('');
   const [billingPlanId, setBillingPlanId] = useState<BillingPlanId>('free');
-  const [billingUsageLines, setBillingUsageLines] = useState<BillingQuoteLine[]>(
-    EMPTY_BILLING_USAGE_LINES,
-  );
+  const [billingUsageLines, setBillingUsageLines] = useState<
+    BillingQuoteLine[]
+  >(EMPTY_BILLING_USAGE_LINES);
   const [billingUsageLoading, setBillingUsageLoading] = useState(false);
   const [billingGraceActive, setBillingGraceActive] = useState(false);
-  const [billingRestrictedToFirstProperty, setBillingRestrictedToFirstProperty] = useState(false);
-  const [billingGraceDeadline, setBillingGraceDeadline] = useState<string | null>(null);
-  const [gamificationState, setGamificationState] = useState<GamificationState | null>(null);
+  const [
+    billingRestrictedToFirstProperty,
+    setBillingRestrictedToFirstProperty,
+  ] = useState(false);
+  const [billingGraceDeadline, setBillingGraceDeadline] = useState<
+    string | null
+  >(null);
+  const [gamificationState, setGamificationState] =
+    useState<GamificationState | null>(null);
   const [appMode, setAppMode] = useState<AppUserMode>(() => getUserAppMode());
   const [brand, setBrand] = useState<SystemBrandConfig>(() => getSystemBrand());
   const [, setBrandThemeVersion] = useState(0);
   const currentUserId = String(user?.id ?? '').trim();
   const canUseSuperMode = isOwnerSuperUser(user);
+
+  // Debug: Log super access status
+  useEffect(() => {
+    if (user?.email) {
+      const debug = debugSuperAccess(user);
+      console.log('╔════════════════════════════════════════════════════╗');
+      console.log('║         [SuperAccess Debug - DetailedInfo]         ║');
+      console.log('╚════════════════════════════════════════════════════╝');
+      console.log('User Object:', user);
+      console.log('Is Super:', debug.isSuper);
+      console.log('Email Detectado:', debug.email);
+      console.log('Emails Permitidos:', debug.allowedEmails);
+      console.log('Razão:', debug.reason);
+      console.log('╚════════════════════════════════════════════════════╝');
+
+      if (!canUseSuperMode) {
+        console.error(
+          '[SuperAccess ERROR]',
+          `Email "${user.email}" NÃO autoriz como super. Verifique VITE_OWNER_SUPER_EMAILS no .env`,
+        );
+      } else {
+        console.log('[SuperAccess SUCCESS] ✅ Usuário é super!');
+      }
+    }
+  }, [user, canUseSuperMode]);
 
   useEffect(() => {
     let alive = true;
@@ -401,7 +433,13 @@ export default function AppLayout() {
       window.removeEventListener(AVATAR_MARKET_UPDATED_EVENT, onAvatarUpdated);
       window.removeEventListener('storage', onStorage);
     };
-  }, [user?.id, user?.email, user?.user_metadata?.name, profile?.name, profile?.producer?.nome_exibicao]);
+  }, [
+    user?.id,
+    user?.email,
+    user?.user_metadata?.name,
+    profile?.name,
+    profile?.producer?.nome_exibicao,
+  ]);
 
   useEffect(() => {
     let alive = true;
@@ -435,7 +473,9 @@ export default function AppLayout() {
         setBillingPlanId(subscription.plan_id);
         setBillingUsageLines(quote.lines);
         setBillingGraceActive(accessPolicy.grace_active);
-        setBillingRestrictedToFirstProperty(accessPolicy.restricted_to_first_property);
+        setBillingRestrictedToFirstProperty(
+          accessPolicy.restricted_to_first_property,
+        );
         setBillingGraceDeadline(accessPolicy.grace_deadline);
       } catch {
         if (!alive) return;
@@ -492,12 +532,16 @@ export default function AppLayout() {
     if (!currentUserId) return;
 
     if (location.pathname === '/dashboard') {
-      void trackGamificationEvent(currentUserId, 'visit_dashboard').catch(() => null);
+      void trackGamificationEvent(currentUserId, 'visit_dashboard').catch(
+        () => null,
+      );
       return;
     }
 
     if (location.pathname === '/user') {
-      void trackGamificationEvent(currentUserId, 'visit_user_center').catch(() => null);
+      void trackGamificationEvent(currentUserId, 'visit_user_center').catch(
+        () => null,
+      );
     }
   }, [currentUserId, location.pathname]);
 
@@ -565,9 +609,13 @@ export default function AppLayout() {
 
     setAppMode(getUserAppMode(currentUserId, user));
 
-    const unsubscribe = subscribeUserPreferences(currentUserId, (prefs) => {
-      setAppMode(prefs.mode);
-    }, user);
+    const unsubscribe = subscribeUserPreferences(
+      currentUserId,
+      (prefs) => {
+        setAppMode(prefs.mode);
+      },
+      user,
+    );
 
     return unsubscribe;
   }, [canUseSuperMode, currentUserId, user]);
@@ -580,8 +628,11 @@ export default function AppLayout() {
   const creditsNumber = normalizeCredits(walletCredits);
   const xpTotal = normalizeCredits(gamificationState?.xp_total ?? 0);
   const xpLevel = normalizeCredits(gamificationState?.level.level ?? 1);
-  const avatarSource = avatarSrc || profile?.avatar_url || profile?.logo_url || '';
-  const cargoProfissao = String(profile?.producer?.cargo_profissao ?? '').trim();
+  const avatarSource =
+    avatarSrc || profile?.avatar_url || profile?.logo_url || '';
+  const cargoProfissao = String(
+    profile?.producer?.cargo_profissao ?? '',
+  ).trim();
   const companyName = truncateHeaderSubtitle(cargoProfissao);
   const isSuperMode = canUseSuperMode && appMode === 'super';
   const brandDisplayName = brand.name.trim() || 'PerfilSolo';
@@ -738,6 +789,11 @@ export default function AppLayout() {
       label: 'Usuários',
       path: '/super/usuarios',
       icon: IconUser,
+    },
+    {
+      label: 'Importações',
+      path: '/super/importacoes',
+      icon: IconDatabase,
     },
   ];
 
@@ -936,7 +992,11 @@ export default function AppLayout() {
               LGPD
             </Text>
           </Group>
-          <Text size="sm" ff="monospace" c={tema === 'dark' ? 'gray.4' : 'dimmed'}>
+          <Text
+            size="sm"
+            ff="monospace"
+            c={tema === 'dark' ? 'gray.4' : 'dimmed'}
+          >
             {appVersionLabel}
           </Text>
         </Group>
@@ -949,6 +1009,7 @@ export default function AppLayout() {
         onClose={closeDrawer}
         onToggleTheme={alternarTema}
         onGo={toggleMenuRoute}
+        onLogout={() => navigate('/auth/logout')}
       />
 
       {loading && (
@@ -958,7 +1019,9 @@ export default function AppLayout() {
             inset: 0,
             zIndex: 2000,
             background:
-              tema === 'light' ? 'rgba(217, 225, 219, 0.88)' : 'rgba(0,0,0,0.45)',
+              tema === 'light'
+                ? 'rgba(217, 225, 219, 0.88)'
+                : 'rgba(0,0,0,0.45)',
             backdropFilter: 'blur(4px)',
           }}
         >

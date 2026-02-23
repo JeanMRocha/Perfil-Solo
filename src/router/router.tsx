@@ -16,17 +16,25 @@ const ForgotPassword = lazy(() => import('@views/Auth/ForgotPassword'));
 const UserCenter = lazy(() => import('@views/User/UserCenter'));
 const Propriedades = lazy(() => import('@views/Propriedades/Propriedades'));
 const CulturasBusca = lazy(() => import('@views/Cadastros/CulturasBusca'));
-const CulturasCadastro = lazy(() => import('@views/Cadastros/CulturasCadastro'));
-const LaboratoriosBusca = lazy(() => import('@views/Cadastros/LaboratoriosBusca'));
+const CulturasCadastro = lazy(
+  () => import('@views/Cadastros/CulturasCadastro'),
+);
+const LaboratoriosBusca = lazy(
+  () => import('@views/Cadastros/LaboratoriosBusca'),
+);
 const LaboratoriosCadastro = lazy(
   () => import('@views/Cadastros/LaboratoriosCadastro'),
 );
 const PessoasBusca = lazy(() => import('@views/Cadastros/PessoasBusca'));
 const PessoasCadastro = lazy(() => import('@views/Cadastros/PessoasCadastro'));
 const ProdutosBusca = lazy(() => import('@views/Cadastros/ProdutosBusca'));
-const ProdutosCadastro = lazy(() => import('@views/Cadastros/ProdutosCadastro'));
+const ProdutosCadastro = lazy(
+  () => import('@views/Cadastros/ProdutosCadastro'),
+);
 const ServicosBusca = lazy(() => import('@views/Cadastros/ServicosBusca'));
-const ServicosCadastro = lazy(() => import('@views/Cadastros/ServicosCadastro'));
+const ServicosCadastro = lazy(
+  () => import('@views/Cadastros/ServicosCadastro'),
+);
 
 const DashboardAnaliseSolo = lazy(
   () => import('@views/AnaliseSolo/DashboardAnaliseSolo'),
@@ -46,6 +54,7 @@ const CookiesNotice = lazy(() => import('@views/Legal/CookiesNotice'));
 const LgpdNotice = lazy(() => import('@views/Legal/LgpdNotice'));
 const SystemIdentity = lazy(() => import('@views/Super/SystemIdentity'));
 const UserManagement = lazy(() => import('@views/Super/UserManagement'));
+const ImportsAdmin = lazy(() => import('@views/Super/ImportsAdmin'));
 const ApiMode = lazy(() => import('@views/Integracoes/ApiMode'));
 const AulasHub = lazy(() => import('@views/Aulas/AulasHub'));
 const KnowledgeHub = lazy(() => import('@views/Knowledge/KnowledgeHub'));
@@ -78,7 +87,9 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando dashboard..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando dashboard..." />}
+          >
             <Dashboard />
           </Suspense>
         ),
@@ -86,7 +97,11 @@ export const router = createBrowserRouter([
       {
         path: 'user',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando central do usuário..." />}>
+          <Suspense
+            fallback={
+              <LoaderGlobal message="Carregando central do usuário..." />
+            }
+          >
             <UserCenter />
           </Suspense>
         ),
@@ -98,7 +113,9 @@ export const router = createBrowserRouter([
       {
         path: 'config/aparencia',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando personalizacao..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando personalizacao..." />}
+          >
             <ThemePersonalization />
           </Suspense>
         ),
@@ -106,7 +123,9 @@ export const router = createBrowserRouter([
       {
         path: 'marketplace',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando ecossistema..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando ecossistema..." />}
+          >
             <Marketplace />
           </Suspense>
         ),
@@ -114,7 +133,9 @@ export const router = createBrowserRouter([
       {
         path: 'notificacoes',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando notificacoes..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando notificacoes..." />}
+          >
             <NotificationsCenter />
           </Suspense>
         ),
@@ -122,7 +143,9 @@ export const router = createBrowserRouter([
       {
         path: 'propriedades',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando propriedades..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando propriedades..." />}
+          >
             <Propriedades />
           </Suspense>
         ),
@@ -133,7 +156,9 @@ export const router = createBrowserRouter([
           {
             path: 'culturas/busca',
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando culturas..." />}>
+              <Suspense
+                fallback={<LoaderGlobal message="Carregando culturas..." />}
+              >
                 <CulturasBusca />
               </Suspense>
             ),
@@ -141,7 +166,9 @@ export const router = createBrowserRouter([
           {
             path: 'culturas/cadastro',
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando cultura..." />}>
+              <Suspense
+                fallback={<LoaderGlobal message="Carregando cultura..." />}
+              >
                 <CulturasCadastro />
               </Suspense>
             ),
@@ -149,7 +176,9 @@ export const router = createBrowserRouter([
           {
             path: 'laboratorios/busca',
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando laboratorios..." />}>
+              <Suspense
+                fallback={<LoaderGlobal message="Carregando laboratorios..." />}
+              >
                 <LaboratoriosBusca />
               </Suspense>
             ),
@@ -158,7 +187,9 @@ export const router = createBrowserRouter([
             path: 'laboratorios/cadastro',
             element: (
               <Suspense
-                fallback={<LoaderGlobal message="Carregando cadastro de laboratorio..." />}
+                fallback={
+                  <LoaderGlobal message="Carregando cadastro de laboratorio..." />
+                }
               >
                 <LaboratoriosCadastro />
               </Suspense>
@@ -167,7 +198,9 @@ export const router = createBrowserRouter([
           {
             path: 'pessoas/busca',
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando pessoas..." />}>
+              <Suspense
+                fallback={<LoaderGlobal message="Carregando pessoas..." />}
+              >
                 <PessoasBusca />
               </Suspense>
             ),
@@ -175,7 +208,11 @@ export const router = createBrowserRouter([
           {
             path: 'pessoas/cadastro',
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando cadastro de pessoa..." />}>
+              <Suspense
+                fallback={
+                  <LoaderGlobal message="Carregando cadastro de pessoa..." />
+                }
+              >
                 <PessoasCadastro />
               </Suspense>
             ),
@@ -183,7 +220,9 @@ export const router = createBrowserRouter([
           {
             path: 'produtos/busca',
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando produtos..." />}>
+              <Suspense
+                fallback={<LoaderGlobal message="Carregando produtos..." />}
+              >
                 <ProdutosBusca />
               </Suspense>
             ),
@@ -191,7 +230,11 @@ export const router = createBrowserRouter([
           {
             path: 'produtos/cadastro',
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando cadastro de produto..." />}>
+              <Suspense
+                fallback={
+                  <LoaderGlobal message="Carregando cadastro de produto..." />
+                }
+              >
                 <ProdutosCadastro />
               </Suspense>
             ),
@@ -199,7 +242,9 @@ export const router = createBrowserRouter([
           {
             path: 'servicos/busca',
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando servicos..." />}>
+              <Suspense
+                fallback={<LoaderGlobal message="Carregando servicos..." />}
+              >
                 <ServicosBusca />
               </Suspense>
             ),
@@ -207,7 +252,11 @@ export const router = createBrowserRouter([
           {
             path: 'servicos/cadastro',
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando cadastro de servico..." />}>
+              <Suspense
+                fallback={
+                  <LoaderGlobal message="Carregando cadastro de servico..." />
+                }
+              >
                 <ServicosCadastro />
               </Suspense>
             ),
@@ -217,7 +266,9 @@ export const router = createBrowserRouter([
       {
         path: 'relatorios',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando relatorios..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando relatorios..." />}
+          >
             <RelatorioAnalise />
           </Suspense>
         ),
@@ -229,7 +280,9 @@ export const router = createBrowserRouter([
       {
         path: 'legal/privacidade',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando politica..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando politica..." />}
+          >
             <PrivacyPolicy />
           </Suspense>
         ),
@@ -253,7 +306,9 @@ export const router = createBrowserRouter([
       {
         path: 'super/sistema',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando modulo super..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando modulo super..." />}
+          >
             <SuperModeGuard>
               <SystemIdentity />
             </SuperModeGuard>
@@ -263,7 +318,9 @@ export const router = createBrowserRouter([
       {
         path: 'super/logo',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando modulo super..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando modulo super..." />}
+          >
             <SuperModeGuard>
               <SystemIdentity />
             </SuperModeGuard>
@@ -273,7 +330,11 @@ export const router = createBrowserRouter([
       {
         path: 'super/usuarios',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando gestao de usuários..." />}>
+          <Suspense
+            fallback={
+              <LoaderGlobal message="Carregando gestao de usuários..." />
+            }
+          >
             <SuperModeGuard>
               <UserManagement />
             </SuperModeGuard>
@@ -281,9 +342,25 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'super/importacoes',
+        element: (
+          <Suspense
+            fallback={
+              <LoaderGlobal message="Carregando gestao de importações..." />
+            }
+          >
+            <SuperModeGuard>
+              <ImportsAdmin />
+            </SuperModeGuard>
+          </Suspense>
+        ),
+      },
+      {
         path: 'integracoes/api',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando modo API..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando modo API..." />}
+          >
             <ApiMode />
           </Suspense>
         ),
@@ -307,7 +384,9 @@ export const router = createBrowserRouter([
       {
         path: 'conhecimento',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando conhecimento..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando conhecimento..." />}
+          >
             <KnowledgeHub />
           </Suspense>
         ),
@@ -326,7 +405,9 @@ export const router = createBrowserRouter([
           {
             index: true,
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando análises..." />}>
+              <Suspense
+                fallback={<LoaderGlobal message="Carregando análises..." />}
+              >
                 <DashboardAnaliseSolo />
               </Suspense>
             ),
@@ -334,7 +415,9 @@ export const router = createBrowserRouter([
           {
             path: 'cadastro',
             element: (
-              <Suspense fallback={<LoaderGlobal message="Carregando cadastro..." />}>
+              <Suspense
+                fallback={<LoaderGlobal message="Carregando cadastro..." />}
+              >
                 <CadastroAnaliseSolo />
               </Suspense>
             ),
@@ -373,7 +456,9 @@ export const router = createBrowserRouter([
       {
         path: 'register',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando registro..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando registro..." />}
+          >
             <Register />
           </Suspense>
         ),
@@ -381,7 +466,9 @@ export const router = createBrowserRouter([
       {
         path: 'forgot-password',
         element: (
-          <Suspense fallback={<LoaderGlobal message="Carregando recuperacao..." />}>
+          <Suspense
+            fallback={<LoaderGlobal message="Carregando recuperacao..." />}
+          >
             <ForgotPassword />
           </Suspense>
         ),

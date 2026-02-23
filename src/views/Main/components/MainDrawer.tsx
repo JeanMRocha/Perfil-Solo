@@ -1,13 +1,15 @@
-import { Drawer, NavLink, Stack, Switch } from '@mantine/core';
+import { Drawer, NavLink, Stack, Switch, Divider } from '@mantine/core';
 import {
   IconApi,
   IconBell,
+  IconDatabase,
   IconMap2,
   IconPhotoUp,
   IconPalette,
   IconSettings,
   IconShoppingBag,
   IconUser,
+  IconLogout,
 } from '@tabler/icons-react';
 
 interface MainDrawerProps {
@@ -17,6 +19,7 @@ interface MainDrawerProps {
   onClose: () => void;
   onToggleTheme: () => void;
   onGo: (path: string) => void;
+  onLogout: () => void;
 }
 
 export default function MainDrawer({
@@ -26,6 +29,7 @@ export default function MainDrawer({
   onClose,
   onToggleTheme,
   onGo,
+  onLogout,
 }: MainDrawerProps) {
   const isLightTheme = themeMode === 'light';
   const drawerStyles = isLightTheme
@@ -158,8 +162,33 @@ export default function MainDrawer({
               onClick={() => onGo('/super/usuarios')}
               styles={navLinkStyles}
             />
+            <NavLink
+              label="Importações"
+              leftSection={<IconDatabase size={16} />}
+              onClick={() => onGo('/super/importacoes')}
+              styles={navLinkStyles}
+            />
           </>
         ) : null}
+
+        <Divider />
+
+        <NavLink
+          label="Sair da Conta"
+          leftSection={<IconLogout size={16} />}
+          onClick={onLogout}
+          styles={{
+            ...navLinkStyles,
+            root: {
+              ...(navLinkStyles?.root || {}),
+              color: '#dc2626',
+            },
+            label: {
+              ...(navLinkStyles?.label || {}),
+              color: '#dc2626',
+            },
+          }}
+        />
       </Stack>
     </Drawer>
   );

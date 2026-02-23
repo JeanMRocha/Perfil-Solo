@@ -54,7 +54,9 @@ async function invokeEdgeSearchDirect(body: any): Promise<any> {
   const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? '').trim();
   const anonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? '').trim();
   if (!supabaseUrl || !anonKey) {
-    throw new Error('Configuração Supabase ausente para consulta remota do RNC.');
+    throw new Error(
+      'Configuração Supabase ausente para consulta remota do RNC.',
+    );
   }
 
   const endpoint = `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/rnc-cultivar-search`;
@@ -71,7 +73,10 @@ async function invokeEdgeSearchDirect(body: any): Promise<any> {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(
-      String(payload?.error ?? `Falha ao consultar edge function do RNC (HTTP ${response.status}).`),
+      String(
+        payload?.error ??
+          `Falha ao consultar edge function do RNC (HTTP ${response.status}).`,
+      ),
     );
   }
   return payload;
@@ -124,8 +129,12 @@ function applyFilters(
 ): RncCultivarRecord[] {
   if (!filters) return rows;
   return rows.filter((row) => {
-    if (!includesNormalized(row.especie_nome_comum, filters.nomeComum)) return false;
-    if (!includesNormalized(row.especie_nome_cientifico, filters.nomeCientifico)) return false;
+    if (!includesNormalized(row.especie_nome_comum, filters.nomeComum))
+      return false;
+    if (
+      !includesNormalized(row.especie_nome_cientifico, filters.nomeCientifico)
+    )
+      return false;
     if (!includesNormalized(row.cultivar, filters.cultivar)) return false;
     if (
       filters.grupoEspecie &&
@@ -151,7 +160,10 @@ export async function searchRncCultivars(params: {
   pageSize?: number;
 }): Promise<RncCultivarSearchResult> {
   const page = Math.max(1, Number(params.page ?? 1) || 1);
-  const pageSize = Math.min(200, Math.max(1, Number(params.pageSize ?? 50) || 50));
+  const pageSize = Math.min(
+    500,
+    Math.max(1, Number(params.pageSize ?? 50) || 50),
+  );
 
   const requestBody = {
     action: 'search',
@@ -172,7 +184,8 @@ export async function searchRncCultivars(params: {
     const items = Array.isArray(response.items) ? response.items : [];
     const groups = Array.isArray(response.groups) ? response.groups : [];
     return {
-      source: response.source === 'local-sample' ? 'local-sample' : 'rnc-mapa-cache',
+      source:
+        response.source === 'local-sample' ? 'local-sample' : 'rnc-mapa-cache',
       items,
       page: Number(response.page ?? page) || page,
       page_size: Number(response.page_size ?? pageSize) || pageSize,
@@ -180,7 +193,9 @@ export async function searchRncCultivars(params: {
       groups,
       fallback_used: Boolean(response.fallback_used),
       cache_updated_at:
-        typeof response.cache_updated_at === 'string' ? response.cache_updated_at : null,
+        typeof response.cache_updated_at === 'string'
+          ? response.cache_updated_at
+          : null,
     };
   } catch {
     // Em modo local, tentamos a edge function via fetch direto (anon key) para evitar
@@ -191,7 +206,10 @@ export async function searchRncCultivars(params: {
         const items = Array.isArray(response.items) ? response.items : [];
         const groups = Array.isArray(response.groups) ? response.groups : [];
         return {
-          source: response.source === 'local-sample' ? 'local-sample' : 'rnc-mapa-cache',
+          source:
+            response.source === 'local-sample'
+              ? 'local-sample'
+              : 'rnc-mapa-cache',
           items,
           page: Number(response.page ?? page) || page,
           page_size: Number(response.page_size ?? pageSize) || pageSize,
@@ -199,14 +217,16 @@ export async function searchRncCultivars(params: {
           groups,
           fallback_used: Boolean(response.fallback_used),
           cache_updated_at:
-            typeof response.cache_updated_at === 'string' ? response.cache_updated_at : null,
+            typeof response.cache_updated_at === 'string'
+              ? response.cache_updated_at
+              : null,
         };
       } catch {
         // fallback final: amostra local
         const filtered = applyFilters(LOCAL_SAMPLE, params.filters);
-        const groups = Array.from(new Set(LOCAL_SAMPLE.map((row) => row.grupo_especie))).sort(
-          (a, b) => a.localeCompare(b, 'pt-BR'),
-        );
+        const groups = Array.from(
+          new Set(LOCAL_SAMPLE.map((row) => row.grupo_especie)),
+        ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
         return {
           source: 'local-sample',
           items: paginate(filtered, page, pageSize),
@@ -234,7 +254,8 @@ export async function forceSyncRncCultivars(): Promise<{
     const data = await invokeEdgeSearchDirect({ action: 'sync' });
     return {
       total: Number(data?.total ?? 0) || 0,
-      synced_at: typeof data?.synced_at === 'string' ? data.synced_at : undefined,
+      synced_at:
+        typeof data?.synced_at === 'string' ? data.synced_at : undefined,
     };
   }
 

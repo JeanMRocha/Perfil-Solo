@@ -1,5 +1,7 @@
 function normalizeEmail(value: unknown): string {
-  return String(value ?? '').trim().toLowerCase();
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
 }
 
 function normalizeToken(value: unknown): string {
@@ -54,22 +56,27 @@ function asRecord(value: unknown): GenericRecord | null {
 }
 
 function collectCandidateEmails(input: unknown): string[] {
+  // Primeiro, verifica se é um record (objeto com propriedades)
+  const record = asRecord(input);
+  if (record) {
+    const appMeta = asRecord(record.app_metadata);
+    const userMeta = asRecord(record.user_metadata);
+
+    const candidates = [
+      normalizeEmail(record.email),
+      normalizeEmail(record.user_email),
+      normalizeEmail(appMeta?.email),
+      normalizeEmail(userMeta?.email),
+    ].filter((value) => value.length > 0);
+
+    return Array.from(new Set(candidates));
+  }
+
+  // Se não for um record, tenta normalizar como string diretamente
   const directEmail = normalizeEmail(input);
   if (directEmail) return [directEmail];
 
-  const record = asRecord(input);
-  if (!record) return [];
-  const appMeta = asRecord(record.app_metadata);
-  const userMeta = asRecord(record.user_metadata);
-
-  const candidates = [
-    normalizeEmail(record.email),
-    normalizeEmail(record.user_email),
-    normalizeEmail(appMeta?.email),
-    normalizeEmail(userMeta?.email),
-  ].filter((value) => value.length > 0);
-
-  return Array.from(new Set(candidates));
+  return [];
 }
 
 function isSuperRoleValue(value: unknown): boolean {
@@ -97,9 +104,11 @@ function hasSuperRoleOrFlag(input: unknown): boolean {
   const record = asRecord(input);
   if (!record) return false;
 
-  const sources = [record, asRecord(record.app_metadata), asRecord(record.user_metadata)].filter(
-    (item): item is GenericRecord => Boolean(item),
-  );
+  const sources = [
+    record,
+    asRecord(record.app_metadata),
+    asRecord(record.user_metadata),
+  ].filter((item): item is GenericRecord => Boolean(item));
 
   return sources.some((source) => {
     const hasFlag = SUPER_FLAG_KEYS.some((key) => isTruthyFlag(source[key]));
@@ -146,4 +155,44 @@ export function isOwnerSuperUser(
   }
 
   return hasSuperRoleOrFlag(identity);
+}
+
+/**
+ * Função de diagnóstico para super access (uso via console do navegador)
+ * Ajuda a identificar por que um usuário não está sendo reconhecido como super
+ */
+export function debugSuperAccess(identity: unknown): {
+  isSuper: boolean;
+  email: string | null;
+  allowedEmails: string[];
+  reason: string;
+  identity: any;
+} {
+  const emails = collectCandidateEmails(identity);
+  const primaryEmail = emails[0] || null;
+  const normalizedAllowed = OWNER_SUPER_EMAILS.map((item) =>
+    normalizeEmail(item),
+  );
+  const hasEmailMatch = emails.some((email) =>
+    normalizedAllowed.includes(email),
+  );
+  const hasFlagOrRole = hasSuperRoleOrFlag(identity);
+  const isSuper = hasEmailMatch || hasFlagOrRole;
+
+  let reason = '';
+  if (hasEmailMatch) {
+    reason = `✓ Email "${primaryEmail}" está na lista de super usuários`;
+  } else if (hasFlagOrRole) {
+    reason = '✓ Usuário tem flag/role de super';
+  } else {
+    reason = `✗ Email "${primaryEmail}" NÃO está na lista. Confira a variável VITE_OWNER_SUPER_EMAILS`;
+  }
+
+  return {
+    isSuper,
+    email: primaryEmail,
+    allowedEmails: normalizedAllowed,
+    reason,
+    identity: identity as any,
+  };
 }
