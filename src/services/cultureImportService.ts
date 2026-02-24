@@ -16,10 +16,6 @@ import { storageReadJson, storageWriteJson } from './safeLocalStorage';
 const RNC_SPECIES_KEY = 'perfilsolo_rnc_species_profiles_v1';
 const RNC_CULTIVARS_KEY = 'perfilsolo_rnc_cultivar_profiles_v1';
 
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
 function makeId(prefix: string): string {
   if (
     typeof crypto !== 'undefined' &&
@@ -341,7 +337,6 @@ export async function importRncRecord(
     }
 
     const resultObject: ImportResult = {
-
       success: true,
       message: `Espécie "${record.especie_nome_comum}" importada com sucesso`,
       species: speciesData,

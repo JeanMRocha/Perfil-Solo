@@ -22,7 +22,8 @@ export type CreditTransactionType =
   | 'ad_reward'
   | 'engagement_reward'
   | 'money_conversion'
-  | 'billing_refund_adjustment';
+  | 'billing_refund_adjustment'
+  | 'cosmetic_purchase';
 
 export interface CreditWallet {
   user_id: string;
@@ -209,7 +210,10 @@ const ENGAGEMENT_RULE_ORDER: CreditEngagementRuleId[] = [
   'talhao_created',
 ];
 
-const DEFAULT_ENGAGEMENT_RULES: Record<CreditEngagementRuleId, CreditEngagementRule> = {
+const DEFAULT_ENGAGEMENT_RULES: Record<
+  CreditEngagementRuleId,
+  CreditEngagementRule
+> = {
   signup: {
     id: 'signup',
     label: 'Cadastro da conta',
@@ -285,7 +289,9 @@ function normalizeUserId(userId: string): string {
 }
 
 function normalizeEmail(email: string): string {
-  return String(email ?? '').trim().toLowerCase();
+  return String(email ?? '')
+    .trim()
+    .toLowerCase();
 }
 
 function normalizeCouponCode(value: string): string {
@@ -324,7 +330,10 @@ function parseIsoOrNull(input: unknown): string | null {
 }
 
 function makeId(prefix: string): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+  if (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.randomUUID === 'function'
+  ) {
     return `${prefix}_${crypto.randomUUID()}`;
   }
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -402,7 +411,9 @@ function readInitialGrantedSet(): string[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as string[];
     if (!Array.isArray(parsed)) return [];
-    return [...new Set(parsed.map((row) => normalizeUserId(row)).filter(Boolean))];
+    return [
+      ...new Set(parsed.map((row) => normalizeUserId(row)).filter(Boolean)),
+    ];
   } catch {
     return [];
   }
@@ -421,11 +432,20 @@ function readPurchaseRequests(): CreditPurchaseRequest[] {
         id: String(row.id),
         user_id: normalizeUserId(row.user_id),
         package_id: String(row.package_id ?? ''),
-        package_label: row.package_label ? String(row.package_label) : undefined,
-        credits_requested: Math.max(1, Math.round(parseNumber(row.credits_requested))),
+        package_label: row.package_label
+          ? String(row.package_label)
+          : undefined,
+        credits_requested: Math.max(
+          1,
+          Math.round(parseNumber(row.credits_requested)),
+        ),
         price_cents:
-          row.price_cents == null ? undefined : normalizePriceCents(row.price_cents),
-        coupon_code: row.coupon_code ? normalizeCouponCode(row.coupon_code) : undefined,
+          row.price_cents == null
+            ? undefined
+            : normalizePriceCents(row.price_cents),
+        coupon_code: row.coupon_code
+          ? normalizeCouponCode(row.coupon_code)
+          : undefined,
         discount_cents:
           row.discount_cents == null
             ? undefined
@@ -468,7 +488,10 @@ function readCoupons(): CreditCoupon[] {
           row.max_redemptions == null || parseNumber(row.max_redemptions) <= 0
             ? null
             : Math.round(parseNumber(row.max_redemptions)),
-        redeemed_count: Math.max(0, Math.round(parseNumber(row.redeemed_count))),
+        redeemed_count: Math.max(
+          0,
+          Math.round(parseNumber(row.redeemed_count)),
+        ),
         expires_at: parseIsoOrNull(row.expires_at),
         notes: row.notes ? String(row.notes) : undefined,
         created_at: String(row.created_at ?? nowIso()),
@@ -512,25 +535,35 @@ function readAdRewardConfig(): CreditAdRewardConfig {
     if (!raw) return { ...DEFAULT_AD_REWARD_CONFIG };
     const parsed = JSON.parse(raw) as Partial<CreditAdRewardConfig>;
     return {
-      enabled: normalizeBoolean(parsed.enabled, DEFAULT_AD_REWARD_CONFIG.enabled),
+      enabled: normalizeBoolean(
+        parsed.enabled,
+        DEFAULT_AD_REWARD_CONFIG.enabled,
+      ),
       credits_per_view: Math.max(
         1,
         Math.round(
-          parseNumber(parsed.credits_per_view || DEFAULT_AD_REWARD_CONFIG.credits_per_view),
+          parseNumber(
+            parsed.credits_per_view ||
+              DEFAULT_AD_REWARD_CONFIG.credits_per_view,
+          ),
         ),
       ),
       daily_limit_per_user: Math.max(
         1,
         Math.round(
           parseNumber(
-            parsed.daily_limit_per_user || DEFAULT_AD_REWARD_CONFIG.daily_limit_per_user,
+            parsed.daily_limit_per_user ||
+              DEFAULT_AD_REWARD_CONFIG.daily_limit_per_user,
           ),
         ),
       ),
       cooldown_minutes: Math.max(
         0,
         Math.round(
-          parseNumber(parsed.cooldown_minutes || DEFAULT_AD_REWARD_CONFIG.cooldown_minutes),
+          parseNumber(
+            parsed.cooldown_minutes ||
+              DEFAULT_AD_REWARD_CONFIG.cooldown_minutes,
+          ),
         ),
       ),
     };
@@ -551,7 +584,10 @@ function readAdRewardClaims(): CreditAdRewardClaim[] {
       .map((row) => ({
         id: String(row.id),
         user_id: normalizeUserId(row.user_id),
-        credits_awarded: Math.max(0, Math.round(parseNumber(row.credits_awarded))),
+        credits_awarded: Math.max(
+          0,
+          Math.round(parseNumber(row.credits_awarded)),
+        ),
         created_at: String(row.created_at ?? nowIso()),
       }));
   } catch {
@@ -559,7 +595,9 @@ function readAdRewardClaims(): CreditAdRewardClaim[] {
   }
 }
 
-function normalizeEngagementRuleId(input: unknown): CreditEngagementRuleId | null {
+function normalizeEngagementRuleId(
+  input: unknown,
+): CreditEngagementRuleId | null {
   const raw = String(input ?? '').trim();
   if (
     raw !== 'signup' &&
@@ -583,16 +621,23 @@ function normalizeEngagementRule(
     description:
       String(input?.description ?? fallback.description).trim() ||
       fallback.description,
-    credits: Math.max(0, Math.round(parseNumber(input?.credits ?? fallback.credits))),
+    credits: Math.max(
+      0,
+      Math.round(parseNumber(input?.credits ?? fallback.credits)),
+    ),
     max_claims_per_user:
       input?.max_claims_per_user == null
         ? fallback.max_claims_per_user
-        : Math.max(0, Math.round(parseNumber(input.max_claims_per_user))) || null,
+        : Math.max(0, Math.round(parseNumber(input.max_claims_per_user))) ||
+          null,
     enabled: normalizeBoolean(input?.enabled, fallback.enabled),
   };
 }
 
-function readEngagementRules(): Record<CreditEngagementRuleId, CreditEngagementRule> {
+function readEngagementRules(): Record<
+  CreditEngagementRuleId,
+  CreditEngagementRule
+> {
   try {
     const raw = storageGetRaw(ENGAGEMENT_RULES_KEY);
     if (!raw) return { ...DEFAULT_ENGAGEMENT_RULES };
@@ -625,7 +670,10 @@ function readEngagementClaims(): CreditEngagementRewardClaim[] {
           id: String(row.id ?? makeId('ceg')),
           user_id: userId,
           rule_id: ruleId,
-          credits_awarded: Math.max(0, Math.round(parseNumber(row.credits_awarded))),
+          credits_awarded: Math.max(
+            0,
+            Math.round(parseNumber(row.credits_awarded)),
+          ),
           created_at: String(row.created_at ?? nowIso()),
           created_by: row.created_by ? String(row.created_by) : undefined,
           reference_id: row.reference_id ? String(row.reference_id) : undefined,
@@ -647,7 +695,10 @@ function writeInitialGrantedSet(rows: string[], changedUserId?: string): void {
   dispatchCreditsUpdated(changedUserId);
 }
 
-function writePurchaseRequests(rows: CreditPurchaseRequest[], changedUserId?: string): void {
+function writePurchaseRequests(
+  rows: CreditPurchaseRequest[],
+  changedUserId?: string,
+): void {
   persistJsonOrThrow(PURCHASE_REQUESTS_KEY, rows);
   dispatchCreditsUpdated(changedUserId);
 }
@@ -667,7 +718,10 @@ function writeAdRewardConfig(config: CreditAdRewardConfig): void {
   dispatchCreditsUpdated('');
 }
 
-function writeAdRewardClaims(rows: CreditAdRewardClaim[], changedUserId?: string): void {
+function writeAdRewardClaims(
+  rows: CreditAdRewardClaim[],
+  changedUserId?: string,
+): void {
   persistJsonOrThrow(AD_REWARD_CLAIMS_KEY, rows);
   dispatchCreditsUpdated(changedUserId);
 }
@@ -884,10 +938,16 @@ function emitCreditTransactionNotification(tx: CreditTransaction): void {
   }).catch(() => undefined);
 }
 
-function parseCouponDiscount(coupon: CreditCoupon, originalPriceCents: number): number {
+function parseCouponDiscount(
+  coupon: CreditCoupon,
+  originalPriceCents: number,
+): number {
   if (originalPriceCents <= 0) return 0;
   if (coupon.type === 'fixed') {
-    return Math.min(originalPriceCents, normalizePriceCents(coupon.value * 100));
+    return Math.min(
+      originalPriceCents,
+      normalizePriceCents(coupon.value * 100),
+    );
   }
 
   const percent = Math.max(0, Math.min(100, parseNumber(coupon.value)));
@@ -986,7 +1046,10 @@ export function ensureInitialCreditsForUser(userId: string): void {
   const granted = readInitialGrantedSet();
   if (granted.includes(normalized)) return;
 
-  const initialCredits = Math.max(0, Math.round(getInitialCreditsAfterSignup()));
+  const initialCredits = Math.max(
+    0,
+    Math.round(getInitialCreditsAfterSignup()),
+  );
   if (initialCredits > 0) {
     applyDelta(
       normalized,
@@ -1007,7 +1070,9 @@ function countEngagementClaimsForRule(
   userId: string,
   ruleId: CreditEngagementRuleId,
 ): number {
-  return claims.filter((row) => row.user_id === userId && row.rule_id === ruleId).length;
+  return claims.filter(
+    (row) => row.user_id === userId && row.rule_id === ruleId,
+  ).length;
 }
 
 export function listCreditEngagementRewardRules(): CreditEngagementRule[] {
@@ -1027,8 +1092,11 @@ export function saveCreditEngagementRewardRules(
         if (!ruleId) return null;
         return [ruleId, row] as const;
       })
-      .filter((entry): entry is readonly [CreditEngagementRuleId, CreditEngagementRule] =>
-        Boolean(entry),
+      .filter(
+        (
+          entry,
+        ): entry is readonly [CreditEngagementRuleId, CreditEngagementRule] =>
+          Boolean(entry),
       ),
   );
 
@@ -1044,7 +1112,9 @@ export function listCreditEngagementRewardClaims(
   userId?: string,
 ): CreditEngagementRewardClaim[] {
   const needle = normalizeUserId(userId ?? '');
-  const rows = readEngagementClaims().sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const rows = readEngagementClaims().sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  );
   if (!needle) return rows;
   return rows.filter((row) => row.user_id === needle);
 }
@@ -1249,7 +1319,9 @@ export function getUserCredits(userId: string): number {
   return wallet.balance;
 }
 
-export function listCreditTransactionsForUser(userId: string): CreditTransaction[] {
+export function listCreditTransactionsForUser(
+  userId: string,
+): CreditTransaction[] {
   const normalized = normalizeUserId(userId);
   if (!normalized) return [];
   return readTransactions()
@@ -1258,7 +1330,9 @@ export function listCreditTransactionsForUser(userId: string): CreditTransaction
 }
 
 export function listAllCreditTransactions(): CreditTransaction[] {
-  return readTransactions().sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return readTransactions().sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  );
 }
 
 export function grantCreditsToUser(
@@ -1419,7 +1493,10 @@ export function listCreditCoupons(): CreditCoupon[] {
   return readCoupons().sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
 
-export function setCreditCouponActive(couponId: string, active: boolean): CreditCoupon {
+export function setCreditCouponActive(
+  couponId: string,
+  active: boolean,
+): CreditCoupon {
   const needle = String(couponId ?? '').trim();
   if (!needle) throw new Error('Cupom inválido.');
 
@@ -1437,7 +1514,9 @@ export function setCreditCouponActive(couponId: string, active: boolean): Credit
   return next;
 }
 
-export function listCreditCouponRedemptions(limit = 100): CreditCouponRedemption[] {
+export function listCreditCouponRedemptions(
+  limit = 100,
+): CreditCouponRedemption[] {
   const normalizedLimit = Math.max(1, Math.round(parseNumber(limit)));
   return readCouponRedemptions()
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -1625,7 +1704,9 @@ export function createCreditPurchaseRequest(input: {
 }
 
 export function listCreditPurchaseRequests(): CreditPurchaseRequest[] {
-  return readPurchaseRequests().sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return readPurchaseRequests().sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  );
 }
 
 export function reviewCreditPurchaseRequest(
@@ -1680,31 +1761,43 @@ export function updateCreditAdRewardConfig(
     enabled: normalizeBoolean(partial.enabled, current.enabled),
     credits_per_view: Math.max(
       1,
-      Math.round(parseNumber(partial.credits_per_view ?? current.credits_per_view)),
+      Math.round(
+        parseNumber(partial.credits_per_view ?? current.credits_per_view),
+      ),
     ),
     daily_limit_per_user: Math.max(
       1,
       Math.round(
-        parseNumber(partial.daily_limit_per_user ?? current.daily_limit_per_user),
+        parseNumber(
+          partial.daily_limit_per_user ?? current.daily_limit_per_user,
+        ),
       ),
     ),
     cooldown_minutes: Math.max(
       0,
-      Math.round(parseNumber(partial.cooldown_minutes ?? current.cooldown_minutes)),
+      Math.round(
+        parseNumber(partial.cooldown_minutes ?? current.cooldown_minutes),
+      ),
     ),
   };
   writeAdRewardConfig(next);
   return next;
 }
 
-export function listCreditAdRewardClaims(userId?: string): CreditAdRewardClaim[] {
+export function listCreditAdRewardClaims(
+  userId?: string,
+): CreditAdRewardClaim[] {
   const normalized = normalizeUserId(userId ?? '');
-  const rows = readAdRewardClaims().sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const rows = readAdRewardClaims().sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  );
   if (!normalized) return rows;
   return rows.filter((row) => row.user_id === normalized);
 }
 
-export function getAdRewardAvailabilityForUser(userId: string): CreditAdRewardAvailability {
+export function getAdRewardAvailabilityForUser(
+  userId: string,
+): CreditAdRewardAvailability {
   const normalized = normalizeUserId(userId);
   const config = readAdRewardConfig();
   if (!normalized) {
@@ -1727,8 +1820,13 @@ export function getAdRewardAvailabilityForUser(userId: string): CreditAdRewardAv
 
   const claims = listCreditAdRewardClaims(normalized);
   const today = dayKeyLocal(nowIso());
-  const todayClaims = claims.filter((row) => dayKeyLocal(row.created_at) === today);
-  const remaining = Math.max(0, config.daily_limit_per_user - todayClaims.length);
+  const todayClaims = claims.filter(
+    (row) => dayKeyLocal(row.created_at) === today,
+  );
+  const remaining = Math.max(
+    0,
+    config.daily_limit_per_user - todayClaims.length,
+  );
 
   if (remaining <= 0) {
     return {
@@ -1774,7 +1872,9 @@ export function claimAdRewardCredits(
 
   const availability = getAdRewardAvailabilityForUser(normalized);
   if (!availability.allowed) {
-    throw new Error(availability.reason || 'Recompensa indisponivel no momento.');
+    throw new Error(
+      availability.reason || 'Recompensa indisponivel no momento.',
+    );
   }
 
   const amount = availability.config.credits_per_view;

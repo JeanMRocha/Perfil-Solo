@@ -1,14 +1,4 @@
-import {
-  Box,
-  Button,
-  Group,
-  Loader,
-  Modal,
-  ScrollArea,
-  Stack,
-  Text,
-  TextInput,
-} from '@mantine/core';
+import { Loader } from '@mantine/core';
 import {
   IconEdit,
   IconFileExport,
@@ -17,6 +7,17 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import type { Talhao } from '../../../types/property';
+import { Button as ShadButton } from '../../../components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '../../../components/ui/dialog';
+import { Input as ShadInput } from '../../../components/ui/input';
+import { ScrollArea as ShadScrollArea } from '../../../components/ui/scroll-area';
+import { cn } from '../../../lib/utils';
 
 export type TalhaoSelectionRow = Talhao & {
   analysesCount: number;
@@ -89,160 +90,158 @@ export default function TalhaoSelectorModal({
   onRetryLoad,
 }: TalhaoSelectorModalProps) {
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      centered
-      size="clamp(320px, 92vw, 760px)"
-      radius="md"
-      withCloseButton
-      title={`Talhões de ${propertyName}`}
-    >
-      <Stack gap="xs">
-        <Group align="center" wrap="wrap" gap="xs">
-          <TextInput
-            leftSection={<IconSearch size={14} />}
-            placeholder="Buscar talhão por nome"
-            value={searchValue}
-            onChange={(event) => onSearchChange(event.currentTarget.value)}
-            style={{ flex: 1, minWidth: 220 }}
-            disabled={loading}
-          />
-          <Button
-            variant="light"
-            color="blue"
-            leftSection={<IconFileExport size={14} />}
-            onClick={onExport}
-            radius="md"
-            disabled={loading}
-            title="Exportar propriedades/talhões/análises em PDF"
-          >
-            Exportar
-          </Button>
-          <Button
-            leftSection={<IconPlus size={14} />}
-            onClick={onCreateTalhao}
-            radius="md"
-            disabled={loading}
-          >
-            Cadastrar
-          </Button>
-        </Group>
+    <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-[760px] w-[92vw] overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle>Talhões de {propertyName}</DialogTitle>
+          <DialogDescription className="hidden">
+            Gerencie os talhões da propriedade selecionada.
+          </DialogDescription>
+        </DialogHeader>
 
-        {loading ? (
-          <Group gap="xs">
-            <Loader size="sm" />
-            <Text size="sm" c="dimmed">
-              Carregando talhões...
-            </Text>
-          </Group>
-        ) : loadError ? (
-          <Stack gap={6}>
-            <Text size="sm" c="red">
-              {loadError}
-            </Text>
-            <Button variant="light" size="xs" onClick={onRetryLoad}>
-              Tentar novamente
-            </Button>
-          </Stack>
-        ) : rows.length === 0 ? (
-          <Text size="sm" c="dimmed">
-            Nenhum talhão encontrado para esta propriedade.
-          </Text>
-        ) : (
-          <ScrollArea.Autosize mah="52vh" type="always">
-            <Stack gap={6} pr={2}>
-              {rows.map((row) => {
-                const selected = row.id === selectedTalhaoId;
-                const tipoSoloRaw = String(row.tipo_solo ?? '').trim();
-                const tipoSolo =
-                  tipoSoloRaw && !isUnclassifiedSoil(tipoSoloRaw) ? tipoSoloRaw : '';
-                const rowMetaParts: string[] = [];
-                if (isPositiveNumber(row.area_ha)) {
-                  rowMetaParts.push(`Área: ${formatAreaHa(row.area_ha)} ha`);
-                }
-                if (tipoSolo) {
-                  rowMetaParts.push(`Solo: ${tipoSolo}`);
-                }
-                if (row.analysesCount > 0) {
-                  rowMetaParts.push(`Análises: ${row.analysesCount}`);
-                }
-                return (
-                  <Box
-                    key={row.id}
-                    style={{
-                      borderRadius: 10,
-                      border:
-                        tema === 'dark'
-                          ? '1px solid rgba(100, 116, 139, 0.35)'
-                          : '1px solid rgba(148, 163, 184, 0.45)',
-                      background:
+        <div className="flex flex-col gap-4 mt-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px]">
+              <IconSearch className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+              <ShadInput
+                placeholder="Buscar talhão por nome"
+                value={searchValue}
+                onChange={(event) => onSearchChange(event.currentTarget.value)}
+                className="pl-9"
+                disabled={loading}
+              />
+            </div>
+            <div className="flex gap-2 whitespace-nowrap">
+              <ShadButton
+                variant="outline"
+                size="sm"
+                onClick={onExport}
+                disabled={loading}
+                className="h-9"
+              >
+                <IconFileExport className="mr-2 h-4 w-4" />
+                Exportar
+              </ShadButton>
+              <ShadButton
+                size="sm"
+                onClick={onCreateTalhao}
+                disabled={loading}
+                className="h-9 bg-amber-600 hover:bg-amber-700"
+              >
+                <IconPlus className="mr-2 h-4 w-4" />
+                Cadastrar
+              </ShadButton>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center gap-2 py-4">
+              <Loader size="sm" />
+              <span className="text-sm text-slate-500">Carregando talhões...</span>
+            </div>
+          ) : loadError ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm text-red-500">{loadError}</span>
+              <ShadButton variant="outline" size="sm" onClick={onRetryLoad}>
+                Tentar novamente
+              </ShadButton>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="py-4">
+              <span className="text-sm text-slate-500 italic">
+                Nenhum talhão encontrado para esta propriedade.
+              </span>
+            </div>
+          ) : (
+            <ShadScrollArea className="flex-1 -mx-2 px-2 overflow-y-auto max-h-[52vh]">
+              <div className="flex flex-col gap-2 pr-4">
+                {rows.map((row) => {
+                  const selected = row.id === selectedTalhaoId;
+                  const tipoSoloRaw = String(row.tipo_solo ?? '').trim();
+                  const tipoSolo =
+                    tipoSoloRaw && !isUnclassifiedSoil(tipoSoloRaw) ? tipoSoloRaw : '';
+                  const rowMetaParts: string[] = [];
+                  if (isPositiveNumber(row.area_ha)) {
+                    rowMetaParts.push(`Área: ${formatAreaHa(row.area_ha)} ha`);
+                  }
+                  if (tipoSolo) {
+                    rowMetaParts.push(`Solo: ${tipoSolo}`);
+                  }
+                  if (row.analysesCount > 0) {
+                    rowMetaParts.push(`Análises: ${row.analysesCount}`);
+                  }
+                  return (
+                    <div
+                      key={row.id}
+                      className={cn(
+                        "group rounded-xl border p-3 transition-all",
                         selected
                           ? tema === 'dark'
-                            ? 'rgba(14, 165, 233, 0.16)'
-                            : 'rgba(14, 165, 233, 0.1)'
+                            ? 'border-amber-500/50 bg-amber-500/10'
+                            : 'border-amber-200 bg-amber-50'
                           : tema === 'dark'
-                            ? 'rgba(15, 23, 42, 0.34)'
-                            : 'rgba(248, 250, 252, 0.9)',
-                      padding: '7px 8px',
-                    }}
-                  >
-                    <Group justify="space-between" wrap="wrap" gap={6}>
-                      <Text
-                        fw={selected ? 700 : 600}
-                        size="sm"
-                        c={selected ? 'cyan' : undefined}
-                        style={{
-                          minWidth: 140,
-                          maxWidth: 240,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {row.nome}
-                      </Text>
-                      {rowMetaParts.length > 0 ? (
-                        <Text size="xs" c="dimmed">
-                          {rowMetaParts.join(' | ')}
-                        </Text>
-                      ) : null}
-                      <Group gap={6} wrap="wrap">
-                        <Button
-                          size="xs"
-                          variant={selected ? 'filled' : 'light'}
-                          color={selected ? 'cyan' : 'gray'}
-                          onClick={() => onSelectTalhao(row.id)}
-                        >
-                          {selected ? 'Ativo' : 'Selecionar'}
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="light"
-                          color="indigo"
-                          leftSection={<IconEdit size={14} />}
-                          onClick={() => onEditTalhao(row.id)}
-                        >
-                          Editar
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="light"
-                          color="red"
-                          leftSection={<IconTrash size={14} />}
-                          onClick={() => onDeleteTalhao(row)}
-                        >
-                          Excluir
-                        </Button>
-                      </Group>
-                    </Group>
-                  </Box>
-                );
-              })}
-            </Stack>
-          </ScrollArea.Autosize>
-        )}
-      </Stack>
-    </Modal>
+                            ? 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
+                            : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
+                      )}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex flex-col gap-1 min-w-0 flex-1">
+                          <span
+                            className={cn(
+                              "font-bold text-sm truncate",
+                              selected ? "text-amber-700 dark:text-amber-400" : ""
+                            )}
+                          >
+                            {row.nome}
+                          </span>
+                          {rowMetaParts.length > 0 && (
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                              {rowMetaParts.join(' | ')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 shrink-0">
+                          <ShadButton
+                            size="sm"
+                            variant={selected ? 'default' : 'ghost'}
+                            className={cn(
+                              "h-8 text-xs",
+                              selected 
+                                ? "bg-amber-600 hover:bg-amber-700 text-white" 
+                                : "bg-slate-200/50 dark:bg-slate-800/50 hover:bg-slate-300 dark:hover:bg-slate-700"
+                            )}
+                            onClick={() => onSelectTalhao(row.id)}
+                          >
+                            {selected ? 'Ativo' : 'Selecionar'}
+                          </ShadButton>
+                          <ShadButton
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 text-xs bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:text-indigo-400"
+                            onClick={() => onEditTalhao(row.id)}
+                          >
+                            <IconEdit className="mr-1.5 h-3 w-3" />
+                            Editar
+                          </ShadButton>
+                          <ShadButton
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 text-xs bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400"
+                            onClick={() => onDeleteTalhao(row)}
+                          >
+                            <IconTrash className="mr-1.5 h-3 w-3" />
+                            Excluir
+                          </ShadButton>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ShadScrollArea>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

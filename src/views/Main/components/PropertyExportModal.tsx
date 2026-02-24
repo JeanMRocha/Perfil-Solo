@@ -1,15 +1,4 @@
 import {
-  ActionIcon,
-  Box,
-  Button,
-  Checkbox,
-  Group,
-  Modal,
-  ScrollArea,
-  Stack,
-  Text,
-} from '@mantine/core';
-import {
   IconChevronDown,
   IconChevronRight,
   IconFileExport,
@@ -17,6 +6,19 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '../../../components/ui/dialog';
+import { Button as ShadButton } from '../../../components/ui/button';
+import { Checkbox as ShadCheckbox } from '../../../components/ui/checkbox';
+import { Label } from '../../../components/ui/label';
+import { ScrollArea as ShadScrollArea } from '../../../components/ui/scroll-area';
+import { cn } from '../../../lib/utils';
+import { Loader } from '@mantine/core';
 
 export type PropertyExportAnalysisNode = {
   id: string;
@@ -203,239 +205,218 @@ export default function PropertyExportModal({
   };
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      centered
-      title="Exportar dados em PDF"
-      size="clamp(320px, 92vw, 840px)"
-      padding="sm"
-    >
-      <Stack gap="xs">
-        <Text size="sm" c="dimmed">
-          Estrutura em arvore: selecionar propriedade marca toda a subarvore de talhoes e analises.
-        </Text>
-        <Checkbox
-          size="xs"
-          checked={includeSoilClassification}
-          onChange={(event) =>
-            onIncludeSoilClassificationChange(event.currentTarget.checked)
-          }
-          label="Incluir bloco Classificação SiBCS do talhão no PDF"
-        />
+    <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-[840px] w-[92vw] overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle>Exportar dados em PDF</DialogTitle>
+          <DialogDescription>
+            Estrutura em árvore: selecionar propriedade marca toda a subárvore de talhões e análises.
+          </DialogDescription>
+        </DialogHeader>
 
-        <Group justify="space-between" align="center" wrap="nowrap">
-          <Text size="xs" fw={700} c="dimmed">
-            Propriedades cadastradas
-          </Text>
-          <Group gap={6} wrap="nowrap">
-            <Button
-              size="compact-xs"
-              variant="light"
-              color="teal"
-              leftSection={<IconSquareCheck size={12} />}
-              onClick={markAll}
-              disabled={tree.length === 0 || loading}
-            >
-              Marcar tudo
-            </Button>
-            <Button
-              size="compact-xs"
-              variant="light"
-              color="gray"
-              leftSection={<IconTrash size={12} />}
-              onClick={clearAll}
-              disabled={selectedSet.size === 0 || loading}
-            >
-              Limpar
-            </Button>
-          </Group>
-        </Group>
+        <div className="flex flex-col gap-4 mt-2">
+          <div className="flex items-center space-x-2">
+            <ShadCheckbox
+              id="include-soil"
+              checked={includeSoilClassification}
+              onCheckedChange={(checked) =>
+                onIncludeSoilClassificationChange(checked === true)
+              }
+            />
+            <Label htmlFor="include-soil" className="text-xs font-normal cursor-pointer">
+              Incluir bloco Classificação SiBCS do talhão no PDF
+            </Label>
+          </div>
 
-        <ScrollArea.Autosize mah={320} type="always">
-          <Stack gap={6} pr={4}>
-            {loading ? (
-              <Text size="sm" c="dimmed">
-                Carregando talhoes e analises...
-              </Text>
-            ) : tree.length === 0 ? (
-              <Text size="sm" c="dimmed">
-                Nenhuma propriedade disponivel para exportacao.
-              </Text>
-            ) : (
-              tree.map((property) => {
-                const propertyChecked = selectedSet.has(property.nodeId);
-                const propertyHasAnyChild = property.talhoes.some(
-                  (talhao) =>
-                    selectedSet.has(talhao.nodeId) ||
-                    talhao.analyses.some((analysis) => selectedSet.has(analysis.nodeId)),
-                );
-                const propertyIndeterminate = !propertyChecked && propertyHasAnyChild;
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Propriedades cadastradas
+            </span>
+            <div className="flex gap-2">
+              <ShadButton
+                variant="ghost"
+                size="sm"
+                className="h-7 text-[10px] text-teal-600 hover:text-teal-700 hover:bg-teal-50 px-2"
+                onClick={markAll}
+                disabled={tree.length === 0 || loading}
+              >
+                <IconSquareCheck className="mr-1 h-3.5 w-3.5" />
+                Marcar tudo
+              </ShadButton>
+              <ShadButton
+                variant="ghost"
+                size="sm"
+                className="h-7 text-[10px] text-slate-500 px-2"
+                onClick={clearAll}
+                disabled={selectedSet.size === 0 || loading}
+              >
+                <IconTrash className="mr-1 h-3.5 w-3.5" />
+                Limpar
+              </ShadButton>
+            </div>
+          </div>
 
-                return (
-                  <Box
-                    key={property.id}
-                    style={(theme) => ({
-                      borderRadius: theme.radius.sm,
-                      border: `1px solid ${theme.colors.gray[5]}`,
-                      background: propertyChecked
-                        ? 'rgba(20, 184, 166, 0.1)'
-                        : 'rgba(15, 23, 42, 0.14)',
-                      padding: 6,
-                    })}
-                  >
-                    <Group gap={8} wrap="nowrap" align="center">
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        size="sm"
-                        onClick={() =>
-                          setOpenPropertyIds((prev) => ({
-                            ...prev,
-                            [property.id]: !prev[property.id],
-                          }))
-                        }
-                        aria-label={openPropertyIds[property.id] ? 'Recolher propriedade' : 'Expandir propriedade'}
-                      >
-                        {openPropertyIds[property.id] ? (
-                          <IconChevronDown size={14} />
-                        ) : (
-                          <IconChevronRight size={14} />
-                        )}
-                      </ActionIcon>
-                      <Checkbox
-                        checked={propertyChecked}
-                        indeterminate={propertyIndeterminate}
-                        onChange={(event) =>
-                          toggleProperty(property, event.currentTarget.checked)
-                        }
-                        label={`${property.label} (${property.talhoes.length} talhoes)`}
-                        styles={{ label: { width: '100%' } }}
-                        style={{ flex: 1 }}
-                      />
-                    </Group>
+          <ShadScrollArea className="flex-1 -mx-2 px-2 overflow-y-auto max-h-[45vh]">
+            <div className="flex flex-col gap-3 pr-4">
+              {loading ? (
+                <div className="flex items-center gap-2 py-4">
+                  <Loader size="sm" />
+                  <span className="text-sm text-slate-500">Carregando talhões e análises...</span>
+                </div>
+              ) : tree.length === 0 ? (
+                <span className="text-sm text-slate-500 italic py-4">
+                  Nenhuma propriedade disponível para exportação.
+                </span>
+              ) : (
+                tree.map((property) => {
+                  const propertyChecked = selectedSet.has(property.nodeId);
+                  const propertyHasAnyChild = property.talhoes.some(
+                    (talhao) =>
+                      selectedSet.has(talhao.nodeId) ||
+                      talhao.analyses.some((analysis) => selectedSet.has(analysis.nodeId)),
+                  );
+                  const propertyIndeterminate = !propertyChecked && propertyHasAnyChild;
 
-                    {openPropertyIds[property.id] && property.talhoes.length > 0 ? (
-                      <Stack gap={6} mt={4}>
-                        {property.talhoes.map((talhao) => {
-                          const talhaoChecked = selectedSet.has(talhao.nodeId);
-                          const talhaoHasAnyAnalysis = talhao.analyses.some((analysis) =>
-                            selectedSet.has(analysis.nodeId),
-                          );
-                          const talhaoIndeterminate =
-                            !talhaoChecked && talhaoHasAnyAnalysis;
+                  return (
+                    <div
+                      key={property.id}
+                      className={cn(
+                        "rounded-lg border p-2",
+                        propertyChecked ? "bg-teal-500/5 border-teal-500/20" : "bg-slate-50/50 border-slate-100"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <ShadButton
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-slate-400"
+                          onClick={() =>
+                            setOpenPropertyIds((prev) => ({
+                              ...prev,
+                              [property.id]: !prev[property.id],
+                            }))
+                          }
+                        >
+                          {openPropertyIds[property.id] ? (
+                            <IconChevronDown className="h-4 w-4" />
+                          ) : (
+                            <IconChevronRight className="h-4 w-4" />
+                          )}
+                        </ShadButton>
+                        <ShadCheckbox
+                          id={`prop-${property.id}`}
+                          checked={propertyChecked ? true : (propertyIndeterminate ? "indeterminate" : false)}
+                          onCheckedChange={(checked) => toggleProperty(property, checked === true)}
+                        />
+                        <Label
+                          htmlFor={`prop-${property.id}`}
+                          className="flex-1 text-sm font-semibold cursor-pointer"
+                        >
+                          {property.label} <span className="text-[10px] font-normal text-slate-400 ml-1">({property.talhoes.length} talhões)</span>
+                        </Label>
+                      </div>
 
-                          return (
-                            <Box
-                              key={talhao.id}
-                              style={(theme) => ({
-                                marginLeft: 16,
-                                borderRadius: theme.radius.sm,
-                                border: `1px solid ${theme.colors.gray[6]}`,
-                                background: talhaoChecked
-                                  ? 'rgba(20, 184, 166, 0.08)'
-                                  : 'rgba(2, 6, 23, 0.14)',
-                                padding: 5,
-                              })}
-                            >
-                              <Group gap={8} wrap="nowrap" align="center">
-                                <ActionIcon
-                                  variant="subtle"
-                                  color="gray"
-                                  size="sm"
-                                  onClick={() =>
-                                    setOpenTalhaoIds((prev) => ({
-                                      ...prev,
-                                      [talhao.id]: !prev[talhao.id],
-                                    }))
-                                  }
-                                  aria-label={openTalhaoIds[talhao.id] ? 'Recolher talhão' : 'Expandir talhão'}
-                                >
-                                  {openTalhaoIds[talhao.id] ? (
-                                    <IconChevronDown size={14} />
-                                  ) : (
-                                    <IconChevronRight size={14} />
-                                  )}
-                                </ActionIcon>
-                                <Checkbox
-                                  checked={talhaoChecked}
-                                  indeterminate={talhaoIndeterminate}
-                                  onChange={(event) =>
-                                    toggleTalhao(talhao, event.currentTarget.checked)
-                                  }
-                                  label={`${talhao.label} (${talhao.analyses.length} analises)`}
-                                  styles={{ label: { width: '100%' } }}
-                                  style={{ flex: 1 }}
-                                />
-                              </Group>
+                      {openPropertyIds[property.id] && property.talhoes.length > 0 && (
+                        <div className="flex flex-col gap-2 mt-2 ml-8 pl-2 border-l border-slate-200">
+                          {property.talhoes.map((talhao) => {
+                            const talhaoChecked = selectedSet.has(talhao.nodeId);
+                            const talhaoHasAnyAnalysis = talhao.analyses.some((analysis) =>
+                              selectedSet.has(analysis.nodeId),
+                            );
+                            const talhaoIndeterminate =
+                              !talhaoChecked && talhaoHasAnyAnalysis;
 
-                              {openTalhaoIds[talhao.id] && talhao.analyses.length > 0 ? (
-                                <Stack gap={4} mt={4}>
-                                  {talhao.analyses.map((analysis) => (
-                                    <Box
-                                      key={analysis.id}
-                                      style={(theme) => ({
-                                        marginLeft: 18,
-                                        borderRadius: theme.radius.sm,
-                                        border: `1px solid ${theme.colors.gray[7]}`,
-                                        padding: '4px 8px',
-                                        background: selectedSet.has(analysis.nodeId)
-                                          ? 'rgba(20, 184, 166, 0.08)'
-                                          : 'rgba(2, 6, 23, 0.12)',
-                                      })}
-                                    >
-                                      <Checkbox
-                                        checked={selectedSet.has(analysis.nodeId)}
-                                        onChange={(event) =>
-                                          toggleAnalysis(
-                                            analysis,
-                                            event.currentTarget.checked,
-                                          )
-                                        }
-                                        label={analysis.label}
-                                        styles={{ label: { width: '100%' } }}
-                                      />
-                                    </Box>
-                                  ))}
-                                </Stack>
-                              ) : null}
-                            </Box>
-                          );
-                        })}
-                      </Stack>
-                    ) : null}
-                  </Box>
-                );
-              })
+                            return (
+                              <div key={talhao.id} className="flex flex-col gap-2">
+                                <div className="flex items-center gap-2">
+                                  <ShadButton
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 text-slate-400"
+                                    onClick={() =>
+                                      setOpenTalhaoIds((prev) => ({
+                                        ...prev,
+                                        [talhao.id]: !prev[talhao.id],
+                                      }))
+                                    }
+                                  >
+                                    {openTalhaoIds[talhao.id] ? (
+                                      <IconChevronDown className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <IconChevronRight className="h-3.5 w-3.5" />
+                                    )}
+                                  </ShadButton>
+                                  <ShadCheckbox
+                                    id={`talhao-${talhao.id}`}
+                                    checked={talhaoChecked ? true : (talhaoIndeterminate ? "indeterminate" : false)}
+                                    onCheckedChange={(checked) => toggleTalhao(talhao, checked === true)}
+                                  />
+                                  <Label
+                                    htmlFor={`talhao-${talhao.id}`}
+                                    className="flex-1 text-xs font-medium cursor-pointer"
+                                  >
+                                    {talhao.label} <span className="text-[9px] font-normal text-slate-400 ml-1">({talhao.analyses.length} análises)</span>
+                                  </Label>
+                                </div>
+
+                                {openTalhaoIds[talhao.id] && talhao.analyses.length > 0 && (
+                                  <div className="flex flex-col gap-1.5 ml-7 pl-2 border-l border-slate-100">
+                                    {talhao.analyses.map((analysis) => (
+                                      <div key={analysis.id} className="flex items-center gap-2 py-0.5">
+                                        <ShadCheckbox
+                                          id={`analysis-${analysis.id}`}
+                                          checked={selectedSet.has(analysis.nodeId)}
+                                          onCheckedChange={(checked) => toggleAnalysis(analysis, checked === true)}
+                                        />
+                                        <Label
+                                          htmlFor={`analysis-${analysis.id}`}
+                                          className="flex-1 text-[11px] cursor-pointer"
+                                        >
+                                          {analysis.label}
+                                        </Label>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ShadScrollArea>
+
+          <div className="flex flex-col gap-1 pt-2">
+            <span className="text-[10px] text-slate-500 font-medium">
+              Selecionados: {selectedPropertyCount} propriedades, {selectedTalhaoCount} talhões e {selectedAnalysisCount} análises.
+            </span>
+            {!canExport && (
+              <span className="text-[10px] text-amber-600 font-bold">
+                Marque ao menos um item da árvore para exportar.
+              </span>
             )}
-          </Stack>
-        </ScrollArea.Autosize>
+          </div>
 
-        <Stack gap={4}>
-          <Text size="xs" c="dimmed">
-            Selecionados: {selectedPropertyCount} propriedades, {selectedTalhaoCount} talhoes e {selectedAnalysisCount} analises.
-          </Text>
-          {!canExport ? (
-            <Text size="xs" c="orange">
-              Marque ao menos um item da arvore para exportar.
-            </Text>
-          ) : null}
-        </Stack>
-
-        <Group justify="flex-end">
-          <Button variant="light" color="gray" onClick={onClose} disabled={exporting}>
-            Cancelar
-          </Button>
-          <Button
-            leftSection={<IconFileExport size={14} />}
-            onClick={onExport}
-            loading={exporting}
-            disabled={!canExport || loading}
-          >
-            Exportar PDF
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
+          <div className="flex justify-end gap-3 mt-2">
+            <ShadButton variant="ghost" size="sm" onClick={onClose} disabled={exporting}>
+              Cancelar
+            </ShadButton>
+            <ShadButton
+              onClick={onExport}
+              disabled={!canExport || loading || exporting}
+              className="bg-teal-600 hover:bg-teal-700 text-white"
+            >
+              {exporting && <Loader size="xs" className="mr-2" />}
+              <IconFileExport className="mr-2 h-4 w-4" />
+              Exportar PDF
+            </ShadButton>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

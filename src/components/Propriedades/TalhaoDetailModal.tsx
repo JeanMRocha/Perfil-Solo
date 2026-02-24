@@ -6,44 +6,47 @@ import {
   useState,
   type RefObject,
 } from 'react';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Badge } from '../ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import {
-  ActionIcon,
-  Badge,
-  Box,
-  Button,
-  Center,
-  Card,
-  Collapse,
-  Group,
-  Loader,
-  Modal,
-  NumberInput,
-  Select,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-  Tooltip,
-} from '@mantine/core';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../ui/dialog';
 import {
-  IconBan,
-  IconCheck,
-  IconChevronDown,
-  IconChevronUp,
-  IconCopy,
-  IconDeviceFloppy,
-  IconHelpCircle,
-  IconMap2,
-  IconMapOff,
-  IconMinus,
-  IconPencil,
-  IconPlus,
-  IconPolygon,
-  IconSearch,
-  IconTrash,
-  IconVectorSpline,
-  IconX,
-} from '@tabler/icons-react';
+  Select as ShadSelect,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
+import { Label } from '../ui/label';
+import { ScrollArea } from '../ui/scroll-area';
+import {
+  Loader2,
+  Plus,
+  Search,
+  Trash2,
+  Save,
+  ChevronDown,
+  ChevronUp,
+  Map as IconMap2,
+  MapPinOff,
+  Square,
+  X,
+  Copy,
+  Info,
+  Ban,
+  Check,
+  Pencil,
+  Spline,
+} from 'lucide-react';
+import { cn } from '../../lib/utils';
 import { notifications } from '@mantine/notifications';
 import {
   Stage,
@@ -1652,174 +1655,177 @@ export default function TalhaoDetailModal({
 
   return (
     <>
-      <Modal
-        opened={opened}
-        onClose={handleRequestClose}
-        title={talhao ? `Detalhamento do talhao: ${talhao.nome}` : 'Detalhamento do talhão'}
-        size="clamp(340px, 95vw, 1280px)"
-        padding="sm"
-        centered
-      >
-        {!talhao ? (
-          <Text c="dimmed">Selecione um talhao para detalhar.</Text>
-        ) : (
-          <GridLayout
-            nome={nome}
-            setNome={setNome}
-            areaHa={areaHa}
-            setAreaHa={setAreaHa}
-            tipoSolo={tipoSolo}
-            setTipoSolo={setTipoSolo}
-            soilOptions={soilOptions}
-            selectedSoilDescription={selectedSoil?.descricao ?? null}
-            openSoilClassifier={openSoilClassifier}
-            lastClassificationSummary={lastClassificationSummary}
-            currentCulture={currentCulture}
-            setCurrentCulture={setCurrentCulture}
-            currentCultureOptions={currentCultureOptions}
-            cultures={cultures}
-            cultureDraft={cultureDraft}
-            setCultureDraft={setCultureDraft}
-            cultureModalOpened={cultureModalOpened}
-            cultureLinkModalOpened={cultureLinkModalOpened}
-            closeCultureModal={closeCultureModal}
-            closeCultureLinkModal={closeCultureLinkModal}
-            saveCultureDraft={saveCultureDraft}
-            openCultureLinkModal={openCultureLinkModal}
-            handleLinkCultureFromRnc={handleLinkCultureFromRnc}
-            openEditCultureModal={openEditCultureModal}
-            removeCulture={removeCulture}
-            duplicateCultivarForTechnicalProfile={duplicateCultivarForTechnicalProfile}
-            drawMode={drawMode}
-            statusLabel={statusLabel}
-            startMainDrawing={startMainDrawing}
-            startZoneDrawing={startZoneDrawing}
-            cancelDrawing={cancelDrawing}
-            finishDrawing={finishDrawing}
-            zones={zones}
-            selectedMainPolygon={selectedMainPolygon}
-            selectedZoneIndex={selectedZoneIndex}
-            setSelectedZoneIndex={setSelectedZoneIndex}
-            toggleMainPolygonSelection={toggleMainPolygonSelection}
-            toggleZoneSelection={toggleZoneSelection}
-            removeSelectedZone={removeSelectedZone}
-            removeMainPolygon={removeMainPolygon}
-            selectedVertex={selectedVertex}
-            selectMainVertex={selectMainVertex}
-            selectZoneVertex={selectZoneVertex}
-            clearSelectedVertex={clearSelectedVertex}
-            removeSelectedVertex={removeSelectedVertex}
-            removeCurrentSelection={removeCurrentSelection}
-            canvasRef={canvasRef}
-            stageWidth={stageWidth}
-            mainPoints={mainPoints}
-            currentPoints={currentPoints}
-            mousePos={mousePos}
-            handleStageClick={handleStageClick}
-            handleMouseMove={handleMouseMove}
-            handleCloseWithRightClick={handleCloseWithRightClick}
-            moveMainAnchor={moveMainAnchor}
-            moveZoneAnchor={moveZoneAnchor}
-            moveCurrentAnchor={moveCurrentAnchor}
-            insertMainPointAfter={insertMainPointAfter}
-            insertZonePointAfter={insertZonePointAfter}
-            mapSearchValue={mapSearchValue}
-            setMapSearchValue={setMapSearchValue}
-            mapSearchLoading={mapSearchLoading}
-            pointSearchValue={pointSearchValue}
-            setPointSearchValue={setPointSearchValue}
-            addPointFromCoordinates={addPointFromCoordinates}
-            applyRealMapBackground={applyRealMapBackground}
-            clearRealMapBackground={clearRealMapBackground}
-            mapCenter={mapCenter}
-            mapZoom={mapZoom}
-            mapLayerId={mapLayerId}
-            setMapLayerId={setMapLayerId}
-            mapInteractive={mapInteractive}
-            setMapInteractive={setMapInteractive}
-            onRealMapViewChange={handleRealMapViewChange}
-            mapHasRealBackground={Boolean(mapCenter)}
-            save={save}
-            saving={saving}
-          />
-        )}
-      </Modal>
+    <Dialog open={opened} onOpenChange={(val) => !val && handleRequestClose()}>
+      <DialogContent className="max-w-[1280px] w-[95vw] overflow-hidden flex flex-col max-h-[96vh] p-0">
+        <DialogHeader className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <DialogTitle className="text-sm font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
+            {talhao ? `Detalhamento do talhão: ${talhao.nome}` : 'Detalhamento do talhão'}
+          </DialogTitle>
+        </DialogHeader>
 
-      <Modal
-        opened={emptyAreaGuardOpened}
-        onClose={() => setEmptyAreaGuardOpened(false)}
-        centered
-        closeOnClickOutside={false}
-        closeOnEscape={false}
-        title="Talhão sem área"
-      >
-        <Stack gap="sm">
-          <Text size="sm">
+        <ScrollArea className="flex-1 overflow-y-auto">
+          <div className="p-6">
+            {!talhao ? (
+              <p className="text-sm text-slate-500 italic">Selecione um talhão para detalhar.</p>
+            ) : (
+              <GridLayout
+                nome={nome}
+                setNome={setNome}
+                areaHa={areaHa}
+                setAreaHa={setAreaHa}
+                tipoSolo={tipoSolo}
+                setTipoSolo={setTipoSolo}
+                soilOptions={soilOptions}
+                selectedSoilDescription={selectedSoil?.descricao ?? null}
+                openSoilClassifier={openSoilClassifier}
+                lastClassificationSummary={lastClassificationSummary}
+                currentCulture={currentCulture}
+                setCurrentCulture={setCurrentCulture}
+                currentCultureOptions={currentCultureOptions}
+                cultures={cultures}
+                cultureDraft={cultureDraft}
+                setCultureDraft={setCultureDraft}
+                cultureModalOpened={cultureModalOpened}
+                cultureLinkModalOpened={cultureLinkModalOpened}
+                closeCultureModal={closeCultureModal}
+                closeCultureLinkModal={closeCultureLinkModal}
+                saveCultureDraft={saveCultureDraft}
+                openCultureLinkModal={openCultureLinkModal}
+                handleLinkCultureFromRnc={handleLinkCultureFromRnc}
+                openEditCultureModal={openEditCultureModal}
+                removeCulture={removeCulture}
+                duplicateCultivarForTechnicalProfile={duplicateCultivarForTechnicalProfile}
+                drawMode={drawMode}
+                statusLabel={statusLabel}
+                startMainDrawing={startMainDrawing}
+                startZoneDrawing={startZoneDrawing}
+                cancelDrawing={cancelDrawing}
+                finishDrawing={finishDrawing}
+                zones={zones}
+                selectedMainPolygon={selectedMainPolygon}
+                selectedZoneIndex={selectedZoneIndex}
+                setSelectedZoneIndex={setSelectedZoneIndex}
+                toggleMainPolygonSelection={toggleMainPolygonSelection}
+                toggleZoneSelection={toggleZoneSelection}
+                removeSelectedZone={removeSelectedZone}
+                removeMainPolygon={removeMainPolygon}
+                selectedVertex={selectedVertex}
+                selectMainVertex={selectMainVertex}
+                selectZoneVertex={selectZoneVertex}
+                clearSelectedVertex={clearSelectedVertex}
+                removeSelectedVertex={removeSelectedVertex}
+                removeCurrentSelection={removeCurrentSelection}
+                canvasRef={canvasRef}
+                stageWidth={stageWidth}
+                mainPoints={mainPoints}
+                currentPoints={currentPoints}
+                mousePos={mousePos}
+                handleStageClick={handleStageClick}
+                handleMouseMove={handleMouseMove}
+                handleCloseWithRightClick={handleCloseWithRightClick}
+                moveMainAnchor={moveMainAnchor}
+                moveZoneAnchor={moveZoneAnchor}
+                moveCurrentAnchor={moveCurrentAnchor}
+                insertMainPointAfter={insertMainPointAfter}
+                insertZonePointAfter={insertZonePointAfter}
+                mapSearchValue={mapSearchValue}
+                setMapSearchValue={setMapSearchValue}
+                mapSearchLoading={mapSearchLoading}
+                pointSearchValue={pointSearchValue}
+                setPointSearchValue={setPointSearchValue}
+                addPointFromCoordinates={addPointFromCoordinates}
+                applyRealMapBackground={applyRealMapBackground}
+                clearRealMapBackground={clearRealMapBackground}
+                mapCenter={mapCenter}
+                mapZoom={mapZoom}
+                mapLayerId={mapLayerId}
+                setMapLayerId={setMapLayerId}
+                mapInteractive={mapInteractive}
+                setMapInteractive={setMapInteractive}
+                onRealMapViewChange={handleRealMapViewChange}
+                mapHasRealBackground={Boolean(mapCenter)}
+                save={save}
+                saving={saving}
+              />
+            )}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={emptyAreaGuardOpened} onOpenChange={setEmptyAreaGuardOpened}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Talhão sem área</DialogTitle>
+          <DialogDescription>
             {emptyAreaGuardReason === 'save'
               ? 'Este talhão ainda não possui área. Não é possível salvar sem informar área.'
               : 'Este talhão ainda não possui área.'}
-          </Text>
-          <Text size="sm" c="dimmed">
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-slate-500">
             Você pode voltar para edição e preencher a área, ou excluir o talhão vazio.
-          </Text>
-          <Group justify="flex-end" mt="xs">
+          </p>
+          <div className="flex justify-end gap-3">
             <Button
-              variant="light"
-              color="gray"
+              variant="outline"
               onClick={() => setEmptyAreaGuardOpened(false)}
               disabled={deletingEmptyTalhao}
             >
-              Cancelar e voltar edição
+              Cancelar e voltar
             </Button>
             <Button
-              color="red"
+              variant="destructive"
               onClick={() => void deleteEmptyTalhao()}
-              loading={deletingEmptyTalhao}
+              disabled={deletingEmptyTalhao}
             >
+              {deletingEmptyTalhao && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Excluir talhão vazio
             </Button>
-          </Group>
-        </Stack>
-      </Modal>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
 
-      <Modal
-        opened={soilClassifierOpened}
-        onClose={closeSoilClassifier}
-        title="Classificador SiBCS do talhão"
-        size="clamp(340px, 96vw, 1380px)"
-        centered
-        padding="sm"
-      >
-        <Stack gap="sm">
-          <Text size="sm" c="dimmed">
-            Execute a classificacao, revise a confianca e aplique a ordem no campo de classe de solo do talhao.
-          </Text>
-          {soilClassifierOpened ? (
-            <Suspense
-              fallback={
-                <Center h={180}>
-                  <Loader size="sm" />
-                </Center>
-              }
-            >
-              <LazySoilClassificationWorkspace
-                key={`${talhao?.id ?? 'talhao'}-${soilClassificationSnapshot?.applied_at ?? 'novo'}`}
-                initialRequest={soilClassificationRequest ?? undefined}
-                onRequestChange={setSoilClassificationRequest}
-                onResult={setSoilClassificationResult}
-              />
-            </Suspense>
-          ) : null}
-          <Group justify="flex-end">
-            <Button variant="default" onClick={closeSoilClassifier}>
-              Fechar
-            </Button>
-            <Button onClick={applyClassificationToTalhao} disabled={!soilClassificationResult}>
-              Aplicar classificacao no talhao
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+    <Dialog open={soilClassifierOpened} onOpenChange={closeSoilClassifier}>
+      <DialogContent className="max-w-[1380px] w-[96vw] max-h-[95vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+          <DialogTitle>Classificador SiBCS do talhão</DialogTitle>
+          <DialogDescription>
+            Execute a classificação, revise a confiança e aplique a ordem no campo de classe de solo do talhão.
+          </DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="flex-1 p-6">
+          <div className="flex flex-col gap-4">
+            {soilClassifierOpened ? (
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="animate-spin text-slate-400" size={32} />
+                  </div>
+                }
+              >
+                <LazySoilClassificationWorkspace
+                  key={`${talhao?.id ?? 'talhao'}-${soilClassificationSnapshot?.applied_at ?? 'novo'}`}
+                  initialRequest={soilClassificationRequest ?? undefined}
+                  onRequestChange={setSoilClassificationRequest}
+                  onResult={setSoilClassificationResult}
+                />
+              </Suspense>
+            ) : null}
+          </div>
+        </ScrollArea>
+        <DialogFooter className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+          <Button variant="outline" onClick={closeSoilClassifier}>
+            Fechar
+          </Button>
+          <Button onClick={applyClassificationToTalhao} disabled={!soilClassificationResult}>
+            Aplicar classificação no talhão
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
@@ -1942,17 +1948,6 @@ function GridLayout(props: {
     props.selectedZoneIndex != null ||
     props.selectedMainPolygon ||
     props.zones.length === 1;
-  const deleteSelectionLabel = props.selectedVertex
-    ? 'Excluir ponto selecionado (Del)'
-    : props.selectedZoneIndex != null || props.zones.length === 1
-      ? 'Remover zona selecionada (Del)'
-      : props.selectedMainPolygon
-        ? 'Remover limite selecionado (Del)'
-        : 'Selecione ponto, zona ou limite para excluir';
-  const mapLayerOptions = GEO_BASE_LAYERS.map((layer) => ({
-    value: layer.id,
-    label: layer.label,
-  }));
   const [cultureSectionOpened, setCultureSectionOpened] = useState(false);
 
   const currentCultureRow = useMemo(
@@ -1974,563 +1969,503 @@ function GridLayout(props: {
   }, [props.cultures, props.currentCulture]);
 
   return (
-    <Stack gap="sm">
-      <Group
-        justify="space-between"
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 2,
-          paddingBottom: 4,
-          background: 'var(--mantine-color-body)',
-        }}
-      >
-        <Text size="sm" c="dimmed">
-          Acoes do detalhamento
-        </Text>
-        <Group gap="xs">
-          <Tooltip label="Salvar detalhamento">
-            <ActionIcon
-              aria-label="Salvar detalhamento"
-              color="green"
-              size="lg"
-              onClick={() => void props.save()}
-              loading={props.saving}
-            >
-              <IconDeviceFloppy size={18} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-      </Group>
+    <div className="flex flex-col gap-4">
+      <div className="sticky top-0 z-20 pb-2 bg-white dark:bg-slate-950 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          Ações do detalhamento
+        </p>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={() => void props.save()}
+            disabled={props.saving}
+            className="h-9 px-4 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs uppercase"
+          >
+            {props.saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            SALVAR DETALHAMENTO
+          </Button>
+        </div>
+      </div>
 
-      <Group align="flex-end" wrap="wrap" gap="xs">
-        <TextInput
-          label="Nome do talhão"
-          value={props.nome}
-          onChange={(event) => props.setNome(event.currentTarget.value)}
-          style={{ flex: '1 1 clamp(220px, 30vw, 320px)' }}
-        />
-        <NumberInput
-          label="Area (ha)"
-          value={props.areaHa}
-          min={0}
-          decimalScale={2}
-          style={{ flex: '0 0 clamp(96px, 9vw, 136px)' }}
-          onChange={(value) => {
-            if (value == null || value === '') {
-              props.setAreaHa('');
-              return;
-            }
-            props.setAreaHa(Number(value));
-          }}
-        />
-        <Box style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flex: '1 1 clamp(220px, 28vw, 300px)' }}>
-          <Select
-            label="Classe de solo (SiBCS)"
-            placeholder="Selecione a classe"
-            searchable
-            clearable
-            nothingFoundMessage="Nenhuma classe encontrada"
-            data={props.soilOptions}
-            value={props.tipoSolo.trim() ? props.tipoSolo : UNCLASSIFIED_SOIL_VALUE}
-            onChange={(value) => props.setTipoSolo(value ?? UNCLASSIFIED_SOIL_VALUE)}
-            style={{ flex: 1 }}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[220px]">
+          <Label htmlFor="talhao-nome" className="text-[10px] font-bold uppercase tracking-tight text-slate-500 mb-1.5 block">
+            Nome do talhão
+          </Label>
+          <Input
+            id="talhao-nome"
+            value={props.nome}
+            onChange={(event) => props.setNome(event.currentTarget.value)}
+            className="h-10 text-sm"
           />
-          <Tooltip label="Classificar SiBCS">
-            <ActionIcon
-              aria-label="Classificar SiBCS"
-              variant="light"
-              color="green"
-              size="lg"
-              onClick={props.openSoilClassifier}
-              mb={1}
-            >
-              <IconSearch size={16} />
-            </ActionIcon>
-          </Tooltip>
-        </Box>
-      </Group>
-      <Group justify="space-between" align="center" mt={-4}>
-        <Group gap={8}>
-          {props.lastClassificationSummary ? (
-            <Badge variant="light" color="teal">
-              Ultima: {props.lastClassificationSummary}
-            </Badge>
-          ) : null}
-        </Group>
-      </Group>
-      {props.selectedSoilDescription ? (
-        <Text size="xs" c="dimmed" mt={-6}>
-          {props.selectedSoilDescription}
-        </Text>
-      ) : null}
-
-      <Card withBorder p="xs">
-        <Group justify="space-between" mb="xs">
-          <Group gap={8}>
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              size="sm"
-              aria-label={
-                cultureSectionOpened ? 'Recolher seção de culturas' : 'Expandir seção de culturas'
+        </div>
+        <div className="w-[120px] shrink-0">
+          <Label htmlFor="talhao-area" className="text-[10px] font-bold uppercase tracking-tight text-slate-500 mb-1.5 block">
+            Área (ha)
+          </Label>
+          <Input
+            id="talhao-area"
+            type="number"
+            value={props.areaHa}
+            min={0}
+            step={0.01}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              if (value === '') {
+                props.setAreaHa('');
+                return;
               }
+              props.setAreaHa(Number(value));
+            }}
+            className="h-10 text-sm"
+          />
+        </div>
+        <div className="flex-1 min-w-[220px] flex items-end gap-2">
+          <div className="flex-1">
+            <Label className="text-[10px] font-bold uppercase tracking-tight text-slate-500 mb-1.5 block">
+              Classe de solo (SiBCS)
+            </Label>
+            <ShadSelect
+              value={props.tipoSolo.trim() ? props.tipoSolo : UNCLASSIFIED_SOIL_VALUE}
+              onValueChange={(value) => props.setTipoSolo(value || UNCLASSIFIED_SOIL_VALUE)}
+            >
+              <SelectTrigger className="h-10 text-sm">
+                <SelectValue placeholder="Selecione a classe" />
+              </SelectTrigger>
+              <SelectContent>
+                {props.soilOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </ShadSelect>
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 shrink-0 border-teal-200 dark:border-teal-800 text-teal-600 hover:bg-teal-50"
+            onClick={props.openSoilClassifier}
+            title="Classificar SiBCS com IA"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between -mt-2">
+        <div className="flex gap-2">
+          {props.lastClassificationSummary && (
+            <Badge variant="secondary" className="bg-teal-50 text-teal-700 border-teal-200 text-[10px] font-bold">
+              Última: {props.lastClassificationSummary}
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {props.selectedSoilDescription && (
+        <p className="text-[11px] text-slate-500 italic -mt-2 leading-relaxed">
+          {props.selectedSoilDescription}
+        </p>
+      )}
+
+      <Card className="border-slate-200 dark:border-slate-800 shadow-none">
+        <CardHeader className="p-4 flex flex-row items-center justify-between space-y-0">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-slate-500"
               onClick={() => setCultureSectionOpened((prev) => !prev)}
             >
               {cultureSectionOpened ? (
-                <IconChevronUp size={15} />
+                <ChevronUp className="h-4 w-4" />
               ) : (
-                <IconChevronDown size={15} />
+                <ChevronDown className="h-4 w-4" />
               )}
-            </ActionIcon>
-            <Text fw={700}>Culturas do talhão</Text>
-            <Badge color="grape">{props.cultures.length} registros</Badge>
-          </Group>
+            </Button>
+            <CardTitle className="text-sm font-bold text-slate-700 dark:text-slate-200">
+              Culturas do talhão
+            </CardTitle>
+            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px]">
+              {props.cultures.length} registros
+            </Badge>
+          </div>
           <Button
-            size="xs"
-            leftSection={<IconPlus size={14} />}
+            size="sm"
+            variant="outline"
+            className="h-8 text-[10px] font-bold uppercase tracking-wider"
             onClick={props.openCultureLinkModal}
           >
-            Vincular cultura e período
+            <Plus className="mr-1.5 h-3 w-3" />
+            Vincular cultura
           </Button>
-        </Group>
+        </CardHeader>
 
-        <Collapse in={cultureSectionOpened}>
-          <Group align="stretch" gap="xs" wrap="wrap" grow>
-            <Card withBorder p="xs" style={{ flex: '1 1 clamp(220px, 28vw, 360px)' }}>
-              <Stack gap={6}>
-                <Text fw={600} size="sm">
+        {cultureSectionOpened && (
+          <CardContent className="p-4 pt-0">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              <div className="lg:col-span-4 rounded-lg border border-slate-100 dark:border-slate-800 p-3 space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-tight text-slate-400">
                   Espécie atual
-                </Text>
-                <Select
-                  placeholder="Selecione a espécie ativa"
-                  searchable
-                  clearable
-                  nothingFoundMessage="Nenhuma espécie encontrada"
-                  data={props.currentCultureOptions}
-                  value={props.currentCulture || null}
-                  onChange={(value) => props.setCurrentCulture(value ?? '')}
-                />
+                </p>
+                <ShadSelect
+                  value={props.currentCulture || ""}
+                  onValueChange={(value) => props.setCurrentCulture(value)}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Selecione a espécie ativa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {props.currentCultureOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </ShadSelect>
                 {currentCultureRow ? (
-                  <Text size="xs" c="dimmed">
-                    {`Refino por cultivar: ${currentCultureRow.cultivar || '-'} | Período: ${formatMonthYear(currentCultureRow.data_inicio)} a ${formatMonthYear(currentCultureRow.data_fim)}`}
-                  </Text>
+                  <p className="text-[10px] text-slate-500 leading-tight">
+                    Refino por cultivar: <strong className="text-slate-700 dark:text-slate-300">{currentCultureRow.cultivar || '-'}</strong>
+                    <br />
+                    Período: <span className="font-medium">{formatMonthYear(currentCultureRow.data_inicio)} a {formatMonthYear(currentCultureRow.data_fim)}</span>
+                  </p>
                 ) : (
-                  <Text size="xs" c="dimmed">
-                    Sem espécie ativa selecionada.
-                  </Text>
+                  <p className="text-[10px] text-slate-400 italic">Sem espécie ativa selecionada.</p>
                 )}
-                <Text size="xs" c="dimmed">
+                <p className="text-[9px] text-slate-400 leading-tight">
                   Prioridade de referência para cálculos: cultivar quando informada; senão, espécie.
-                </Text>
-              </Stack>
-            </Card>
+                </p>
+              </div>
 
-            <Card withBorder p="xs" style={{ flex: '1 1 clamp(280px, 45vw, 620px)' }}>
-              <Stack gap={6}>
-                <Text fw={600} size="sm">
+              <div className="lg:col-span-8 rounded-lg border border-slate-100 dark:border-slate-800 p-3 overflow-hidden">
+                <p className="text-[10px] font-bold uppercase tracking-tight text-slate-400 mb-2">
                   Histórico de culturas
-                </Text>
+                </p>
                 {historyCultureRows.length > 0 ? (
-                  <Table striped highlightOnHover withTableBorder>
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>Espécie</Table.Th>
-                        <Table.Th>Cultivar (refino)</Table.Th>
-                        <Table.Th>Período</Table.Th>
-                        <Table.Th>Prioridade</Table.Th>
-                        <Table.Th>Dados técnicos</Table.Th>
-                        <Table.Th>Ações</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {historyCultureRows.map(({ row, index }) => (
-                        <Table.Tr
-                          key={`${row.cultura}-${row.data_inicio}-${row.data_fim}-${index}`}
-                        >
-                          <Table.Td>{row.cultura}</Table.Td>
-                          <Table.Td>{row.cultivar || '-'}</Table.Td>
-                          <Table.Td>
-                            {`${formatMonthYear(row.data_inicio)} a ${formatMonthYear(row.data_fim)}`}
-                          </Table.Td>
-                          <Table.Td>
-                            {row.cultivar ? 'Cultivar' : 'Espécie'}
-                          </Table.Td>
-                          <Table.Td>
-                            {row.technical_profile_id
-                              ? 'Cultivar custom'
-                              : row.technical_priority === 'cultivar'
-                                ? 'Cultivar RNC'
-                                : 'Espécie'}
-                          </Table.Td>
-                          <Table.Td>
-                            <Group gap={6}>
-                              <Tooltip label="Duplicar cultivar para dados técnicos próprios">
-                                <ActionIcon
-                                  size="sm"
-                                  variant="light"
-                                  color="teal"
-                                  aria-label="Duplicar cultivar para dados técnicos"
-                                  onClick={() =>
-                                    props.duplicateCultivarForTechnicalProfile(index)
-                                  }
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[11px] border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500 font-bold uppercase tracking-wider bg-slate-50/50 dark:bg-slate-900/50">
+                          <th className="px-2 py-1.5">Espécie</th>
+                          <th className="px-2 py-1.5">Cultivar</th>
+                          <th className="px-2 py-1.5">Período</th>
+                          <th className="px-2 py-1.5">Fonte</th>
+                          <th className="px-2 py-1.5 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyCultureRows.map(({ row, index }) => (
+                          <tr
+                            key={`${row.cultura}-${row.data_inicio}-${row.data_fim}-${index}`}
+                            className="border-b border-slate-50 dark:border-slate-900 hover:bg-slate-50/30 dark:hover:bg-slate-900/30 transition-colors"
+                          >
+                            <td className="px-2 py-2 font-medium">{row.cultura}</td>
+                            <td className="px-2 py-2 text-slate-500">{row.cultivar || '-'}</td>
+                            <td className="px-2 py-2 text-slate-500">
+                              {formatMonthYear(row.data_inicio)} a {formatMonthYear(row.data_fim)}
+                            </td>
+                            <td className="px-2 py-2">
+                              <Badge variant="outline" className="text-[9px] py-0 h-4 bg-slate-50 text-slate-500 font-normal">
+                                {row.technical_profile_id ? 'Custom' : row.technical_priority === 'cultivar' ? 'RNC' : 'Espécie'}
+                              </Badge>
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+                                  onClick={() => props.duplicateCultivarForTechnicalProfile(index)}
                                   disabled={!row.cultivar}
+                                  title="Duplicar para dados próprios"
                                 >
-                                  <IconCopy size={14} />
-                                </ActionIcon>
-                              </Tooltip>
-                              <Tooltip label="Editar cultura/safra">
-                                <ActionIcon
-                                  size="sm"
-                                  variant="light"
-                                  color="blue"
-                                  aria-label="Editar cultura/safra"
+                                  <Copy className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                   onClick={() => props.openEditCultureModal(index)}
+                                  title="Editar"
                                 >
-                                  <IconPencil size={14} />
-                                </ActionIcon>
-                              </Tooltip>
-                              <Tooltip label="Remover cultura/safra">
-                                <ActionIcon
-                                  size="sm"
-                                  color="red"
-                                  variant="light"
-                                  aria-label="Remover cultura/safra"
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
                                   onClick={() => props.removeCulture(index)}
+                                  title="Remover"
                                 >
-                                  <IconTrash size={14} />
-                                </ActionIcon>
-                              </Tooltip>
-                            </Group>
-                          </Table.Td>
-                        </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
-                  <Text size="sm" c="dimmed">
+                  <p className="text-[10px] text-slate-400 italic py-4 text-center">
                     Nenhum histórico anterior para este talhão.
-                  </Text>
+                  </p>
                 )}
-              </Stack>
-            </Card>
-          </Group>
-        </Collapse>
+              </div>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
-      <Modal
-        opened={props.cultureModalOpened}
-        onClose={props.closeCultureModal}
-        title="Editar período da cultura"
-        centered
-      >
-        <Stack>
-          <TextInput
-            label="Espécie (RNC)"
-            value={props.cultureDraft.cultura}
-            readOnly
-          />
+    <Dialog open={props.cultureModalOpened} onOpenChange={(val) => !val && props.closeCultureModal()}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Editar período da cultura</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label className="text-[10px] uppercase font-bold text-slate-500">Espécie (RNC)</Label>
+            <Input value={props.cultureDraft.cultura} readOnly className="h-9 bg-slate-50 text-xs" />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-[10px] uppercase font-bold text-slate-500">Cultivar (RNC - refino)</Label>
+            <Input value={props.cultureDraft.cultivar ?? ''} readOnly className="h-9 bg-slate-50 text-xs" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label className="text-[10px] uppercase font-bold text-slate-500">Mês/ano inicial</Label>
+              <Input
+                type="month"
+                value={props.cultureDraft.data_inicio}
+                onChange={(event) =>
+                  props.setCultureDraft({
+                    ...props.cultureDraft,
+                    data_inicio: normalizeMonthYear(event.currentTarget.value),
+                  })
+                }
+                className="h-9 text-xs"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label className="text-[10px] uppercase font-bold text-slate-500">Mês/ano final</Label>
+              <Input
+                type="month"
+                value={props.cultureDraft.data_fim}
+                onChange={(event) =>
+                  props.setCultureDraft({
+                    ...props.cultureDraft,
+                    data_fim: normalizeMonthYear(event.currentTarget.value),
+                  })
+                }
+                className="h-9 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={props.closeCultureModal}>
+            <X className="mr-2 h-4 w-4" />
+            CANCELAR
+          </Button>
+          <Button onClick={props.saveCultureDraft} className="bg-teal-600 hover:bg-teal-700">
+            <Save className="mr-2 h-4 w-4" />
+            SALVAR PERÍODO
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-          <TextInput
-            label="Cultivar (RNC - refino)"
-            value={props.cultureDraft.cultivar ?? ''}
-            readOnly
+    <Dialog open={props.cultureLinkModalOpened} onOpenChange={(val) => !val && props.closeCultureLinkModal()}>
+      <DialogContent className="max-w-[1180px] w-[92vw] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 py-4 border-b">
+          <DialogTitle>Vincular espécie/cultivar ao talhão</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="flex-1 p-6">
+          <RncCultivarSelector
+            mode="picker"
+            onSelect={props.handleLinkCultureFromRnc}
           />
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
 
-          <Group grow>
-            <TextInput
-              type="month"
-              label="Mês/ano inicial"
-              value={props.cultureDraft.data_inicio}
-              onChange={(event) =>
-                props.setCultureDraft({
-                  ...props.cultureDraft,
-                  data_inicio: normalizeMonthYear(event.currentTarget.value),
-                })
-              }
+    <Card className="border-slate-200 dark:border-slate-800 shadow-none">
+      <CardHeader className="p-4 flex flex-row items-center justify-between space-y-0">
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-sm font-bold text-slate-700 dark:text-slate-200">
+            Croqui do talhão
+          </CardTitle>
+          <Info className="h-4 w-4 text-slate-400 cursor-help" aria-label="Croqui visual de referência, sem proporção real." />
+        </div>
+        <Badge variant={props.drawMode === 'none' ? 'secondary' : 'destructive'} className="text-[10px] font-bold">
+          {props.statusLabel}
+        </Badge>
+      </CardHeader>
+
+      <CardContent className="p-4 pt-0 space-y-4">
+        <div className="flex flex-wrap items-center gap-2 pb-2 overflow-x-auto">
+          <div className="flex items-center gap-1 shrink-0">
+            <Input
+              className="h-9 w-[180px] text-xs"
+              placeholder="CEP ou coordenadas"
+              value={props.mapSearchValue}
+              onChange={(event) => props.setMapSearchValue(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void props.applyRealMapBackground();
+                }
+              }}
             />
-            <TextInput
-              type="month"
-              label="Mês/ano final"
-              value={props.cultureDraft.data_fim}
-              onChange={(event) =>
-                props.setCultureDraft({
-                  ...props.cultureDraft,
-                  data_fim: normalizeMonthYear(event.currentTarget.value),
-                })
-              }
-            />
-          </Group>
-
-          <Group justify="flex-end">
-            <Tooltip label="Cancelar">
-              <ActionIcon
-                variant="light"
-                color="gray"
-                size="lg"
-                aria-label="Cancelar"
-                onClick={props.closeCultureModal}
-              >
-                <IconX size={16} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Salvar periodo">
-              <ActionIcon
-                color="green"
-                size="lg"
-                aria-label="Salvar periodo"
-                onClick={props.saveCultureDraft}
-              >
-                <IconDeviceFloppy size={16} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        </Stack>
-      </Modal>
-
-      <Modal
-        opened={props.cultureLinkModalOpened}
-        onClose={props.closeCultureLinkModal}
-        title="Vincular espécie/cultivar ao talhão"
-        centered
-        size="clamp(340px, 92vw, 1180px)"
-      >
-        <RncCultivarSelector
-          mode="picker"
-          onSelect={props.handleLinkCultureFromRnc}
-        />
-      </Modal>
-
-      <Card withBorder p="xs">
-        <Group justify="space-between" mb="xs">
-          <Group gap={6} align="center">
-            <Text fw={700}>Croqui do talhao</Text>
-            <Tooltip label="Croqui visual de referencia, sem proporcao/escala real do terreno.">
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                size="sm"
-                aria-label="Ajuda sobre escala do croqui do talhão"
-              >
-                <IconHelpCircle size={15} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-          <Badge color={props.drawMode === 'none' ? 'blue' : 'orange'}>
-            {props.statusLabel}
-          </Badge>
-        </Group>
-
-        <Group
-          mb="sm"
-          gap={6}
-          wrap="nowrap"
-          style={{ overflowX: 'auto', paddingBottom: 2 }}
-        >
-          <TextInput
-            style={{ flex: 1, minWidth: 226 }}
-            size="sm"
-            aria-label="Referencia real por CEP ou coordenadas"
-            placeholder="CEP ou coordenadas"
-            value={props.mapSearchValue}
-            onChange={(event) => props.setMapSearchValue(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                void props.applyRealMapBackground();
-              }
-            }}
-          />
-          <Tooltip label="Aplicar fundo real">
-            <ActionIcon
-              color="blue"
-              size="md"
-              aria-label="Aplicar fundo real"
-              loading={props.mapSearchLoading}
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 border-blue-200 text-blue-600 hover:bg-blue-50"
+              disabled={props.mapSearchLoading}
               onClick={() => void props.applyRealMapBackground()}
             >
-              <IconSearch size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <TextInput
-            size="sm"
-            style={{ width: 188, minWidth: 188 }}
-            aria-label="Adicionar ponto por coordenadas"
-            placeholder="Lat, Lon do ponto"
-            value={props.pointSearchValue}
-            onChange={(event) => props.setPointSearchValue(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                props.addPointFromCoordinates();
-              }
-            }}
-          />
-          <Tooltip label="Inserir ponto por coordenada">
-            <ActionIcon
-              size="md"
-              color="teal"
-              aria-label="Inserir ponto por coordenada"
+              {props.mapSearchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0 px-2 border-l">
+            <Input
+              className="h-9 w-[160px] text-xs"
+              placeholder="Lat, Lon do ponto"
+              value={props.pointSearchValue}
+              onChange={(event) => props.setPointSearchValue(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  props.addPointFromCoordinates();
+                }
+              }}
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 border-teal-200 text-teal-600 hover:bg-teal-50"
               onClick={props.addPointFromCoordinates}
             >
-              <IconPlus size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Select
-            size="sm"
-            placeholder="Camada"
-            aria-label="Selecionar camada do mapa"
-            style={{ width: 129, minWidth: 129 }}
-            data={mapLayerOptions}
-            value={props.mapLayerId}
-            onChange={(value) => {
-              if (!value) return;
-              props.setMapLayerId(value as GeoLayerId);
-            }}
-            disabled={!props.mapHasRealBackground}
-          />
-          <Tooltip
-            label={
-              props.mapInteractive
-                ? 'Desativar navegacao do mapa'
-                : 'Ativar navegacao do mapa (pan/zoom)'
-            }
-          >
-            <ActionIcon
-              size="md"
-              color={props.mapInteractive ? 'teal' : 'gray'}
-              variant={props.mapInteractive ? 'filled' : 'light'}
-              aria-label="Alternar navegacao do mapa"
-              onClick={() => props.setMapInteractive(!props.mapInteractive)}
-              disabled={!props.mapHasRealBackground || props.drawMode !== 'none'}
-            >
-              <IconMap2 size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Voltar para fundo ilustrativo">
-            <ActionIcon
-              color="gray"
-              variant="light"
-              size="md"
-              aria-label="Voltar para fundo ilustrativo"
-              onClick={props.clearRealMapBackground}
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0 px-2 border-l">
+            <ShadSelect
+              value={props.mapLayerId}
+              onValueChange={(value) => props.setMapLayerId(value as GeoLayerId)}
               disabled={!props.mapHasRealBackground}
             >
-              <IconMapOff size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Desenhar limite do talhão">
-            <ActionIcon
-              variant="light"
-              size="md"
-              aria-label="Desenhar limite do talhão"
-              onClick={props.startMainDrawing}
-              disabled={
-                props.drawMode !== 'none' || props.mainPoints.length >= 3 || props.mapInteractive
-              }
+              <SelectTrigger className="h-9 w-[120px] text-xs">
+                <SelectValue placeholder="Camada" />
+              </SelectTrigger>
+              <SelectContent>
+                {GEO_BASE_LAYERS.map((layer) => (
+                  <SelectItem key={layer.id} value={layer.id}>
+                    {layer.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </ShadSelect>
+
+            <Button
+              variant={props.mapInteractive ? "secondary" : "ghost"}
+              size="icon"
+              className={cn("h-9 w-9", props.mapInteractive ? "bg-teal-100 text-teal-700" : "text-slate-500")}
+              onClick={() => props.setMapInteractive(!props.mapInteractive)}
+              disabled={!props.mapHasRealBackground || props.drawMode !== 'none'}
+              title="Alternar navegação"
             >
-              <IconPolygon size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Adicionar zona de exclusao">
-            <ActionIcon
-              variant="light"
-              color="red"
-              size="md"
-              aria-label="Adicionar zona de exclusao"
+              <IconMap2 className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 text-slate-500"
+              onClick={props.clearRealMapBackground}
+              disabled={!props.mapHasRealBackground}
+              title="Fundo ilustrativo"
+            >
+              <MapPinOff className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0 px-2 border-l">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 border-slate-200 text-slate-600"
+              onClick={props.startMainDrawing}
+              disabled={props.drawMode !== 'none' || props.mainPoints.length >= 3 || props.mapInteractive}
+              title="Desenhar limite"
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 border-red-200 text-red-600 hover:bg-red-50"
               onClick={props.startZoneDrawing}
               disabled={props.drawMode !== 'none' || props.mapInteractive}
+              title="Adicionar zona de exclusão"
             >
-              <IconVectorSpline size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Cancelar desenho">
-            <ActionIcon
-              variant="light"
-              color="gray"
-              size="md"
-              aria-label="Cancelar desenho"
+              <Spline className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 text-slate-400"
               onClick={props.cancelDrawing}
               disabled={props.drawMode === 'none' || props.mapInteractive}
+              title="Cancelar desenho"
             >
-              <IconBan size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Concluir desenho">
-            <ActionIcon
-              size="md"
-              color="green"
-              aria-label="Concluir desenho"
+              <Ban className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 border-green-200 text-green-600 hover:bg-green-50"
               onClick={props.finishDrawing}
               disabled={props.drawMode === 'none' || props.mapInteractive}
+              title="Concluir desenho"
             >
-              <IconCheck size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label={deleteSelectionLabel}>
-            <ActionIcon
-              color="red"
-              variant="light"
-              size="md"
-              aria-label="Excluir selecao atual"
+              <Check className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0 px-2 border-l">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 text-red-600 hover:bg-red-50"
               onClick={props.removeCurrentSelection}
               disabled={!canDeleteSelection}
+              title="Excluir seleção"
             >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Excluir ponto selecionado (Del)">
-            <ActionIcon
-              color="orange"
-              variant="light"
-              size="md"
-              aria-label="Excluir ponto selecionado"
-              onClick={props.removeSelectedVertex}
-              disabled={!props.selectedVertex}
-            >
-              <IconMinus size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Remover limite do talhão">
-            <ActionIcon
-              color="orange"
-              variant="light"
-              size="md"
-              aria-label="Remover limite do talhão"
-              onClick={props.removeMainPolygon}
-              disabled={
-                props.mainPoints.length === 0 &&
-                props.currentPoints.length === 0 &&
-                props.zones.length === 0
-              }
-            >
-              <IconX size={16} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
 
         <div
           ref={props.canvasRef}
+          className="relative w-full h-[440px] overflow-hidden rounded-lg border border-slate-200 bg-[#e8efe1]"
           style={{
-            width: '100%',
-            height: 440,
-            position: 'relative',
-            overflow: 'hidden',
-            backgroundColor: '#e8efe1',
             backgroundImage: props.mapCenter ? undefined : `url(${mapReferenceBg})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            border: '1px solid #cbd5e1',
-            borderRadius: 8,
           }}
         >
           {props.mapCenter ? (
-            <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+            <div className="absolute inset-0 z-0">
               <Suspense
                 fallback={
-                  <Center h="100%">
-                    <Loader size="sm" />
-                  </Center>
+                  <div className="flex h-full items-center justify-center bg-slate-100/50">
+                    <Loader2 className="animate-spin text-slate-400" size={32} />
+                  </div>
                 }
               >
                 <LazyGeoBackdropMap
@@ -2544,10 +2479,8 @@ function GridLayout(props: {
             </div>
           ) : null}
           <div
+            className="absolute inset-0 z-10"
             style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: 1,
               pointerEvents: props.mapInteractive ? 'none' : 'auto',
             }}
           >
@@ -2827,22 +2760,21 @@ function GridLayout(props: {
           </div>
         </div>
 
-        <Group justify="space-between" mt="sm">
-          <Text size="sm" c="dimmed">
-            Um desenho principal por talhao. Zonas de exclusao podem ser varias.
-          </Text>
-          <Badge color="red">{props.zones.length} zonas</Badge>
-        </Group>
-        <Text size="sm" c="dimmed" mt={4}>
-          Arraste as bolinhas para editar vertices. Clique na bolinha para selecionar e use Excluir ponto (Del).
-        </Text>
-        {props.drawMode === 'zone' && props.currentPoints.length > 1 && hasInvalidPreviewSegment ? (
-          <Text size="sm" c="red.6" mt={2}>
-            Existe aresta fora da area util. Ajuste os pontos ate todas as arestas ficarem validas.
-          </Text>
-        ) : null}
-      </Card>
-
-    </Stack>
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-[10px] text-slate-400 italic">
+            Um desenho principal por talhão. Arraste os pontos para editar.
+          </p>
+          <Badge variant="outline" className="text-[10px] bg-red-50 text-red-600 border-red-100 font-bold">
+            {props.zones.length} zonas
+          </Badge>
+        </div>
+        {props.drawMode === 'zone' && props.currentPoints.length > 1 && hasInvalidPreviewSegment && (
+          <p className="text-xs text-red-600 font-medium mt-1">
+            Existe(m) aresta(s) fora da área útil. Ajuste os pontos.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+    </div>
   );
 }

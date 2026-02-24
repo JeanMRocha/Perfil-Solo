@@ -1,14 +1,19 @@
 import {
   Box,
-  Button,
-  Group,
   Loader,
-  Modal,
-  ScrollArea,
-  Stack,
-  Text,
-  TextInput,
 } from '@mantine/core';
+import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Button as ShadButton } from '../../components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '../../components/ui/dialog';
+import { ScrollArea as ShadScrollArea } from '../../components/ui/scroll-area';
+import { Input as ShadInput } from '../../components/ui/input';
 import { notifications } from '@mantine/notifications';
 import { useStore } from '@nanostores/react';
 import {
@@ -63,6 +68,7 @@ import type {
 import TalhaoSelectorModal, {
   type TalhaoSelectionRow,
 } from './components/TalhaoSelectorModal';
+import { cn } from '../../lib/utils';
 import './dashboard.css';
 
 const DASHBOARD_SELECTED_PROPERTY_KEY = 'perfilsolo_dashboard_selected_property_v1';
@@ -1019,45 +1025,43 @@ export default function Dashboard() {
               />
             </Box>
 
-            <Box
+            <Card
               ref={propertyInfoCardRef}
-              className="dashboard-scene-info-card dashboard-property-info-card dashboard-info-card"
+              className="dashboard-scene-info-card dashboard-property-info-card dashboard-info-card border-slate-200/50 dark:border-slate-800/50 shadow-xl backdrop-blur-md bg-white/90 dark:bg-slate-950/90"
             >
-              {selectedProperty ? (
-                <>
-                  <Text size="xs" fw={700} ta="center">
-                    Propriedade selecionada:
-                  </Text>
-                  <Text size="sm" fw={700} ta="center">
-                    {selectedProperty.nome}
-                  </Text>
-                  {showSelectedPropertyOtherAreas ? (
-                    <Text size="xs" fw={600} ta="center">
-                      Outras áreas: {formatAreaHa(selectedPropertyOtherAreas)} ha
-                    </Text>
-                  ) : null}
-                  {showSelectedPropertyTotalArea ? (
-                    <Text size="xs" fw={700} ta="center">
-                      Total: {formatAreaHa(selectedPropertyTotalArea)} ha
-                    </Text>
-                  ) : null}
-                  {showSelectedPropertyTalhoes ? (
-                    <Text size="xs" fw={600} ta="center">
-                      Talhões: {selectedPropertyTalhoesCount} ({formatAreaHa(selectedPropertyTalhoesArea)} ha)
-                    </Text>
-                  ) : null}
-                  {showSelectedPropertyAnalyses ? (
-                    <Text size="xs" fw={600} ta="center">
-                      Análises: {selectedPropertyAnalysesCount}
-                    </Text>
-                  ) : null}
-                </>
-              ) : (
-                <Text size="sm" fw={700} ta="center">
-                  Selecione uma propriedade na casa
-                </Text>
+              <CardHeader className="p-3 pb-0 space-y-0 text-center">
+                <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+                  Propriedade Ativa
+                </CardTitle>
+                <div className="text-sm font-bold truncate">
+                  {selectedProperty ? selectedProperty.nome : "Selecione na casa"}
+                </div>
+              </CardHeader>
+              {selectedProperty && (
+                <CardContent className="p-3 pt-1 space-y-1 text-center">
+                  <div className="flex flex-col gap-0.5">
+                    {showSelectedPropertyTotalArea && (
+                      <Badge variant="outline" className="mx-auto text-[10px] h-5 border-teal-500/30 text-teal-700 dark:text-teal-300">
+                        Total: {formatAreaHa(selectedPropertyTotalArea)} ha
+                      </Badge>
+                    )}
+                    <div className="grid grid-cols-1 gap-1 mt-1 text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                      {showSelectedPropertyOtherAreas && (
+                        <span>Outras: {formatAreaHa(selectedPropertyOtherAreas)} ha</span>
+                      )}
+                      {showSelectedPropertyTalhoes && (
+                        <span>Talhões: {selectedPropertyTalhoesCount} ({formatAreaHa(selectedPropertyTalhoesArea)} ha)</span>
+                      )}
+                      {showSelectedPropertyAnalyses && (
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                          Análises: {selectedPropertyAnalysesCount}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
               )}
-            </Box>
+            </Card>
           </Box>
 
           {selectedProperty ? (
@@ -1086,258 +1090,241 @@ export default function Dashboard() {
                 />
               </Box>
 
-              <Box
+              <Card
                 ref={talhaoInfoCardRef}
-                className="dashboard-scene-info-card dashboard-talhao-info-card dashboard-info-card"
+                className="dashboard-scene-info-card dashboard-talhao-info-card dashboard-info-card border-slate-200/50 dark:border-slate-800/50 shadow-xl backdrop-blur-md bg-white/90 dark:bg-slate-950/90"
               >
-                {selectedTalhao ? (
-                  <>
-                    <Text size="xs" fw={700} ta="center">
-                      Talhão selecionado:
-                    </Text>
-                    <Text size="xs" fw={700} ta="center">
-                      {selectedTalhao.nome}
-                    </Text>
-                    {showSelectedTalhaoArea ? (
-                      <Text size="xs" fw={600} ta="center">
-                        Área: {formatAreaHa(selectedTalhaoArea)} ha
-                      </Text>
-                    ) : null}
-                    {selectedTalhaoSoil ? (
-                      <Text size="xs" fw={600} ta="center">
-                        Solo: {selectedTalhaoSoil}
-                      </Text>
-                    ) : null}
-                    {showSelectedTalhaoAnalyses ? (
-                      <Text size="xs" fw={600} ta="center">
-                        Análises: {selectedTalhaoAnalysesCount}
-                      </Text>
-                    ) : null}
-                  </>
-                ) : (
-                  <Text size="xs" fw={700} ta="center">
-                    Selecione um talhão no terreno
-                  </Text>
+                <CardHeader className="p-3 pb-0 space-y-0 text-center">
+                  <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    Talhão Selecionado
+                  </CardTitle>
+                  <div className="text-sm font-bold truncate">
+                    {selectedTalhao ? selectedTalhao.nome : "Selecione no terreno"}
+                  </div>
+                </CardHeader>
+                {selectedTalhao && (
+                  <CardContent className="p-3 pt-1 space-y-1 text-center">
+                    <div className="flex flex-col gap-0.5">
+                      {showSelectedTalhaoArea && (
+                        <Badge variant="outline" className="mx-auto text-[10px] h-5 border-amber-500/30 text-amber-700 dark:text-amber-300">
+                          Área: {formatAreaHa(selectedTalhaoArea)} ha
+                        </Badge>
+                      )}
+                      <div className="grid grid-cols-1 gap-1 mt-1 text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                        {selectedTalhaoSoil && (
+                          <span>Solo: {selectedTalhaoSoil}</span>
+                        )}
+                        {showSelectedTalhaoAnalyses && (
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                            Análises: {selectedTalhaoAnalysesCount}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
                 )}
-              </Box>
+              </Card>
             </Box>
           ) : null}
         </Box>
       </Box>
 
-      <Modal
-        opened={drawerOpened}
-        onClose={() => setDrawerOpened(false)}
-        centered
-        size="clamp(320px, 92vw, 760px)"
-        radius="md"
-        withCloseButton
-        title="Selecionar propriedade"
-      >
-        <Stack gap="xs">
-          <Text
-            size="xs"
-            style={{
-              borderRadius: 8,
-              padding: '4px 6px',
-              border:
+      <Dialog open={drawerOpened} onOpenChange={setDrawerOpened}>
+        <DialogContent className="max-w-[760px] w-[92vw] overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Selecionar propriedade</DialogTitle>
+            <DialogDescription className="hidden">
+              Pesquise e selecione a propriedade ativa para trabalhar no dashboard.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 mt-2">
+            <div
+              className={cn(
+                "text-[10px] leading-relaxed rounded-lg p-2 border",
                 tema === 'dark'
-                  ? '1px solid rgba(100, 116, 139, 0.35)'
-                  : '1px solid rgba(148, 163, 184, 0.4)',
-              background:
-                tema === 'dark'
-                  ? 'rgba(15, 23, 42, 0.35)'
-                  : 'rgba(248, 250, 252, 0.92)',
-            }}
-          >
-            Propriedades: <Text span fw={700}>{propertyPlanSummary.used}</Text>
-            {' | '}Limite: <Text span fw={700}>{propertyPlanSummary.included}</Text>
-            {' | '}Restantes:{' '}
-            <Text
-              span
-              fw={700}
-              c={propertyPlanSummary.remaining > 0 ? 'teal' : 'orange'}
+                  ? 'border-slate-800 bg-slate-900/50'
+                  : 'border-slate-200 bg-slate-50/90'
+              )}
             >
-              {propertyPlanSummary.remaining}
-            </Text>
-            {propertyPlanSummary.exceeded > 0 ? (
-              <>
-                {' | '}Excedente:{' '}
-                <Text span fw={700} c="orange">
-                  {propertyPlanSummary.exceeded}
-                </Text>
-              </>
-            ) : null}
-          </Text>
-
-          <Group align="center" wrap="wrap" gap="xs">
-            <TextInput
-              leftSection={<IconSearch size={14} />}
-              placeholder="Buscar propriedade por nome"
-              value={propertySearch}
-              onChange={(event) => setPropertySearch(event.currentTarget.value)}
-              style={{ flex: 1, minWidth: 220 }}
-            />
-            <Group gap="xs" wrap="nowrap">
-              <Button
-                variant="light"
-                color="blue"
-                leftSection={<IconFileExport size={14} />}
-                onClick={openExportModal}
-                radius="md"
-                disabled={loadingProperties || propertyRows.length === 0}
-                title="Exportar propriedades/talhões/análises em PDF"
+              Propriedades: <span className="font-bold">{propertyPlanSummary.used}</span>
+              {' | '}Limite: <span className="font-bold">{propertyPlanSummary.included}</span>
+              {' | '}Restantes:{' '}
+              <span
+                className={cn(
+                  "font-bold",
+                  propertyPlanSummary.remaining > 0 ? 'text-teal-600' : 'text-orange-600'
+                )}
               >
-                Exportar
-              </Button>
-              <Button
-                leftSection={<IconPlus size={14} />}
-                onClick={openPropertyCreate}
-                radius="md"
-                disabled={!canCreateProperty}
-                title={
-                  canCreateProperty
-                    ? 'Cadastrar nova propriedade'
-                    : `Limite atingido (${propertyPlanSummary.used}/${propertyPlanSummary.included})`
-                }
-              >
-                Cadastrar
-              </Button>
-            </Group>
-          </Group>
+                {propertyPlanSummary.remaining}
+              </span>
+              {propertyPlanSummary.exceeded > 0 && (
+                <>
+                  {' | '}Excedente:{' '}
+                  <span className="font-bold text-orange-600">
+                    {propertyPlanSummary.exceeded}
+                  </span>
+                </>
+              )}
+            </div>
 
-          {loadingProperties ? (
-            <Group gap="xs">
-              <Loader size="sm" />
-              <Text size="sm" c="dimmed">
-                Carregando propriedades...
-              </Text>
-            </Group>
-          ) : loadError ? (
-            <Stack gap={6}>
-              <Text size="sm" c="red">
-                {loadError}
-              </Text>
-              <Button variant="light" size="xs" onClick={() => void loadProperties()}>
-                Tentar novamente
-              </Button>
-            </Stack>
-          ) : filteredProperties.length === 0 ? (
-            <Stack gap={8}>
-              <Text size="sm" c="dimmed">
-                {canCreateProperty
-                  ? 'Nenhuma propriedade cadastrada. Inicie um onboarding com ajuda ou cadastre direto.'
-                  : 'Nenhuma propriedade cadastrada e o limite de cadastro do plano atual foi atingido.'}
-              </Text>
-              {canCreateProperty ? (
-                <Group gap="xs" wrap="wrap">
-                  <Button size="xs" variant="light" color="blue" onClick={() => setPropertyOnboardingOpened(true)}>
-                    Cadastrar com ajuda
-                  </Button>
-                  <Button size="xs" onClick={openPropertyCreate}>
-                    Cadastrar sem ajuda
-                  </Button>
-                </Group>
-              ) : null}
-            </Stack>
-          ) : (
-            <ScrollArea.Autosize mah="52vh" type="always">
-              <Stack gap={6} pr={2}>
-                {filteredProperties.map((row) => {
-                  const selected = row.id === selectedPropertyId;
-                  const rowTotalArea = propertyTotalAreaById[row.id] ?? 0;
-                  const rowTalhoesCount = propertyTalhoesCountById[row.id] ?? 0;
-                  const rowTalhoesArea = propertyTalhoesAreaById[row.id] ?? 0;
-                  const rowAnalysesCount = propertyAnalysesCountById[row.id] ?? 0;
-                  const rowMetaParts: string[] = [];
-                  if (isPositiveNumber(rowTotalArea)) {
-                    rowMetaParts.push(`Área total: ${formatAreaHa(rowTotalArea)} ha`);
-                  }
-                  if (rowTalhoesCount > 0 || isPositiveNumber(rowTalhoesArea)) {
-                    rowMetaParts.push(
-                      `Talhões: ${rowTalhoesCount} (${formatAreaHa(rowTalhoesArea)} ha)`,
-                    );
-                  }
-                  if (rowAnalysesCount > 0) {
-                    rowMetaParts.push(`Análises: ${rowAnalysesCount}`);
-                  }
-                  return (
-                    <Box
-                      key={row.id}
-                      style={{
-                        borderRadius: 10,
-                        border:
-                          tema === 'dark'
-                            ? '1px solid rgba(100, 116, 139, 0.35)'
-                            : '1px solid rgba(148, 163, 184, 0.45)',
-                        background:
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[220px]">
+                <IconSearch className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                <ShadInput
+                  placeholder="Buscar propriedade por nome"
+                  value={propertySearch}
+                  onChange={(event) => setPropertySearch(event.currentTarget.value)}
+                  className="pl-9"
+                />
+              </div>
+              <div className="flex gap-2 whitespace-nowrap">
+                <ShadButton
+                  variant="outline"
+                  size="sm"
+                  onClick={openExportModal}
+                  disabled={loadingProperties || propertyRows.length === 0}
+                  className="h-9"
+                >
+                  <IconFileExport className="mr-2 h-4 w-4" />
+                  Exportar
+                </ShadButton>
+                <ShadButton
+                  size="sm"
+                  onClick={openPropertyCreate}
+                  disabled={!canCreateProperty}
+                  className="h-9 bg-indigo-600 hover:bg-indigo-700"
+                >
+                  <IconPlus className="mr-2 h-4 w-4" />
+                  Cadastrar
+                </ShadButton>
+              </div>
+            </div>
+
+            {loadingProperties ? (
+              <div className="flex items-center gap-2 py-4">
+                <Loader size="sm" />
+                <span className="text-sm text-slate-500">Carregando propriedades...</span>
+              </div>
+            ) : loadError ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-sm text-red-500">{loadError}</span>
+                <ShadButton variant="outline" size="sm" onClick={() => void loadProperties()}>
+                  Tentar novamente
+                </ShadButton>
+              </div>
+            ) : filteredProperties.length === 0 ? (
+              <div className="flex flex-col gap-3 py-4">
+                <span className="text-sm text-slate-500 italic">
+                  {canCreateProperty
+                    ? 'Nenhuma propriedade cadastrada. Inicie um onboarding com ajuda ou cadastre direto.'
+                    : 'Nenhuma propriedade cadastrada e o limite de seu plano foi atingido.'}
+                </span>
+                {canCreateProperty && (
+                  <div className="flex flex-wrap gap-2">
+                    <ShadButton variant="outline" size="sm" onClick={() => setPropertyOnboardingOpened(true)}>
+                      Cadastrar com ajuda
+                    </ShadButton>
+                    <ShadButton size="sm" onClick={openPropertyCreate}>
+                      Cadastrar sem ajuda
+                    </ShadButton>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <ShadScrollArea className="flex-1 -mx-2 px-2 overflow-y-auto max-h-[52vh]">
+                <div className="flex flex-col gap-2 pr-4">
+                  {filteredProperties.map((row) => {
+                    const selected = row.id === selectedPropertyId;
+                    const rowTotalArea = propertyTotalAreaById[row.id] ?? 0;
+                    const rowTalhoesCount = propertyTalhoesCountById[row.id] ?? 0;
+                    const rowTalhoesArea = propertyTalhoesAreaById[row.id] ?? 0;
+                    const rowAnalysesCount = propertyAnalysesCountById[row.id] ?? 0;
+                    const rowMetaParts: string[] = [];
+                    if (isPositiveNumber(rowTotalArea)) {
+                      rowMetaParts.push(`Área total: ${formatAreaHa(rowTotalArea)} ha`);
+                    }
+                    if (rowTalhoesCount > 0 || isPositiveNumber(rowTalhoesArea)) {
+                      rowMetaParts.push(
+                        `Talhões: ${rowTalhoesCount} (${formatAreaHa(rowTalhoesArea)} ha)`,
+                      );
+                    }
+                    if (rowAnalysesCount > 0) {
+                      rowMetaParts.push(`Análises: ${rowAnalysesCount}`);
+                    }
+                    return (
+                      <div
+                        key={row.id}
+                        className={cn(
+                          "group rounded-xl border p-3 transition-all",
                           selected
                             ? tema === 'dark'
-                              ? 'rgba(20, 184, 166, 0.16)'
-                              : 'rgba(20, 184, 166, 0.12)'
+                              ? 'border-teal-500/50 bg-teal-500/10'
+                              : 'border-teal-200 bg-teal-50'
                             : tema === 'dark'
-                              ? 'rgba(15, 23, 42, 0.34)'
-                              : 'rgba(248, 250, 252, 0.9)',
-                        padding: '7px 8px',
-                      }}
-                    >
-                      <Group justify="space-between" wrap="wrap" gap={6}>
-                        <Text
-                          fw={selected ? 700 : 600}
-                          size="sm"
-                          c={selected ? 'teal' : undefined}
-                          style={{
-                            minWidth: 140,
-                            maxWidth: 250,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {row.nome}
-                        </Text>
-                        {rowMetaParts.length > 0 ? (
-                          <Text size="xs" c="dimmed">
-                            {rowMetaParts.join(' | ')}
-                          </Text>
-                        ) : null}
-                        <Group gap={6} wrap="wrap">
-                          <Button
-                            size="xs"
-                            variant={selected ? 'filled' : 'light'}
-                            color={selected ? 'teal' : 'gray'}
-                            onClick={() => selectActiveProperty(row.id)}
-                          >
-                            {selected ? 'Ativa' : 'Selecionar'}
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color="indigo"
-                            leftSection={<IconEdit size={14} />}
-                            onClick={() => openPropertyEdit(row.id)}
-                          >
-                            Editar
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color="red"
-                            leftSection={<IconTrash size={14} />}
-                            onClick={() => void removeProperty(row)}
-                          >
-                            Excluir
-                          </Button>
-                        </Group>
-                      </Group>
-                    </Box>
-                  );
-                })}
-              </Stack>
-            </ScrollArea.Autosize>
-          )}
-        </Stack>
-      </Modal>
+                              ? 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
+                              : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
+                        )}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex flex-col gap-1 min-w-0 flex-1">
+                            <span
+                              className={cn(
+                                "font-bold text-sm truncate",
+                                selected ? "text-teal-700 dark:text-teal-400" : ""
+                              )}
+                            >
+                              {row.nome}
+                            </span>
+                            {rowMetaParts.length > 0 && (
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                {rowMetaParts.join(' | ')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 shrink-0">
+                            <ShadButton
+                              size="sm"
+                              variant={selected ? 'default' : 'ghost'}
+                              className={cn(
+                                "h-8 text-xs",
+                                selected 
+                                  ? "bg-teal-600 hover:bg-teal-700 text-white" 
+                                  : "bg-slate-200/50 dark:bg-slate-800/50 hover:bg-slate-300 dark:hover:bg-slate-700"
+                              )}
+                              onClick={() => selectActiveProperty(row.id)}
+                            >
+                              {selected ? 'Ativa' : 'Selecionar'}
+                            </ShadButton>
+                            <ShadButton
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-xs bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:text-indigo-400"
+                              onClick={() => openPropertyEdit(row.id)}
+                            >
+                              <IconEdit className="mr-1.5 h-3 w-3" />
+                              Editar
+                            </ShadButton>
+                            <ShadButton
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-xs bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400"
+                              onClick={() => void removeProperty(row)}
+                            >
+                              <IconTrash className="mr-1.5 h-3 w-3" />
+                              Excluir
+                            </ShadButton>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ShadScrollArea>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <PropertyExportModal
         opened={exportModalOpened}
@@ -1377,30 +1364,34 @@ export default function Dashboard() {
         onRetryLoad={() => void loadTalhoesForSelectedProperty()}
       />
 
-      <Modal
-        opened={propertyOnboardingOpened}
-        onClose={() => setPropertyOnboardingOpened(false)}
-        centered
-        radius="md"
-        title="Cadastrar propriedade"
-      >
-        <Stack gap="xs">
-          <Text size="sm" c="dimmed">
-            Para trabalhar com talhões no dashboard, primeiro cadastre uma propriedade.
-          </Text>
-          <Text size="sm">
-            Escolha como deseja seguir:
-          </Text>
-          <Group gap="xs" wrap="wrap">
-            <Button variant="light" color="blue" onClick={openPropertyOnboardingWithHelp}>
-              Com ajuda
-            </Button>
-            <Button onClick={openPropertyOnboardingWithoutHelp}>
-              Sem ajuda
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+      <Dialog open={propertyOnboardingOpened} onOpenChange={setPropertyOnboardingOpened}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Cadastrar propriedade</DialogTitle>
+            <DialogDescription>
+              Para trabalhar com talhões no dashboard, primeiro cadastre uma propriedade.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm font-medium">Escolha como deseja seguir:</p>
+            <div className="flex gap-3">
+              <ShadButton
+                variant="outline"
+                className="flex-1"
+                onClick={openPropertyOnboardingWithHelp}
+              >
+                Com ajuda
+              </ShadButton>
+              <ShadButton
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                onClick={openPropertyOnboardingWithoutHelp}
+              >
+                Sem ajuda
+              </ShadButton>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <PropertyFullModal
         opened={propertyModalMode !== null}

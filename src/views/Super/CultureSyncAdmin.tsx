@@ -43,9 +43,6 @@ import {
   cleanupStaleHashes,
   getRetentionStats,
   runAllCleanupJobs,
-  markImportLogResolved,
-  deleteImportLog,
-  getUnresolvedErrorsStats,
 } from '../../services/dataRetentionService';
 import { fullImportRncDatabase } from '../../services/cultureImportService';
 import { searchRncCultivars } from '../../services/rncCultivarService';
@@ -84,8 +81,7 @@ export default function CultureSyncAdmin({
     Array<{ record: string; error: string }>
   >([]);
   const [lastImportStats, setLastImportStats] = useState<any>(null);
-  const [processingLogId, setProcessingLogId] = useState<string | null>(null);
-  const [unresolvedErrorsStats, setUnresolvedErrorsStats] = useState<any>(null);
+
 
   // Verifica se é super usuário (apenas quando não está embutido)
   useEffect(() => {
