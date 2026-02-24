@@ -1,27 +1,19 @@
-import { Group, Text, Divider } from '@mantine/core';
-import { useStore } from '@nanostores/react';
-import { $tema } from '@global/themeStore';
-import { getBrandPalette } from '../mantine/brand';
 
 interface PageHeaderProps {
   title: string;
-  color?: string;
+  color?: string; // color logic from palette might need adjustment if using Tailwind colors
 }
 
-export default function PageHeader({ title, color }: PageHeaderProps) {
-  const tema = useStore($tema);
-  const palette = getBrandPalette(tema);
+export default function PageHeader({ title }: PageHeaderProps) {
 
   return (
-    <>
-      <Group justify="space-between" align="center" mb="md" mt="md">
-        <Group>
-          <Text fz="xl" fw={700} c={color ? `${color}.8` : palette.typography.title}>
-            {title}
-          </Text>
-        </Group>
-      </Group>
-      <Divider my="sm" />
-    </>
+    <div className="space-y-4 mb-6 mt-4">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+          {title}
+        </h1>
+      </div>
+      <div className="h-px bg-slate-200 dark:bg-slate-800 w-full" />
+    </div>
   );
 }

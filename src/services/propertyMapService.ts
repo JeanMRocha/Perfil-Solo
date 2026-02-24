@@ -4,9 +4,7 @@ import type {
   SoilClassificationRequest,
   SoilResultResponse,
 } from './soilClassificationContractService';
-import {
-  type ContactInfo,
-} from '../types/contact';
+import { type ContactInfo } from '../types/contact';
 import { getPropertyAccessPolicyForUser } from './billingPlanService';
 import { isLocalDataMode } from './dataProvider';
 import {
@@ -36,9 +34,16 @@ export type MapPoint = {
   y: number;
 };
 
+export type ExclusionZone = {
+  id: string;
+  nome: string;
+  points: MapPoint[];
+  area_ha?: number;
+};
+
 export type TalhaoGeometry = {
   points: MapPoint[];
-  exclusionZones: MapPoint[][];
+  exclusionZones: ExclusionZone[];
   mapReference?: TalhaoMapReference | null;
   soilClassification?: TalhaoSoilClassificationSnapshot | null;
   currentCulture?: string | null;
@@ -78,7 +83,10 @@ export type PersistedAnalysisInput = Omit<
 
 const DEFAULT_TALHAO_COLOR = '#81C784';
 
-function applyPropertyVisibilityPolicy(userId: string, rows: Property[]): Property[] {
+function applyPropertyVisibilityPolicy(
+  userId: string,
+  rows: Property[],
+): Property[] {
   const policy = getPropertyAccessPolicyForUser(userId);
   if (!policy.restricted_to_first_property) return rows;
   return rows.slice(0, 1);
@@ -116,10 +124,9 @@ export function deriveTalhaoStatusFromAnalysis(
   );
   if (hasMediumAlert) return 'attention';
 
-  const normalized = (analysisRow?.normalized ?? analysisRow?.raw ?? {}) as Record<
-    string,
-    any
-  >;
+  const normalized = (analysisRow?.normalized ??
+    analysisRow?.raw ??
+    {}) as Record<string, any>;
   const ph = extractNumeric(normalized, 'pH');
   const vPercent = extractNumeric(normalized, 'V%');
   const al = extractNumeric(normalized, 'Al');
@@ -210,7 +217,9 @@ function parseOptionalString(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
-export function parseTalhaoGeometry(coordenadas?: string | null): TalhaoGeometry {
+export function parseTalhaoGeometry(
+  coordenadas?: string | null,
+): TalhaoGeometry {
   if (!coordenadas) {
     return { points: [], exclusionZones: [], mapReference: null };
   }
@@ -233,13 +242,46 @@ export function parseTalhaoGeometry(coordenadas?: string | null): TalhaoGeometry
         soilClassification?: unknown;
         currentCulture?: unknown;
       };
+
+      const points = parsePointArray(bag.points);
+
+      const rawExclusionZones = Array.isArray(bag.exclusionZones)
+        ? bag.exclusionZones
+        : [];
+      const exclusionZones: ExclusionZone[] = rawExclusionZones
+        .map((item, idx) => {
+          if (Array.isArray(item)) {
+            // Legacy check: if it's just an array of points
+            const pts = parsePointArray(item);
+            return {
+              id: `legacy-zone-${idx}`,
+              nome: `Zona ${idx + 1}`,
+              points: pts,
+            };
+          }
+          if (item && typeof item === 'object') {
+            const zoneObj = item as Partial<ExclusionZone>;
+            return {
+              id: zoneObj.id || `zone-${idx}`,
+              nome: zoneObj.nome || `Zona ${idx + 1}`,
+              points: parsePointArray(zoneObj.points),
+              area_ha:
+                typeof zoneObj.area_ha === 'number'
+                  ? zoneObj.area_ha
+                  : undefined,
+            };
+          }
+          return null;
+        })
+        .filter((z): z is ExclusionZone => z !== null && z.points.length >= 3);
+
       return {
-        points: parsePointArray(bag.points),
-        exclusionZones: Array.isArray(bag.exclusionZones)
-          ? bag.exclusionZones.map((zone) => parsePointArray(zone)).filter((zone) => zone.length >= 3)
-          : [],
+        points,
+        exclusionZones,
         mapReference: parseMapReference(bag.mapReference),
-        soilClassification: parseSoilClassificationSnapshot(bag.soilClassification),
+        soilClassification: parseSoilClassificationSnapshot(
+          bag.soilClassification,
+        ),
         currentCulture: parseOptionalString(bag.currentCulture),
       };
     }
@@ -296,13 +338,17 @@ function sumNonTalhoesAllocations(property: Property | null): number {
     ? property?.area_allocations
     : [];
   return rows.reduce((sum, row) => {
-    const categoryId = String(row?.category_id ?? '').trim().toLowerCase();
+    const categoryId = String(row?.category_id ?? '')
+      .trim()
+      .toLowerCase();
     if (categoryId === 'talhoes') return sum;
     return sum + toPositiveArea(row?.area_ha);
   }, 0);
 }
 
-async function findPropertyByIdForSync(propertyId: string): Promise<Property | null> {
+async function findPropertyByIdForSync(
+  propertyId: string,
+): Promise<Property | null> {
   if (isLocalDataMode) {
     return getPropertyByIdLocal(propertyId);
   }
@@ -391,9 +437,7 @@ export async function fetchOrCreateUserProperties(
   return [created as Property];
 }
 
-export async function fetchUserProperties(
-  userId: string,
-): Promise<Property[]> {
+export async function fetchUserProperties(userId: string): Promise<Property[]> {
   if (isLocalDataMode) {
     const rows = await getPropertiesByUser(userId);
     return applyPropertyVisibilityPolicy(userId, rows);
@@ -709,7 +753,7 @@ export async function createTalhaoForProperty(input: {
   propertyId: string;
   nome: string;
   points?: MapPoint[];
-  exclusionZones?: MapPoint[][];
+  exclusionZones?: ExclusionZone[];
   mapReference?: TalhaoMapReference | null;
   color?: string;
   area_ha?: number;
@@ -805,7 +849,7 @@ export async function updateTalhaoForProperty(input: {
   tipo_solo?: string | null;
   color?: string;
   points?: MapPoint[];
-  exclusionZones?: MapPoint[][];
+  exclusionZones?: ExclusionZone[];
   mapReference?: TalhaoMapReference | null;
   soilClassification?: TalhaoSoilClassificationSnapshot | null;
   currentCulture?: string | null;
@@ -974,7 +1018,9 @@ async function assertAnalysisLinkIntegrity(
   ]);
 
   if (propertyResult.error || !propertyResult.data) {
-    throw propertyResult.error ?? new Error('Propriedade vinculada não encontrada.');
+    throw (
+      propertyResult.error ?? new Error('Propriedade vinculada não encontrada.')
+    );
   }
   if (talhaoResult.error || !talhaoResult.data) {
     throw talhaoResult.error ?? new Error('Talhão vinculado não encontrado.');
@@ -999,7 +1045,10 @@ async function assertAnalysisLinkIntegrity(
       .single();
 
     if (laboratorioResult.error || !laboratorioResult.data) {
-      throw laboratorioResult.error ?? new Error('Laboratorio vinculado não encontrado.');
+      throw (
+        laboratorioResult.error ??
+        new Error('Laboratorio vinculado não encontrado.')
+      );
     }
 
     if (laboratorioResult.data.user_id !== input.user_id) {

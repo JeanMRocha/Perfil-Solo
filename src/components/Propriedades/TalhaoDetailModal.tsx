@@ -69,12 +69,12 @@ import {
   type MapPoint,
   type TalhaoSoilClassificationSnapshot,
   updateTalhaoForProperty,
+  type ExclusionZone,
 } from '../../services/propertyMapService';
+import type { GeoPoint } from '../../services/mapBackgroundService';
 import {
-  resolveGeoPointFromInput,
-  parseCoordinatesInput,
-  type GeoPoint,
-} from '../../services/mapBackgroundService';
+  type RncCultivarSelectionPayload,
+} from '../../services/rncCultivarService';
 import {
   GEO_BASE_LAYERS,
   type GeoLayerId,
@@ -83,13 +83,38 @@ import type {
   SoilClassificationRequest,
   SoilResultResponse,
 } from '../../services/soilClassificationContractService';
-import {
-  type RncCultivarSelectionPayload,
-} from '../../services/rncCultivarService';
-import { duplicateCultivarTechnicalProfile } from '../../services/cultivarTechnicalProfilesService';
 import { lazyWithBoundary } from '../../router/lazyWithBoundary';
-import { CRS, latLng } from 'leaflet';
 import RncCultivarSelector from '../../views/Rnc/RncCultivarSelector';
+
+// ── Módulo Talhão (tipos, constantes, utilitários) ──────────────────────────
+import type {
+  DrawMode,
+  SelectedVertex,
+  CultureEntry,
+} from '../../modules/talhao/types';
+import {
+  UNCLASSIFIED_SOIL_VALUE,
+  UNCLASSIFIED_SOIL_LABEL,
+} from '../../modules/talhao/constants';
+import {
+  flattenPoints,
+  polygonBounds,
+  isPolygonInsidePolygon,
+  isSegmentInsidePolygon,
+  midpoint,
+} from '../../modules/talhao/utils/geometry';
+import {
+  normalizeMonthYear,
+  formatMonthYear,
+  normalizeKey,
+  isUnclassifiedSoilValue,
+  resolveSoilLinkedColor,
+} from '../../modules/talhao/utils/formatters';
+
+// ── Hooks do módulo Talhão ──────────────────────────────────────────────────
+import { useTalhaoDrawing } from '../../modules/talhao/hooks/useTalhaoDrawing';
+import { useTalhaoCultures } from '../../modules/talhao/hooks/useTalhaoCultures';
+import { useTalhaoMapBackground } from '../../modules/talhao/hooks/useTalhaoMapBackground';
 
 const LazyGeoBackdropMap = lazyWithBoundary(
   () =>
@@ -106,263 +131,6 @@ const LazySoilClassificationWorkspace = lazyWithBoundary(
     })),
   'SoilClassificationWorkspace',
 );
-
-type DrawMode = 'none' | 'main' | 'zone';
-type CultureModalMode = 'edit';
-type SelectedVertex =
-  | { kind: 'main'; pointIndex: number }
-  | { kind: 'zone'; zoneIndex: number; pointIndex: number };
-
-type CultureEntry = {
-  cultura: string;
-  cultivar?: string;
-  especie_nome_comum?: string;
-  especie_nome_cientifico?: string;
-  grupo_especie?: string;
-  rnc_detail_url?: string;
-  technical_profile_id?: string;
-  technical_priority?: 'species' | 'cultivar';
-  data_inicio: string;
-  data_fim: string;
-  fonte?: string;
-};
-
-const UNCLASSIFIED_SOIL_VALUE = '__nao_classificado__';
-const UNCLASSIFIED_SOIL_LABEL = 'Não classificado';
-const DEFAULT_SOIL_LINKED_COLOR = '#81C784';
-const SOIL_COLOR_BY_ORDER: Record<string, string> = {
-  argissolos: '#B45309',
-  cambissolos: '#A16207',
-  chernossolos: '#78350F',
-  espodossolos: '#475569',
-  gleissolos: '#0EA5A4',
-  latossolos: '#7C3AED',
-  luvissolos: '#D97706',
-  neossolos: '#6B7280',
-  nitossolos: '#16A34A',
-  organossolos: '#166534',
-  planossolos: '#2563EB',
-  plintossolos: '#B91C1C',
-  vertissolos: '#4F46E5',
-};
-
-function flattenPoints(points: MapPoint[]) {
-  return points.flatMap((p) => [p.x, p.y]);
-}
-
-function polygonBounds(points: MapPoint[]) {
-  if (!points.length) {
-    return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
-  }
-  return points.reduce(
-    (acc, point) => ({
-      minX: Math.min(acc.minX, point.x),
-      maxX: Math.max(acc.maxX, point.x),
-      minY: Math.min(acc.minY, point.y),
-      maxY: Math.max(acc.maxY, point.y),
-    }),
-    { minX: points[0].x, maxX: points[0].x, minY: points[0].y, maxY: points[0].y },
-  );
-}
-
-function isPointOnSegment(point: MapPoint, start: MapPoint, end: MapPoint): boolean {
-  const cross =
-    (point.y - start.y) * (end.x - start.x) - (point.x - start.x) * (end.y - start.y);
-  if (Math.abs(cross) > 0.5) return false;
-
-  const dot =
-    (point.x - start.x) * (end.x - start.x) + (point.y - start.y) * (end.y - start.y);
-  if (dot < 0) return false;
-
-  const squaredLength =
-    (end.x - start.x) * (end.x - start.x) + (end.y - start.y) * (end.y - start.y);
-  return dot <= squaredLength;
-}
-
-function isPointInsidePolygon(point: MapPoint, polygon: MapPoint[]): boolean {
-  if (polygon.length < 3) return false;
-
-  for (let i = 0; i < polygon.length; i += 1) {
-    const a = polygon[i];
-    const b = polygon[(i + 1) % polygon.length];
-    if (isPointOnSegment(point, a, b)) return true;
-  }
-
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
-    const xi = polygon[i].x;
-    const yi = polygon[i].y;
-    const xj = polygon[j].x;
-    const yj = polygon[j].y;
-
-    const intersects =
-      yi > point.y !== yj > point.y &&
-      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
-
-function signedArea2(a: MapPoint, b: MapPoint, c: MapPoint): number {
-  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-}
-
-function isProperSegmentIntersection(
-  a1: MapPoint,
-  a2: MapPoint,
-  b1: MapPoint,
-  b2: MapPoint,
-): boolean {
-  const o1 = signedArea2(a1, a2, b1);
-  const o2 = signedArea2(a1, a2, b2);
-  const o3 = signedArea2(b1, b2, a1);
-  const o4 = signedArea2(b1, b2, a2);
-  return o1 * o2 < 0 && o3 * o4 < 0;
-}
-
-function isSegmentInsidePolygon(start: MapPoint, end: MapPoint, polygon: MapPoint[]): boolean {
-  if (polygon.length < 3) return false;
-  if (!isPointInsidePolygon(start, polygon) || !isPointInsidePolygon(end, polygon)) {
-    return false;
-  }
-  if (!isPointInsidePolygon(midpoint(start, end), polygon)) return false;
-
-  for (let i = 0; i < polygon.length; i += 1) {
-    const edgeA = polygon[i];
-    const edgeB = polygon[(i + 1) % polygon.length];
-    if (isProperSegmentIntersection(start, end, edgeA, edgeB)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function isPolygonInsidePolygon(inner: MapPoint[], outer: MapPoint[]): boolean {
-  if (inner.length < 3 || outer.length < 3) return false;
-
-  if (!inner.every((point) => isPointInsidePolygon(point, outer))) return false;
-
-  for (let i = 0; i < inner.length; i += 1) {
-    const innerA = inner[i];
-    const innerB = inner[(i + 1) % inner.length];
-
-    // Em poligonos concavos, dois pontos internos podem formar aresta externa.
-    // Validamos um ponto no meio da aresta para garantir que o segmento permaneceu dentro.
-    if (!isSegmentInsidePolygon(innerA, innerB, outer)) return false;
-  }
-
-  return true;
-}
-
-function midpoint(start: MapPoint, end: MapPoint): MapPoint {
-  return {
-    x: (start.x + end.x) / 2,
-    y: (start.y + end.y) / 2,
-  };
-}
-
-function geoPointToCanvasPoint(
-  geoPoint: GeoPoint,
-  viewCenter: GeoPoint,
-  zoom: number,
-  canvasWidth: number,
-  canvasHeight: number,
-): MapPoint {
-  const centerProjected = CRS.EPSG3857.latLngToPoint(
-    latLng(viewCenter.lat, viewCenter.lon),
-    zoom,
-  );
-  const targetProjected = CRS.EPSG3857.latLngToPoint(
-    latLng(geoPoint.lat, geoPoint.lon),
-    zoom,
-  );
-
-  return {
-    x: targetProjected.x - centerProjected.x + canvasWidth / 2,
-    y: targetProjected.y - centerProjected.y + canvasHeight / 2,
-  };
-}
-
-function normalizeMonthYear(value?: string | null): string {
-  const raw = String(value ?? '').trim();
-  if (!raw) return '';
-
-  const isoMatch = raw.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
-  if (isoMatch) {
-    const year = Number(isoMatch[1]);
-    const month = Number(isoMatch[2]);
-    if (year >= 1900 && month >= 1 && month <= 12) {
-      return `${isoMatch[1]}-${isoMatch[2]}`;
-    }
-  }
-
-  const brMatch = raw.match(/^(\d{2})\/(\d{4})$/);
-  if (brMatch) {
-    const month = Number(brMatch[1]);
-    const year = Number(brMatch[2]);
-    if (year >= 1900 && month >= 1 && month <= 12) {
-      return `${brMatch[2]}-${brMatch[1]}`;
-    }
-  }
-
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return '';
-  const year = parsed.getUTCFullYear();
-  const month = parsed.getUTCMonth() + 1;
-  if (year < 1900 || month < 1 || month > 12) return '';
-  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}`;
-}
-
-function monthYearOrder(value?: string | null): number {
-  const normalized = normalizeMonthYear(value);
-  if (!normalized) return Number.NaN;
-  const [yearText, monthText] = normalized.split('-');
-  const year = Number(yearText);
-  const month = Number(monthText);
-  if (!Number.isFinite(year) || !Number.isFinite(month)) return Number.NaN;
-  return year * 12 + month;
-}
-
-function formatMonthYear(value?: string | null): string {
-  const normalized = normalizeMonthYear(value);
-  if (!normalized) return '-';
-  const [year, month] = normalized.split('-');
-  return `${month}/${year}`;
-}
-
-function normalizeKey(value?: string | null): string {
-  return (value ?? '')
-    .toString()
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
-
-function isUnclassifiedSoilValue(value?: string | null): boolean {
-  const normalized = normalizeKey(value);
-  return (
-    normalized === normalizeKey(UNCLASSIFIED_SOIL_VALUE) ||
-    normalized === normalizeKey(UNCLASSIFIED_SOIL_LABEL)
-  );
-}
-
-function resolveSoilLinkedColor(
-  soilValue?: string | null,
-  fallback?: string | null,
-): string {
-  const normalized = normalizeKey(soilValue);
-  if (normalized && SOIL_COLOR_BY_ORDER[normalized]) return SOIL_COLOR_BY_ORDER[normalized];
-  return (fallback && fallback.trim()) || DEFAULT_SOIL_LINKED_COLOR;
-}
-
-function normalizeGeoLayerId(value?: string | null): GeoLayerId {
-  if (value === 'streets' || value === 'topographic' || value === 'satellite') {
-    return value;
-  }
-  return 'satellite';
-}
-
 interface TalhaoDetailModalProps {
   opened: boolean;
   talhao: Talhao | null;
@@ -379,49 +147,17 @@ export default function TalhaoDetailModal({
   onDeleted,
 }: TalhaoDetailModalProps) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
-  const lastDrawWarningAt = useRef(0);
   const [stageWidth, setStageWidth] = useState(900);
-  const [drawMode, setDrawMode] = useState<DrawMode>('none');
-  const [currentPoints, setCurrentPoints] = useState<MapPoint[]>([]);
-  const [mousePos, setMousePos] = useState<MapPoint | null>(null);
-  const [mainPoints, setMainPoints] = useState<MapPoint[]>([]);
-  const [zones, setZones] = useState<MapPoint[][]>([]);
-  const [selectedMainPolygon, setSelectedMainPolygon] = useState(false);
-  const [selectedZoneIndex, setSelectedZoneIndex] = useState<number | null>(null);
-  const [selectedVertex, setSelectedVertex] = useState<SelectedVertex | null>(null);
-  const [mapSearchValue, setMapSearchValue] = useState('');
-  const [mapCenter, setMapCenter] = useState<GeoPoint | null>(null);
-  const [mapZoom, setMapZoom] = useState(16);
-  const [mapLayerId, setMapLayerId] = useState<GeoLayerId>('satellite');
-  const [mapInteractive, setMapInteractive] = useState(false);
-  const [mapSearchLoading, setMapSearchLoading] = useState(false);
-  const [pointSearchValue, setPointSearchValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [emptyAreaGuardOpened, setEmptyAreaGuardOpened] = useState(false);
-  const [emptyAreaGuardReason, setEmptyAreaGuardReason] = useState<'close' | 'save'>(
-    'close',
-  );
+  const [emptyAreaGuardReason, setEmptyAreaGuardReason] = useState<'close' | 'save'>('close');
   const [deletingEmptyTalhao, setDeletingEmptyTalhao] = useState(false);
 
+  // ── Form state (nome, área, solo) ──────────────────────────────────────
   const [nome, setNome] = useState('');
   const [areaHa, setAreaHa] = useState<number | ''>('');
   const [tipoSolo, setTipoSolo] = useState('');
-  const [currentCulture, setCurrentCulture] = useState('');
-  const [cultureDraft, setCultureDraft] = useState<CultureEntry>({
-    cultura: '',
-    cultivar: '',
-    data_inicio: '',
-    data_fim: '',
-  });
-  const [cultures, setCultures] = useState<CultureEntry[]>([]);
   const [availableSoils, setAvailableSoils] = useState<SoilCatalogEntry[]>([]);
-  const [cultureModalOpened, setCultureModalOpened] = useState(false);
-  const [cultureLinkModalOpened, setCultureLinkModalOpened] = useState(false);
-  const [cultureModalMode, setCultureModalMode] =
-    useState<CultureModalMode>('edit');
-  const [editingCultureIndex, setEditingCultureIndex] = useState<number | null>(
-    null,
-  );
   const [soilClassifierOpened, setSoilClassifierOpened] = useState(false);
   const [soilClassificationRequest, setSoilClassificationRequest] =
     useState<SoilClassificationRequest | null>(null);
@@ -430,6 +166,44 @@ export default function TalhaoDetailModal({
   const [soilClassificationSnapshot, setSoilClassificationSnapshot] =
     useState<TalhaoSoilClassificationSnapshot | null>(null);
 
+  // ── Hooks extraídos ────────────────────────────────────────────────────
+  const drawing = useTalhaoDrawing();
+  const culturesHook = useTalhaoCultures();
+  const mapBg = useTalhaoMapBackground();
+
+  // ── Aliases para compatibilidade com GridLayout props ──────────────────
+  const {
+    drawMode, mainPoints, zones, currentPoints, mousePos, selectedVertex,
+    selectedZoneIndex, selectedMainPolygon, statusLabel,
+    setSelectedZoneIndex,
+    showDrawWarning, handleStageClick, handleMouseMove,
+    startMainDrawing, startZoneDrawing, cancelDrawing, finishDrawing,
+    removeSelectedZone, removeMainPolygon, clearSelectedVertex,
+    toggleMainPolygonSelection, toggleZoneSelection,
+    selectMainVertex, selectZoneVertex, removeCurrentSelection,
+    moveMainAnchor, moveZoneAnchor, moveCurrentAnchor,
+    insertMainPointAfter, insertZonePointAfter,
+    removeSelectedVertex,
+  } = drawing;
+
+  const {
+    cultures, currentCulture, setCurrentCulture,
+    cultureDraft, setCultureDraft, cultureModalOpened, cultureLinkModalOpened,
+    currentCultureOptions,
+    openCultureLinkModal, closeCultureLinkModal, handleLinkCultureFromRnc,
+    openEditCultureModal, closeCultureModal, saveCultureDraft,
+    removeCulture, duplicateCultivarForTechnicalProfile,
+  } = culturesHook;
+
+  const {
+    mapSearchValue, setMapSearchValue, mapSearchLoading,
+    mapCenter, mapZoom, mapLayerId, setMapLayerId,
+    mapInteractive, setMapInteractive,
+    pointSearchValue, setPointSearchValue,
+    applyRealMapBackground, clearRealMapBackground, handleRealMapViewChange,
+  } = mapBg;
+
+  // ── Canvas resize observer ─────────────────────────────────────────────
   useEffect(() => {
     const element = canvasRef.current;
     if (!element || !opened) return;
@@ -454,17 +228,15 @@ export default function TalhaoDetailModal({
     setAvailableSoils(listSoilCatalog());
   }, [opened]);
 
+  // ── Init do talhão ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!opened || !talhao) return;
     const geometry = parseTalhaoGeometry(talhao.coordenadas_svg);
-    setMainPoints(geometry.points);
-    setZones(geometry.exclusionZones);
-    setSelectedMainPolygon(false);
-    setSelectedZoneIndex(null);
-    setSelectedVertex(null);
-    setDrawMode('none');
-    setCurrentPoints([]);
-    setMousePos(null);
+
+    // Desenho
+    drawing.resetFromGeometry(geometry.points, geometry.exclusionZones);
+
+    // Form
     setNome(talhao.nome ?? '');
     setAreaHa(talhao.area_ha == null ? '' : talhao.area_ha);
     setTipoSolo(
@@ -472,7 +244,9 @@ export default function TalhaoDetailModal({
         ? UNCLASSIFIED_SOIL_VALUE
         : talhao.tipo_solo,
     );
-    const parsedCultures = Array.isArray(talhao.historico_culturas)
+
+    // Culturas
+    const parsedCultures: CultureEntry[] = Array.isArray(talhao.historico_culturas)
       ? talhao.historico_culturas.map((item) => ({
           cultura: item.cultura ?? '',
           cultivar: item.cultivar ?? '',
@@ -487,64 +261,21 @@ export default function TalhaoDetailModal({
           fonte: (item as any)?.fonte ?? undefined,
         }))
       : [];
-    setCultures(parsedCultures);
     const persistedCurrentCulture =
       typeof geometry.currentCulture === 'string' ? geometry.currentCulture.trim() : '';
-    setCurrentCulture(persistedCurrentCulture || parsedCultures[0]?.cultura || '');
-    setCultureDraft({ cultura: '', cultivar: '', data_inicio: '', data_fim: '' });
-    setCultureModalOpened(false);
-    setCultureLinkModalOpened(false);
-    setCultureModalMode('edit');
-    setEditingCultureIndex(null);
+    culturesHook.resetFromTalhao(parsedCultures, persistedCurrentCulture);
+
+    // Solo / classificação
     setSoilClassifierOpened(false);
     setSoilClassificationSnapshot(geometry.soilClassification ?? null);
     setSoilClassificationRequest(geometry.soilClassification?.request ?? null);
     setSoilClassificationResult(geometry.soilClassification?.response ?? null);
-    setMapSearchValue('');
-    if (geometry.mapReference?.center) {
-      setMapCenter({
-        lat: geometry.mapReference.center.lat,
-        lon: geometry.mapReference.center.lon,
-      });
-      setMapZoom(Math.max(3, Math.min(19, Math.round(geometry.mapReference.zoom ?? 16))));
-      setMapLayerId(normalizeGeoLayerId(geometry.mapReference.layerId));
-    } else {
-      setMapCenter(null);
-      setMapZoom(16);
-      setMapLayerId('satellite');
-    }
-    setMapInteractive(false);
-    setMapSearchLoading(false);
-    setPointSearchValue('');
+
+    // Mapa de fundo
+    mapBg.resetFromGeometry(geometry.mapReference ?? null);
   }, [opened, talhao]);
 
-  const statusLabel = useMemo(() => {
-    if (drawMode === 'main') return 'Desenhando limite principal';
-    if (drawMode === 'zone') return 'Desenhando zona de exclusao';
-    return 'Visualizacao';
-  }, [drawMode]);
-
-  const currentCultureOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const row of cultures) {
-      const label = row.cultura.trim();
-      if (!label) continue;
-      const key = normalizeKey(label);
-      if (!key || map.has(key)) continue;
-      map.set(key, label);
-    }
-    const selected = currentCulture.trim();
-    if (selected) {
-      const key = normalizeKey(selected);
-      if (key && !map.has(key)) {
-        map.set(key, selected);
-      }
-    }
-    return Array.from(map.values())
-      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-      .map((value) => ({ value, label: value }));
-  }, [cultures, currentCulture]);
-
+  // ── Derivados do formulário ────────────────────────────────────────────
   const soilOptions = useMemo(() => {
     const catalogOptions = availableSoils.map((soil) => ({
       value: soil.nome,
@@ -596,6 +327,7 @@ export default function TalhaoDetailModal({
     return `${primary.order} (${Math.round(primary.confidence)}%)`;
   }, [soilClassificationResult]);
 
+  // ── Classificação de solo ──────────────────────────────────────────────
   const openSoilClassifier = () => {
     setSoilClassifierOpened(true);
   };
@@ -638,133 +370,10 @@ export default function TalhaoDetailModal({
     });
   };
 
-  const showDrawWarning = (title: string, message: string) => {
-    const now = Date.now();
-    if (now - lastDrawWarningAt.current < 700) return;
-    lastDrawWarningAt.current = now;
-    notifications.show({
-      title,
-      message,
-      color: 'yellow',
-    });
-  };
-
-  const handleStageClick = (event: any) => {
-    if (drawMode === 'none') {
-      setSelectedMainPolygon(false);
-      setSelectedZoneIndex(null);
-      setSelectedVertex(null);
-      return;
-    }
-    if (event?.evt?.button === 2) return;
-    const stage = event.target.getStage();
-    const point = stage?.getPointerPosition();
-    if (!point) return;
-    if (drawMode === 'zone' && !isPointInsidePolygon(point, mainPoints)) {
-      showDrawWarning(
-        'Ponto fora da area util',
-        'A zona de exclusao deve ficar dentro do limite principal do talhão.',
-      );
-      return;
-    }
-    setCurrentPoints((prev) => [...prev, { x: point.x, y: point.y }]);
-  };
-
-  const handleMouseMove = (event: any) => {
-    if (drawMode === 'none') return;
-    const stage = event.target.getStage();
-    const point = stage?.getPointerPosition();
-    if (!point) return;
-    setMousePos({ x: point.x, y: point.y });
-  };
-
-  const startMainDrawing = () => {
-    if (mainPoints.length >= 3) {
-      notifications.show({
-        title: 'Area util ja definida',
-        message:
-          'Cada talhão aceita apenas uma area util. Edite os vertices existentes para ajustar.',
-        color: 'yellow',
-      });
-      return;
-    }
-    setSelectedMainPolygon(false);
-    setSelectedVertex(null);
-    setDrawMode('main');
-    setCurrentPoints([]);
-    setMousePos(null);
-  };
-
-  const startZoneDrawing = () => {
-    if (mainPoints.length < 3) {
-      notifications.show({
-        title: 'Desenhe o limite primeiro',
-        message: 'Defina o limite do talhão antes de criar zonas de exclusao.',
-        color: 'yellow',
-      });
-      return;
-    }
-    setSelectedMainPolygon(false);
-    setSelectedVertex(null);
-    setDrawMode('zone');
-    setCurrentPoints([]);
-    setMousePos(null);
-  };
-
-  const cancelDrawing = () => {
-    setSelectedMainPolygon(false);
-    setSelectedZoneIndex(null);
-    setSelectedVertex(null);
-    setDrawMode('none');
-    setCurrentPoints([]);
-    setMousePos(null);
-  };
-
-  const finishDrawing = () => {
-    if (currentPoints.length < 3) {
-      notifications.show({
-        title: 'Desenho incompleto',
-        message: 'Desenhe pelo menos 3 pontos.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    if (drawMode === 'main') {
-      setMainPoints(currentPoints);
-      notifications.show({
-        title: 'Limite atualizado',
-        message: 'Desenho principal do talhão definido.',
-        color: 'green',
-      });
-    } else if (drawMode === 'zone') {
-      if (!isPolygonInsidePolygon(currentPoints, mainPoints)) {
-        notifications.show({
-          title: 'Zona fora da area util',
-          message:
-            'Todos os pontos da zona de exclusao precisam ficar dentro da area util do talhão.',
-          color: 'yellow',
-        });
-        return;
-      }
-      setZones((prev) => [...prev, currentPoints]);
-      notifications.show({
-        title: 'Zona adicionada',
-        message: 'Zona de exclusao adicionada ao talhão.',
-        color: 'green',
-      });
-    }
-
-    setDrawMode('none');
-    setSelectedMainPolygon(false);
-    setSelectedVertex(null);
-    setCurrentPoints([]);
-    setMousePos(null);
-  };
-
+  // ── Persistência de desenho (right-click save) ─────────────────────────
   const persistDrawingOnly = async (
     nextMainPoints: MapPoint[],
-    nextZones: MapPoint[][],
+    nextZones: ExclusionZone[],
   ) => {
     if (!talhao) return;
     const persistedGeometry = parseTalhaoGeometry(talhao.coordenadas_svg);
@@ -809,691 +418,23 @@ export default function TalhaoDetailModal({
   };
 
   const handleCloseWithRightClick = (event: any) => {
-    event?.evt?.preventDefault?.();
-    if (drawMode === 'none') return;
-    if (currentPoints.length < 3) {
-      notifications.show({
-        title: 'Desenho incompleto',
-        message: 'Desenhe pelo menos 3 pontos.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    if (drawMode === 'zone' && !isPolygonInsidePolygon(currentPoints, mainPoints)) {
-      notifications.show({
-        title: 'Zona fora da area util',
-        message:
-          'Todos os pontos da zona de exclusao precisam ficar dentro da area util do talhão.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    const nextMainPoints = drawMode === 'main' ? currentPoints : mainPoints;
-    const nextZones = drawMode === 'zone' ? [...zones, currentPoints] : zones;
-
-    if (drawMode === 'main') {
-      setMainPoints(nextMainPoints);
-    } else if (drawMode === 'zone') {
-      setZones(nextZones);
-    }
-
-    setDrawMode('none');
-    setSelectedMainPolygon(false);
-    setSelectedVertex(null);
-    setCurrentPoints([]);
-    setMousePos(null);
-
-    void persistDrawingOnly(nextMainPoints, nextZones);
+    drawing.handleCloseWithRightClick(event, persistDrawingOnly);
   };
 
-  const removeSelectedZone = () => {
-    const targetIndex =
-      selectedZoneIndex != null ? selectedZoneIndex : zones.length === 1 ? 0 : null;
-
-    if (targetIndex == null) {
-      notifications.show({
-        title: 'Selecione a zona',
-        message: 'Escolha a zona de exclusao para remover.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    setZones((prev) => prev.filter((_, idx) => idx !== targetIndex));
-    setSelectedMainPolygon(false);
-    setSelectedZoneIndex(null);
-    setSelectedVertex((prev) => {
-      if (!prev || prev.kind !== 'zone') return prev;
-      if (prev.zoneIndex === targetIndex) return null;
-      if (prev.zoneIndex > targetIndex) {
-        return { ...prev, zoneIndex: prev.zoneIndex - 1 };
-      }
-      return prev;
-    });
-  };
-
-  const removeMainPolygon = () => {
-    const hadMain = mainPoints.length > 0 || currentPoints.length > 0;
-    const hadZones = zones.length > 0;
-    if (!hadMain && !hadZones) return;
-    setMainPoints([]);
-    setZones([]);
-    setSelectedMainPolygon(false);
-    setSelectedZoneIndex(null);
-    setSelectedVertex(null);
-    setDrawMode('none');
-    setCurrentPoints([]);
-    setMousePos(null);
-    notifications.show({
-      title: hadMain ? 'Limite removido' : 'Zonas removidas',
-      message:
-        hadMain && hadZones
-          ? 'O limite principal e as zonas de exclusao foram removidos.'
-          : hadMain
-            ? 'O limite principal foi removido.'
-            : 'As zonas de exclusao foram removidas.',
-      color: 'yellow',
-    });
-  };
-
-  const clearSelectedVertex = () => {
-    setSelectedVertex(null);
-  };
-
-  const toggleMainPolygonSelection = () => {
-    if (selectedMainPolygon) {
-      setSelectedMainPolygon(false);
-      setSelectedVertex((prev) => (prev?.kind === 'main' ? null : prev));
-      return;
-    }
-    setSelectedMainPolygon(true);
-    setSelectedZoneIndex(null);
-    setSelectedVertex((prev) => (prev?.kind === 'zone' ? null : prev));
-  };
-
-  const toggleZoneSelection = (zoneIndex: number) => {
-    if (selectedZoneIndex === zoneIndex) {
-      setSelectedZoneIndex(null);
-      setSelectedVertex((prev) =>
-        prev?.kind === 'zone' && prev.zoneIndex === zoneIndex ? null : prev,
-      );
-      return;
-    }
-    setSelectedMainPolygon(false);
-    setSelectedZoneIndex(zoneIndex);
-    setSelectedVertex((prev) => (prev?.kind === 'main' ? null : prev));
-  };
-
-  const selectMainVertex = (pointIndex: number) => {
-    setSelectedMainPolygon(true);
-    setSelectedZoneIndex(null);
-    setSelectedVertex({ kind: 'main', pointIndex });
-  };
-
-  const selectZoneVertex = (zoneIndex: number, pointIndex: number) => {
-    setSelectedMainPolygon(false);
-    setSelectedZoneIndex(zoneIndex);
-    setSelectedVertex({ kind: 'zone', zoneIndex, pointIndex });
-  };
-
-  const removeSelectedVertex = () => {
-    if (!selectedVertex) {
-      notifications.show({
-        title: 'Selecione um ponto',
-        message: 'Clique em uma bolinha para excluir o vertice.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    if (selectedVertex.kind === 'main') {
-      if (mainPoints.length <= 3) {
-        notifications.show({
-          title: 'Minimo de 3 pontos',
-          message: 'O limite principal precisa ter ao menos 3 vertices.',
-          color: 'yellow',
-        });
-        return;
-      }
-      const nextMainPoints = mainPoints.filter(
-        (_, idx) => idx !== selectedVertex.pointIndex,
-      );
-      const hasZoneOutside = zones.some(
-        (zone) => zone.length >= 3 && !isPolygonInsidePolygon(zone, nextMainPoints),
-      );
-      if (hasZoneOutside) {
-        notifications.show({
-          title: 'Ajuste inválido',
-          message:
-            'Remover esse ponto deixaria zona de exclusao fora da area util.',
-          color: 'yellow',
-        });
-        return;
-      }
-      setMainPoints(nextMainPoints);
-      setSelectedVertex(null);
-      notifications.show({
-        title: 'Ponto removido',
-        message: 'Vertice removido do limite principal.',
-        color: 'green',
-      });
-      return;
-    }
-
-    const zone = zones[selectedVertex.zoneIndex];
-    if (!zone) {
-      setSelectedVertex(null);
-      return;
-    }
-    if (zone.length <= 3) {
-      notifications.show({
-        title: 'Minimo de 3 pontos',
-        message:
-          'A zona precisa ter ao menos 3 vertices. Use remover zona para excluir totalmente.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    const nextZone = zone.filter((_, idx) => idx !== selectedVertex.pointIndex);
-    if (!isPolygonInsidePolygon(nextZone, mainPoints)) {
-      notifications.show({
-        title: 'Ajuste inválido',
-        message: 'A zona precisa continuar dentro da area util.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    setZones((prev) =>
-      prev.map((item, idx) => (idx === selectedVertex.zoneIndex ? nextZone : item)),
-    );
-    setSelectedZoneIndex(selectedVertex.zoneIndex);
-    setSelectedVertex(null);
-    notifications.show({
-      title: 'Ponto removido',
-      message: 'Vertice removido da zona de exclusao.',
-      color: 'green',
-    });
-  };
-
-  const removeCurrentSelection = () => {
-    if (selectedVertex) {
-      removeSelectedVertex();
-      return;
-    }
-
-    if (selectedZoneIndex != null || zones.length === 1) {
-      removeSelectedZone();
-      return;
-    }
-
-    if (selectedMainPolygon) {
-      removeMainPolygon();
-      return;
-    }
-
-    notifications.show({
-      title: 'Selecione antes de excluir',
-      message: 'Clique em um ponto, zona ou limite para remover.',
-      color: 'yellow',
-    });
-  };
-
-  const openCultureLinkModal = () => {
-    setCultureLinkModalOpened(true);
-  };
-
-  const closeCultureLinkModal = () => {
-    setCultureLinkModalOpened(false);
-  };
-
-  const handleLinkCultureFromRnc = (payload: RncCultivarSelectionPayload) => {
-    const cultura = String(payload.cultura ?? '').trim();
-    const cultivar = String(payload.cultivar ?? '').trim();
-    const dataInicio = normalizeMonthYear(payload.dataInicio);
-    const dataFim = normalizeMonthYear(payload.dataFim);
-    if (!cultura || !dataInicio || !dataFim) {
-      notifications.show({
-        title: 'Seleção incompleta',
-        message: 'A espécie e o período são obrigatórios para o vínculo.',
-        color: 'yellow',
-      });
-      return;
-    }
-    if (monthYearOrder(dataInicio) > monthYearOrder(dataFim)) {
-      notifications.show({
-        title: 'Período inválido',
-        message: 'O período selecionado é inválido.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    const incomingRow: CultureEntry = {
-      cultura,
-      cultivar: cultivar || undefined,
-      especie_nome_comum: String(payload.especieNomeComum ?? '').trim() || cultura,
-      especie_nome_cientifico: String(payload.especieNomeCientifico ?? '').trim() || undefined,
-      grupo_especie: String(payload.grupoEspecie ?? '').trim() || undefined,
-      rnc_detail_url: String(payload.rncDetailUrl ?? '').trim() || undefined,
-      technical_priority: cultivar ? 'cultivar' : 'species',
-      data_inicio: dataInicio,
-      data_fim: dataFim,
-      fonte: payload.fonte,
-    };
-
-    setCultures((prev) => {
-      const existingIndex = prev.findIndex(
-        (item) =>
-          normalizeKey(item.cultura) === normalizeKey(incomingRow.cultura) &&
-          normalizeKey(item.cultivar ?? '') === normalizeKey(incomingRow.cultivar ?? ''),
-      );
-      if (existingIndex < 0) return [...prev, incomingRow];
-      return prev.map((item, index) => (index === existingIndex ? incomingRow : item));
-    });
-
-    if (!currentCulture.trim()) {
-      setCurrentCulture(cultura);
-    }
-
-    notifications.show({
-      title: 'Cultura vinculada',
-      message: cultivar
-        ? `${cultura} vinculada com refino da cultivar ${cultivar}.`
-        : `${cultura} vinculada por espécie (sem refino de cultivar).`,
-      color: 'green',
-    });
-    setCultureLinkModalOpened(false);
-  };
-
-  const openEditCultureModal = (index: number) => {
-    const row = cultures[index];
-    if (!row) return;
-
-    setCultureModalMode('edit');
-    setEditingCultureIndex(index);
-    setCultureDraft({
-      cultura: row.cultura,
-      cultivar: row.cultivar ?? '',
-      data_inicio: row.data_inicio,
-      data_fim: row.data_fim,
-    });
-    setCultureModalOpened(true);
-  };
-
-  const closeCultureModal = () => {
-    setCultureModalOpened(false);
-  };
-
-  const saveCultureDraft = () => {
-    if (cultureModalMode !== 'edit' || editingCultureIndex == null) {
-      notifications.show({
-        title: 'Cadastro manual bloqueado',
-        message: 'Use o seletor do RNC para incluir novas culturas no talhão.',
-        color: 'yellow',
-      });
-      setCultureModalOpened(false);
-      return;
-    }
-
-    const cultura = cultureDraft.cultura.trim();
-    const cultivar = cultureDraft.cultivar?.trim() || '';
-    const dataInicio = normalizeMonthYear(cultureDraft.data_inicio);
-    const dataFim = normalizeMonthYear(cultureDraft.data_fim);
-
-    if (!cultura || !dataInicio || !dataFim) {
-      notifications.show({
-        title: 'Dados incompletos',
-        message: 'Informe espécie, mês/ano inicial e mês/ano final.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    if (monthYearOrder(dataInicio) > monthYearOrder(dataFim)) {
-      notifications.show({
-        title: 'Periodo inválido',
-        message: 'O mês/ano final deve ser maior ou igual ao mês/ano inicial.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    const row: CultureEntry = {
-      cultura,
-      cultivar: cultivar || undefined,
-      data_inicio: dataInicio,
-      data_fim: dataFim,
-    };
-
-    setCultures((prev) =>
-      prev.map((item, index) =>
-        index === editingCultureIndex
-          ? {
-              ...item,
-              ...row,
-            }
-          : item,
-      ),
-    );
-    if (!currentCulture.trim()) {
-      setCurrentCulture(row.cultura);
-    }
-
-    setCultureModalOpened(false);
-  };
-
-  const removeCulture = (index: number) => {
-    setCultures((prev) => {
-      const removed = prev[index];
-      const next = prev.filter((_, idx) => idx !== index);
-      if (
-        removed &&
-        normalizeKey(removed.cultura) === normalizeKey(currentCulture) &&
-        !next.some((item) => normalizeKey(item.cultura) === normalizeKey(currentCulture))
-      ) {
-        setCurrentCulture(next[0]?.cultura ?? '');
-      }
-      return next;
-    });
-  };
-
-  const duplicateCultivarForTechnicalProfile = (index: number) => {
-    const row = cultures[index];
-    if (!row) return;
-
-    const especieNomeComum = String(
-      row.especie_nome_comum || row.cultura || '',
-    ).trim();
-    const especieNomeCientifico = String(row.especie_nome_cientifico || '').trim();
-    const grupoEspecie = String(row.grupo_especie || '').trim();
-    const cultivarNome = String(row.cultivar || '').trim();
-
-    if (!especieNomeComum) {
-      notifications.show({
-        title: 'Espécie inválida',
-        message: 'Não foi possível identificar a espécie para preparar os dados técnicos.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    if (!cultivarNome) {
-      notifications.show({
-        title: 'Cultivar ausente',
-        message: 'Selecione uma cultivar para duplicar dados técnicos específicos.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    const technicalProfile = duplicateCultivarTechnicalProfile({
-      especieNomeComum,
-      especieNomeCientifico,
-      grupoEspecie,
-      cultivarNome,
-      rncDetailUrl: row.rnc_detail_url,
-    });
-
-    setCultures((prev) =>
-      prev.map((item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              cultivar: technicalProfile.cultivar_nome,
-              technical_profile_id: technicalProfile.id,
-              technical_priority: 'cultivar',
-            }
-          : item,
-      ),
-    );
-
-    notifications.show({
-      title: 'Cultivar duplicada para edição técnica',
-      message: `${technicalProfile.cultivar_nome} preparada para receber seus dados de produção.`,
-      color: 'green',
-    });
-  };
-
-  const moveMainAnchor = (index: number, point: MapPoint): boolean => {
-    const nextMainPoints = mainPoints.map((item, idx) => (idx === index ? point : item));
-    const hasZoneOutside = zones.some(
-      (zone) => zone.length >= 3 && !isPolygonInsidePolygon(zone, nextMainPoints),
-    );
-    if (hasZoneOutside) {
-      showDrawWarning(
-        'Ajuste inválido',
-        'Esse movimento colocaria uma zona de exclusao fora da area util.',
-      );
-      return false;
-    }
-    setMainPoints(nextMainPoints);
-    return true;
-  };
-
-  const moveZoneAnchor = (
-    zoneIndex: number,
-    pointIndex: number,
-    point: MapPoint,
-  ): boolean => {
-    const zone = zones[zoneIndex];
-    if (!zone) return false;
-    const nextZone = zone.map((item, pIdx) => (pIdx === pointIndex ? point : item));
-    if (!isPolygonInsidePolygon(nextZone, mainPoints)) {
-      showDrawWarning(
-        'Ajuste inválido',
-        'A zona de exclusao precisa permanecer dentro da area util.',
-      );
-      return false;
-    }
-    setZones((prev) =>
-      prev.map((item, idx) => (idx === zoneIndex ? nextZone : item)),
-    );
-    return true;
-  };
-
-  const moveCurrentAnchor = (index: number, point: MapPoint): boolean => {
-    const nextCurrent = currentPoints.map((item, idx) =>
-      idx === index ? point : item,
-    );
-    if (drawMode === 'zone' && !isPolygonInsidePolygon(nextCurrent, mainPoints)) {
-      showDrawWarning(
-        'Ajuste inválido',
-        'A zona de exclusao precisa permanecer dentro da area util.',
-      );
-      return false;
-    }
-    setCurrentPoints(nextCurrent);
-    return true;
-  };
-
-  const insertMainPointAfter = (index: number) => {
-    setMainPoints((prev) => {
-      if (prev.length < 2) return prev;
-      const nextIndex = (index + 1) % prev.length;
-      const nextPoint = midpoint(prev[index], prev[nextIndex]);
-      return [...prev.slice(0, index + 1), nextPoint, ...prev.slice(index + 1)];
-    });
-    setSelectedVertex(null);
-  };
-
-  const insertZonePointAfter = (zoneIndex: number, pointIndex: number) => {
-    setZones((prev) =>
-      prev.map((zone, idx) => {
-        if (idx !== zoneIndex || zone.length < 2) return zone;
-        const nextIndex = (pointIndex + 1) % zone.length;
-        const nextPoint = midpoint(zone[pointIndex], zone[nextIndex]);
-        if (!isPointInsidePolygon(nextPoint, mainPoints)) {
-          showDrawWarning(
-            'Ponto inválido',
-            'Não foi possível inserir ponto medio fora da area util.',
-          );
-          return zone;
-        }
-        return [
-          ...zone.slice(0, pointIndex + 1),
-          nextPoint,
-          ...zone.slice(pointIndex + 1),
-        ];
-      }),
-    );
-    setSelectedVertex(null);
-  };
-
-  const applyRealMapBackground = async () => {
-    const query = mapSearchValue.trim();
-    if (!query) {
-      notifications.show({
-        title: 'Informe uma busca',
-        message: 'Digite um CEP (8 digitos) ou coordenadas (lat, lon).',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    try {
-      setMapSearchLoading(true);
-      const point = await resolveGeoPointFromInput(query);
-      if (!point) {
-        notifications.show({
-          title: 'Localização não encontrada',
-          message: 'Não foi possível localizar este CEP/coordenada.',
-          color: 'yellow',
-        });
-        return;
-      }
-
-      setMapCenter(point);
-      setMapZoom(16);
-      setMapLayerId('satellite');
-      setMapInteractive(false);
-      notifications.show({
-        title: 'Fundo real aplicado',
-        message: `Centro aproximado em ${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}.`,
-        color: 'green',
-      });
-    } catch (error: any) {
-      notifications.show({
-        title: 'Falha na busca',
-        message: error?.message ?? 'Não foi possível obter o mapa de referencia real.',
-        color: 'red',
-      });
-    } finally {
-      setMapSearchLoading(false);
-    }
-  };
-
-  const clearRealMapBackground = () => {
-    setMapCenter(null);
-    setMapZoom(16);
-    setMapLayerId('satellite');
-    setMapInteractive(false);
-  };
-
-  const handleRealMapViewChange = (next: { center: GeoPoint; zoom: number }) => {
-    setMapCenter(next.center);
-    setMapZoom(next.zoom);
-  };
-
+  // ── addPointFromCoordinates (delega ao hook de mapa) ───────────────────
   const addPointFromCoordinates = () => {
-    const rawValue = pointSearchValue.trim();
-    if (!rawValue) {
-      notifications.show({
-        title: 'Informe coordenadas',
-        message: 'Digite latitude e longitude no formato: -23.55052, -46.63331.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    if (drawMode === 'none') {
-      notifications.show({
-        title: 'Inicie o desenho',
-        message: 'Ative o desenho do limite ou da zona para inserir pontos por coordenada.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    if (mapInteractive) {
-      notifications.show({
-        title: 'Desative navegacao',
-        message: 'Desative a navegacao do mapa para continuar desenhando.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    if (!mapCenter) {
-      notifications.show({
-        title: 'Fundo real obrigatorio',
-        message: 'Aplique um mapa real para converter coordenadas em pontos do croqui.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    const geoPoint = parseCoordinatesInput(rawValue);
-    if (!geoPoint) {
-      notifications.show({
-        title: 'Formato inválido',
-        message: 'Use o formato latitude, longitude. Ex.: -23.55052, -46.63331.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    const mappedPoint = geoPointToCanvasPoint(
-      geoPoint,
-      mapCenter,
-      mapZoom,
-      Math.max(1, stageWidth),
-      440,
-    );
-
-    if (
-      mappedPoint.x < 0 ||
-      mappedPoint.x > stageWidth ||
-      mappedPoint.y < 0 ||
-      mappedPoint.y > 440
-    ) {
-      notifications.show({
-        title: 'Ponto fora da visao atual',
-        message:
-          'Ajuste zoom/posicao do mapa para enquadrar o ponto e tente novamente.',
-        color: 'yellow',
-      });
-      return;
-    }
-
-    if (drawMode === 'zone') {
-      if (!isPointInsidePolygon(mappedPoint, mainPoints)) {
-        showDrawWarning(
-          'Ponto fora da area util',
-          'A zona de exclusao deve ficar dentro do limite principal do talhão.',
-        );
-        return;
-      }
-      if (currentPoints.length > 0) {
-        const lastPoint = currentPoints[currentPoints.length - 1];
-        if (!isSegmentInsidePolygon(lastPoint, mappedPoint, mainPoints)) {
-          showDrawWarning(
-            'Aresta fora da area util',
-            'Esse novo ponto criaria uma aresta fora da area util.',
-          );
-          return;
-        }
-      }
-    }
-
-    setCurrentPoints((prev) => [...prev, mappedPoint]);
-    setMousePos(mappedPoint);
-    setPointSearchValue('');
+    mapBg.addPointFromCoordinates({
+      drawMode,
+      mainPoints,
+      currentPoints,
+      stageWidth,
+      setCurrentPoints: drawing.setCurrentPoints,
+      setMousePos: drawing.setMousePos,
+      showDrawWarning,
+    });
   };
 
+  // ── Keyboard shortcut (Delete/Backspace) ──────────────────────────────
   useEffect(() => {
     if (!opened) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1554,7 +495,7 @@ export default function TalhaoDetailModal({
     }
 
     const invalidZoneIndex = zones.findIndex(
-      (zone) => zone.length >= 3 && !isPolygonInsidePolygon(zone, mainPoints),
+      (zone) => zone.points.length >= 3 && !isPolygonInsidePolygon(zone.points, mainPoints),
     );
     if (invalidZoneIndex >= 0) {
       notifications.show({
@@ -1863,7 +804,7 @@ function GridLayout(props: {
   startZoneDrawing: () => void;
   cancelDrawing: () => void;
   finishDrawing: () => void;
-  zones: MapPoint[][];
+  zones: ExclusionZone[];
   selectedMainPolygon: boolean;
   selectedZoneIndex: number | null;
   setSelectedZoneIndex: (index: number | null) => void;
@@ -2609,7 +1550,7 @@ function GridLayout(props: {
               {props.zones.map((zone, index) => (
                 <KonvaGroup key={`zone-group-${index}`}>
                   <Line
-                    points={flattenPoints(zone)}
+                    points={flattenPoints(zone.points)}
                     closed
                     listening={canInteractExistingShapes}
                     fill={
@@ -2631,8 +1572,8 @@ function GridLayout(props: {
                     }}
                   />
                   {props.drawMode === 'none'
-                    ? zone.map((point, pointIndex) => {
-                        const next = zone[(pointIndex + 1) % zone.length];
+                    ? zone.points.map((point, pointIndex) => {
+                        const next = zone.points[(pointIndex + 1) % zone.points.length];
                         const middle = midpoint(point, next);
                         return (
                           <KonvaGroup key={`zone-insert-${index}-${pointIndex}`}>
@@ -2675,7 +1616,7 @@ function GridLayout(props: {
                         );
                       })
                     : null}
-                  {zone.map((point, pointIndex) => (
+                  {zone.points.map((point, pointIndex) => (
                     (() => {
                       const isSelected =
                         props.selectedVertex?.kind === 'zone' &&

@@ -126,7 +126,7 @@ export default function TalhaoSelectorModal({
                 size="sm"
                 onClick={onCreateTalhao}
                 disabled={loading}
-                className="h-9 bg-amber-600 hover:bg-amber-700"
+                className="h-9 bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-500/20 transition-all active:scale-95"
               >
                 <IconPlus className="mr-2 h-4 w-4" />
                 Cadastrar
@@ -217,7 +217,7 @@ export default function TalhaoSelectorModal({
                           <ShadButton
                             size="sm"
                             variant="ghost"
-                            className="h-8 text-xs bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:text-indigo-400"
+                            className="h-8 text-xs bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 dark:text-amber-400"
                             onClick={() => onEditTalhao(row.id)}
                           >
                             <IconEdit className="mr-1.5 h-3 w-3" />

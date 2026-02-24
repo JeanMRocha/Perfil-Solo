@@ -30,6 +30,11 @@ initGlobalErrorCatcher();
 function AppRoot() {
   const tema = useStore($tema); // 'light' | 'dark'
 
+  React.useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(tema);
+  }, [tema]);
   return (
     <ErrorBoundary>
       <MantineProvider

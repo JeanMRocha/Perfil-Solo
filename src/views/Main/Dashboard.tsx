@@ -1,7 +1,4 @@
-import {
-  Box,
-  Loader,
-} from '@mantine/core';
+
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button as ShadButton } from '../../components/ui/button';
@@ -23,6 +20,7 @@ import {
   IconSearch,
   IconTrash,
 } from '@tabler/icons-react';
+import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PropertyFullModal, {
@@ -942,7 +940,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <Box
+      <div
         style={{
           position: 'relative',
           minHeight: 'clamp(420px, 68vh, 760px)',
@@ -955,7 +953,7 @@ export default function Dashboard() {
           backgroundRepeat: 'no-repeat',
         }}
       >
-        <Box
+        <div
           style={{
             position: 'absolute',
             top: 'clamp(10px, 2.2vh, 26px)',
@@ -963,8 +961,7 @@ export default function Dashboard() {
             zIndex: 4,
           }}
         >
-          <Box
-            component="button"
+          <button
             type="button"
             className="dashboard-store-balloon"
             title="Abrir loja interna"
@@ -984,10 +981,10 @@ export default function Dashboard() {
               className="dashboard-store-balloon-image"
               draggable={false}
             />
-          </Box>
-        </Box>
+          </button>
+        </div>
 
-        <Box
+        <div
           className="dashboard-scene-standard"
           style={{
             position: 'absolute',
@@ -1000,13 +997,15 @@ export default function Dashboard() {
             maxWidth: '94%',
           }}
         >
-          <Box className="dashboard-scene-item">
-            <Box
-              component="button"
+          <div className="dashboard-scene-item">
+            <button
               type="button"
-              className="dashboard-scene-icon-button"
-              title="Abrir menu de propriedades"
-              aria-label="Abrir menu de propriedades"
+              className={cn(
+                "dashboard-scene-icon-button",
+                !selectedProperty && "dashboard-empty-property-btn"
+              )}
+              title={selectedProperty ? "Abrir menu de propriedades" : "Criar sua primeira propriedade"}
+              aria-label={selectedProperty ? "Abrir menu de propriedades" : "Criar sua primeira propriedade"}
               onClick={() => setDrawerOpened(true)}
               onMouseEnter={() => setHouseHovered(true)}
               onMouseLeave={() => setHouseHovered(false)}
@@ -1017,13 +1016,19 @@ export default function Dashboard() {
                 filter: houseHovered ? 'drop-shadow(0 14px 22px rgba(15, 23, 42, 0.45))' : 'drop-shadow(0 8px 14px rgba(15, 23, 42, 0.36))',
               }}
             >
-              <img
-                src="/sprites/farmhouse-property.png"
-                alt="Casa da propriedade"
-                className="dashboard-scene-image dashboard-property-image"
-                draggable={false}
-              />
-            </Box>
+              {selectedProperty ? (
+                <img
+                  src="/sprites/farmhouse-property.png"
+                  alt="Casa da propriedade"
+                  className="dashboard-scene-image dashboard-property-image"
+                  draggable={false}
+                />
+              ) : (
+                <div className="dashboard-empty-plus-icon">
+                  <IconPlus size="clamp(64px, 10vw, 120px)" stroke={3} />
+                </div>
+              )}
+            </button>
 
             <Card
               ref={propertyInfoCardRef}
@@ -1034,7 +1039,7 @@ export default function Dashboard() {
                   Propriedade Ativa
                 </CardTitle>
                 <div className="text-sm font-bold truncate">
-                  {selectedProperty ? selectedProperty.nome : "Selecione na casa"}
+                  {selectedProperty ? selectedProperty.nome : "Clique no + para iniciar"}
                 </div>
               </CardHeader>
               {selectedProperty && (
@@ -1062,16 +1067,18 @@ export default function Dashboard() {
                 </CardContent>
               )}
             </Card>
-          </Box>
+          </div>
 
           {selectedProperty ? (
-            <Box className="dashboard-scene-item">
-              <Box
-                component="button"
+            <div className="dashboard-scene-item">
+              <button
                 type="button"
-                className="dashboard-scene-icon-button"
-                title="Abrir menu de talhões"
-                aria-label="Abrir menu de talhões"
+                className={cn(
+                  "dashboard-scene-icon-button",
+                  !selectedTalhao && "dashboard-empty-property-btn"
+                )}
+                title={selectedTalhao ? "Abrir menu de talhões" : "Criar seu primeiro talhão"}
+                aria-label={selectedTalhao ? "Abrir menu de talhões" : "Criar seu primeiro talhão"}
                 onClick={openTalhaoMenu}
                 onMouseEnter={() => setPlotHovered(true)}
                 onMouseLeave={() => setPlotHovered(false)}
@@ -1082,13 +1089,19 @@ export default function Dashboard() {
                   filter: plotHovered ? 'drop-shadow(0 12px 18px rgba(15, 23, 42, 0.42))' : 'drop-shadow(0 7px 12px rgba(15, 23, 42, 0.3))',
                 }}
               >
-                <img
-                  src="/sprites/plowed-field-plot.png"
-                  alt="Terra arada para abrir menu de talhões"
-                  className="dashboard-scene-image dashboard-talhao-image"
-                  draggable={false}
-                />
-              </Box>
+                {selectedTalhao ? (
+                  <img
+                    src="/sprites/plowed-field-plot.png"
+                    alt="Terra arada para abrir menu de talhões"
+                    className="dashboard-scene-image dashboard-talhao-image"
+                    draggable={false}
+                  />
+                ) : (
+                  <div className="dashboard-empty-plus-icon">
+                    <IconPlus size="clamp(64px, 10vw, 120px)" stroke={3} />
+                  </div>
+                )}
+              </button>
 
               <Card
                 ref={talhaoInfoCardRef}
@@ -1099,7 +1112,7 @@ export default function Dashboard() {
                     Talhão Selecionado
                   </CardTitle>
                   <div className="text-sm font-bold truncate">
-                    {selectedTalhao ? selectedTalhao.nome : "Selecione no terreno"}
+                    {selectedTalhao ? selectedTalhao.nome : "Clique no + para adicionar"}
                   </div>
                 </CardHeader>
                 {selectedTalhao && (
@@ -1124,10 +1137,10 @@ export default function Dashboard() {
                   </CardContent>
                 )}
               </Card>
-            </Box>
+            </div>
           ) : null}
-        </Box>
-      </Box>
+        </div>
+      </div>
 
       <Dialog open={drawerOpened} onOpenChange={setDrawerOpened}>
         <DialogContent className="max-w-[760px] w-[92vw] overflow-hidden flex flex-col max-h-[90vh]">
@@ -1193,7 +1206,7 @@ export default function Dashboard() {
                   size="sm"
                   onClick={openPropertyCreate}
                   disabled={!canCreateProperty}
-                  className="h-9 bg-indigo-600 hover:bg-indigo-700"
+                  className="h-9 bg-teal-600 hover:bg-teal-700 text-white shadow-lg shadow-teal-500/20 transition-all active:scale-95"
                 >
                   <IconPlus className="mr-2 h-4 w-4" />
                   Cadastrar
@@ -1203,7 +1216,7 @@ export default function Dashboard() {
 
             {loadingProperties ? (
               <div className="flex items-center gap-2 py-4">
-                <Loader size="sm" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm text-slate-500">Carregando propriedades...</span>
               </div>
             ) : loadError ? (
@@ -1299,7 +1312,7 @@ export default function Dashboard() {
                             <ShadButton
                               size="sm"
                               variant="ghost"
-                              className="h-8 text-xs bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:text-indigo-400"
+                              className="h-8 text-xs bg-teal-500/10 text-teal-600 hover:bg-teal-500/20 dark:text-teal-400"
                               onClick={() => openPropertyEdit(row.id)}
                             >
                               <IconEdit className="mr-1.5 h-3 w-3" />
@@ -1377,13 +1390,13 @@ export default function Dashboard() {
             <div className="flex gap-3">
               <ShadButton
                 variant="outline"
-                className="flex-1"
+                className="flex-1 border-teal-200 text-teal-700 hover:bg-teal-50 dark:border-teal-900/50 dark:text-teal-400"
                 onClick={openPropertyOnboardingWithHelp}
               >
                 Com ajuda
               </ShadButton>
               <ShadButton
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                className="flex-1 bg-teal-600 hover:bg-teal-700 text-white shadow-lg shadow-teal-500/20 transition-all active:scale-95"
                 onClick={openPropertyOnboardingWithoutHelp}
               >
                 Sem ajuda

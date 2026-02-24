@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Loader2,
+  X,
 } from 'lucide-react';
 import {
   IconPlus,
@@ -968,17 +969,28 @@ export default function PropertyFullModal({
 
   return (
     <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[960px] w-[96vw] overflow-hidden flex flex-col max-h-[95vh] p-0 gap-0">
-        <DialogHeader className="p-4 pb-2 border-b">
-          <DialogTitle>{mode === 'create' ? 'Cadastrar propriedade' : 'Editar propriedade'}</DialogTitle>
-          <DialogDescription className="hidden">
-            Preencha os dados da propriedade para salvar no sistema.
-          </DialogDescription>
+      <DialogContent className="max-w-[960px] w-[98vw] sm:w-[92vw] overflow-hidden flex flex-col h-[94vh] max-h-[860px] p-0 gap-0">
+        <DialogHeader className="p-4 pb-2 border-b shrink-0 flex flex-row items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <DialogTitle>{mode === 'create' ? 'Cadastrar propriedade' : 'Editar propriedade'}</DialogTitle>
+            <DialogDescription className="hidden">
+              Preencha os dados da propriedade para salvar no sistema.
+            </DialogDescription>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 -mr-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            onClick={onClose}
+          >
+            <X className="h-5 w-5" />
+            <span className="sr-only">Fechar</span>
+          </Button>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col p-4 pt-2">
-          <Tabs defaultValue="gerais" className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="grid grid-cols-4 sm:grid-cols-7 h-auto mb-4 bg-slate-100 dark:bg-slate-900 p-1">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col p-4 pt-2">
+          <Tabs defaultValue="gerais" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <TabsList className="grid grid-cols-4 sm:grid-cols-7 h-auto mb-4 bg-slate-100 dark:bg-slate-900 p-1 shrink-0">
               <TabsTrigger value="gerais" className="text-[11px] py-1.5 px-2">Gerais</TabsTrigger>
               <TabsTrigger value="enderecos" className="text-[11px] py-1.5 px-2">Endereços</TabsTrigger>
               <TabsTrigger value="contatos" className="text-[11px] py-1.5 px-2">Contatos</TabsTrigger>
@@ -988,7 +1000,7 @@ export default function PropertyFullModal({
               <TabsTrigger value="areas" className="text-[11px] py-1.5 px-2">Áreas</TabsTrigger>
             </TabsList>
 
-            <ScrollArea className="flex-1 -mx-2 px-2 h-full">
+            <ScrollArea className="flex-1 -mx-2 px-2 overflow-y-auto">
               <div className="flex flex-col gap-4 pb-4">
                 <TabsContent value="gerais" className="mt-0 outline-none">
                   <div className="flex flex-col gap-4">
@@ -1639,7 +1651,7 @@ export default function PropertyFullModal({
           </Tabs>
         </div>
 
-        <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t flex items-center justify-between sm:justify-between gap-4">
+        <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t flex items-center justify-between sm:justify-between gap-4 shrink-0">
           <div className="flex items-center gap-2">
             <div className={cn("h-2 w-2 rounded-full", saving ? "bg-amber-500 animate-pulse" : "bg-teal-500")} />
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
