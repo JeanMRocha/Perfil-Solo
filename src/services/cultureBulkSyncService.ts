@@ -196,6 +196,21 @@ async function createSyncLog(
 /**
  * Finaliza o log de sincronização
  */
+async function finalizeSyncLog(
+  logId: string,
+  result: {
+    imported: number;
+    updated: number;
+    skipped: number;
+    errors: number;
+    errorMessage?: string;
+    details?: Record<string, any>;
+  },
+): Promise<void> {
+  if (isLocalDataMode) {
+    const rows = readLogs();
+    const idx = rows.findIndex((r) => r.id === logId);
+    if (idx >= 0) {
       const next: SyncLog = {
         ...rows[idx],
         completed_at: nowIso(),
@@ -203,7 +218,7 @@ async function createSyncLog(
         updated_count: result.updated,
         skipped_count: result.skipped,
         error_count: result.errors,
-        status: result.errors === 0 ? 'completed' : 'completed',
+        status: 'completed',
         error_message: result.errorMessage || null,
         details: result.details || {},
       };
@@ -211,6 +226,7 @@ async function createSyncLog(
       writeLogs(rows);
     }
     return;
+  }
 
   const { error } = await supabaseClient
     .from('culture_import_logs')
@@ -362,11 +378,10 @@ async function syncSingleRecord(
     }
   } else {
     // Supabase caminho
-    const normSpeciesKey = `${
-      record.especie_nome_cientifico?.trim().toLowerCase() ||
+    const normSpeciesKey = `${record.especie_nome_cientifico?.trim().toLowerCase() ||
       record.especie_nome_comum?.trim().toLowerCase() ||
       `especie-${Date.now()}`
-    }`;
+      }`;
 
     const { data: speciesData } = await supabaseClient
       .from('crop_species_profiles')
@@ -449,123 +464,6 @@ async function syncSingleRecord(
 }
 
 /**
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
  * Sincroniza múltiplos registros do RNC em lote
  * Otimizado com batches e tratamento de erros
  */
@@ -681,6 +579,121 @@ export async function bulkSyncRncRecords(
   }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /**
  * Obtém logs de sincronização (apenas super usuários)
  */
@@ -745,11 +758,11 @@ export async function getSyncState(): Promise<{
 
   return data
     ? {
-        last_sync_at: data.last_full_sync_at,
-        total_synced: data.total_synced_records,
-        next_sync: data.next_scheduled_sync,
-        is_enabled: data.is_enabled,
-      }
+      last_sync_at: data.last_full_sync_at,
+      total_synced: data.total_synced_records,
+      next_sync: data.next_scheduled_sync,
+      is_enabled: data.is_enabled,
+    }
     : null;
 }
 

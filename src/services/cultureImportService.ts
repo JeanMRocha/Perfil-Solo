@@ -332,7 +332,7 @@ export async function importRncRecord(
       speciesData = (data as ImportedSpecies) ?? null;
     }
 
-        if (!speciesData) {
+    if (!speciesData) {
       return {
         success: false,
         message: 'Espécie não encontrada após criação',
@@ -340,10 +340,8 @@ export async function importRncRecord(
       };
     }
 
-    
-    }
-
     const resultObject: ImportResult = {
+
       success: true,
       message: `Espécie "${record.especie_nome_comum}" importada com sucesso`,
       species: speciesData,

@@ -17,10 +17,12 @@ import { notifications } from '@mantine/notifications';
 import { useStore } from '@nanostores/react';
 import {
   IconCopy,
+  IconPalette,
   IconShoppingCart,
   IconSparkles,
   IconUsers,
 } from '@tabler/icons-react';
+import CosmeticsShop from './CosmeticsShop';
 import { $currUser } from '../../global-state/user';
 import {
   APP_STORE_UPDATED_EVENT,
@@ -160,10 +162,10 @@ export default function Marketplace() {
     () =>
       couponCode
         ? validateAppStoreCoupon({
-            code: couponCode,
-            credits_subtotal: creditsCart,
-            recurring_subtotal_cents: recurringCartCents,
-          })
+          code: couponCode,
+          credits_subtotal: creditsCart,
+          recurring_subtotal_cents: recurringCartCents,
+        })
         : null,
     [couponCode, creditsCart, recurringCartCents],
   );
@@ -218,7 +220,8 @@ export default function Marketplace() {
       <Tabs defaultValue="loja" variant="outline">
         <Tabs.List>
           <Tabs.Tab value="loja" leftSection={<IconShoppingCart size={16} />}>Loja</Tabs.Tab>
-          <Tabs.Tab value="indicacao" leftSection={<IconUsers size={16} />}>Indicacao</Tabs.Tab>
+          <Tabs.Tab value="cosmeticos" leftSection={<IconPalette size={16} />}>Cosméticos</Tabs.Tab>
+          <Tabs.Tab value="indicacao" leftSection={<IconUsers size={16} />}>Indicação</Tabs.Tab>
           <Tabs.Tab value="roadmap" leftSection={<IconSparkles size={16} />}>Roadmap</Tabs.Tab>
         </Tabs.List>
 
@@ -357,6 +360,10 @@ export default function Marketplace() {
               </Table>
             </Card>
           </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="cosmeticos" pt="md">
+          <CosmeticsShop />
         </Tabs.Panel>
 
         <Tabs.Panel value="indicacao" pt="md">
