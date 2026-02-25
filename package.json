@@ -47,6 +47,7 @@
     "react-router-dom": "^7.13.0",
     "recharts": "^3.3.0",
     "shadcn-ui": "^0.9.5",
+    "sonner": "^2.0.7",
     "sort-by": "^0.0.2",
     "swr": "^2.4.0",
     "tailwind-merge": "^3.5.0",

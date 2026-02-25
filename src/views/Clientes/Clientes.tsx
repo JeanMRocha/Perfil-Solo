@@ -13,7 +13,7 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
 import PageHeader from '../../components/PageHeader';
 import ContactInfoModal from '../../components/modals/ContactInfoModal';
@@ -165,7 +165,7 @@ export default function PessoasHub({
     if (!currentUserId) return;
     const name = draftName.trim();
     if (name.length < 3) {
-      notifications.show({
+      notify.show({
         title: 'Nome inválido',
         message: 'Use pelo menos 3 caracteres para o nome da pessoa.',
         color: 'yellow',
@@ -175,7 +175,7 @@ export default function PessoasHub({
 
     const types = fixedTypesOrDraft(fixed, draftTypes);
     if (!types.length) {
-      notifications.show({
+      notify.show({
         title: 'Tipo obrigatorio',
         message: 'Selecione ao menos um identificador para a pessoa.',
         color: 'yellow',
@@ -193,7 +193,7 @@ export default function PessoasHub({
           types,
         });
         setPeople((prev) => [created, ...prev]);
-        notifications.show({
+        notify.show({
           title: 'Pessoa criada',
           message: `${created.name} adicionada com sucesso.`,
           color: 'green',
@@ -207,7 +207,7 @@ export default function PessoasHub({
         setPeople((prev) =>
           prev.map((person) => (person.id === updated.id ? updated : person)),
         );
-        notifications.show({
+        notify.show({
           title: 'Pessoa atualizada',
           message: `${updated.name} atualizada com sucesso.`,
           color: 'green',
@@ -215,7 +215,7 @@ export default function PessoasHub({
       }
       setModalOpened(false);
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao salvar pessoa',
         message: err?.message ?? 'Não foi possível salvar pessoa.',
         color: 'red',
@@ -233,13 +233,13 @@ export default function PessoasHub({
         await deletePerson(person.id);
       }
       setPeople((prev) => prev.filter((row) => row.id !== person.id));
-      notifications.show({
+      notify.show({
         title: 'Pessoa removida',
         message: 'Pessoa excluida com sucesso.',
         color: 'green',
       });
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao excluir pessoa',
         message: err?.message ?? 'Não foi possível excluir pessoa.',
         color: 'red',
@@ -256,13 +256,13 @@ export default function PessoasHub({
         prev.map((person) => (person.id === updated.id ? updated : person)),
       );
       setContactModalOpened(false);
-      notifications.show({
+      notify.show({
         title: 'Contato atualizado',
         message: `Contato de ${updated.name} salvo com sucesso.`,
         color: 'green',
       });
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao salvar contato',
         message: err?.message ?? 'Não foi possível salvar contato.',
         color: 'red',

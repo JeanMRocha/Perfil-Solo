@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Stack, Tabs } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
 import PageHeader from '../../components/PageHeader';
 import { $currUser } from '../../global-state/user';
@@ -376,14 +376,14 @@ export default function UserManagement() {
         operationReason || 'Crédito concedido pelo super usuário',
         currentAdminId,
       );
-      notifications.show({
+      notify.show({
         title: 'Crédito concedido',
         message: `${amount} creditos adicionados para o usuario.`,
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao conceder crédito',
         message: String(error?.message ?? 'Não foi possível concluir a operação.'),
         color: 'red',
@@ -402,14 +402,14 @@ export default function UserManagement() {
         operationReason || 'Debito aplicado pelo super usuário',
         currentAdminId,
       );
-      notifications.show({
+      notify.show({
         title: 'Debito aplicado',
         message: `${amount} creditos removidos do usuario.`,
         color: 'yellow',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao remover crédito',
         message: String(error?.message ?? 'Não foi possível concluir a operação.'),
         color: 'red',
@@ -421,14 +421,14 @@ export default function UserManagement() {
     if (!selectedUserId) return;
     try {
       setCreditsForUser(selectedUserId, Number(setBalanceValue) || 0, currentAdminId);
-      notifications.show({
+      notify.show({
         title: 'Saldo ajustado',
         message: 'O saldo do usuário foi atualizado.',
         color: 'blue',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao ajustar saldo',
         message: String(error?.message ?? 'Não foi possível ajustar saldo.'),
         color: 'red',
@@ -439,7 +439,7 @@ export default function UserManagement() {
   const saveInitialCredits = () => {
     const next = Math.max(0, Math.round(Number(initialCreditsConfig) || 0));
     setInitialCreditsAfterSignup(next);
-    notifications.show({
+    notify.show({
       title: 'Configuracao atualizada',
       message: `Novos usuarios receberao ${next} creditos iniciais.`,
       color: 'teal',
@@ -455,7 +455,7 @@ export default function UserManagement() {
       cooldown_minutes: adConfig.cooldown_minutes,
     });
     setAdConfig(next);
-    notifications.show({
+    notify.show({
       title: 'Recompensa por propaganda atualizada',
       message: 'As regras foram salvas para todos os usuários.',
       color: 'teal',
@@ -482,7 +482,7 @@ export default function UserManagement() {
     const saved = saveCreditEngagementRewardRules(engagementRules);
     setEngagementRules(saved);
     setEngagementPerformanceRows(listCreditEngagementUsersPerformance().slice(0, 200));
-    notifications.show({
+    notify.show({
       title: 'Regras de conquista atualizadas',
       message: 'Limites e valores de recompensa foram salvos.',
       color: 'teal',
@@ -514,14 +514,14 @@ export default function UserManagement() {
       setCouponMaxRedemptions('');
       setCouponExpiresAt('');
       setCouponNotes('');
-      notifications.show({
+      notify.show({
         title: 'Cupom criado',
         message: 'Cupom salvo e pronto para uso.',
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao criar cupom',
         message: String(error?.message ?? 'Não foi possível salvar o cupom.'),
         color: 'red',
@@ -532,14 +532,14 @@ export default function UserManagement() {
   const handleToggleCoupon = (coupon: CreditCoupon) => {
     try {
       setCreditCouponActive(coupon.id, !coupon.active);
-      notifications.show({
+      notify.show({
         title: 'Cupom atualizado',
         message: `Cupom ${coupon.code} ${coupon.active ? 'desativado' : 'ativado'}.`,
         color: 'blue',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao atualizar cupom',
         message: String(error?.message ?? 'Não foi possível atualizar o cupom.'),
         color: 'red',
@@ -551,14 +551,14 @@ export default function UserManagement() {
     if (!selectedUserId) return;
     try {
       refundCreditTransaction(selectedUserId, tx.id, currentAdminId);
-      notifications.show({
+      notify.show({
         title: 'Ressarcimento concluido',
         message: 'O crédito foi devolvido ao usuário.',
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha no ressarcimento',
         message: String(error?.message ?? 'Não foi possível ressarcir a transacao.'),
         color: 'red',
@@ -574,7 +574,7 @@ export default function UserManagement() {
         currentAdminId,
         approved ? 'Aprovado pelo super usuário' : 'Negado pelo super usuário',
       );
-      notifications.show({
+      notify.show({
         title: approved ? 'Solicitação aprovada' : 'Solicitação negada',
         message: approved
           ? 'Créditos liberados para o usuário.'
@@ -583,7 +583,7 @@ export default function UserManagement() {
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao revisar solicitação',
         message: String(error?.message ?? 'Não foi possível revisar a solicitação.'),
         color: 'red',
@@ -599,14 +599,14 @@ export default function UserManagement() {
         plan_id: billingSelectedPlanId,
         updated_by: currentAdminId,
       });
-      notifications.show({
+      notify.show({
         title: 'Plano atualizado',
         message: `Plano ${updated.plan_id.toUpperCase()} aplicado para o usuario.`,
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao atualizar plano',
         message: String(error?.message ?? 'Não foi possível salvar o plano.'),
         color: 'red',
@@ -623,14 +623,14 @@ export default function UserManagement() {
         legacy_plan_id: legacyPlan,
         created_by: currentAdminId,
       });
-      notifications.show({
+      notify.show({
         title: 'Fechamento gerado',
         message: `Total mensal calculado: ${formatBillingMoney(quote.total_monthly_cents)}.`,
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao gerar fechamento',
         message: String(error?.message ?? 'Não foi possível gerar o fechamento mensal.'),
         color: 'red',
@@ -649,14 +649,14 @@ export default function UserManagement() {
         amount_cents: amountCents,
         created_by: currentAdminId,
       });
-      notifications.show({
+      notify.show({
         title: 'Conversão realizada',
         message: `${formatBillingMoney(entry.amount_cents)} convertidos em ${entry.credits_delta} creditos cosmeticos.`,
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha na conversão',
         message: String(error?.message ?? 'Não foi possível converter dinheiro em créditos.'),
         color: 'red',
@@ -672,14 +672,14 @@ export default function UserManagement() {
         reason: 'Estorno manual pelo super usuário',
         reverse_credits: row.type === 'credit_topup',
       });
-      notifications.show({
+      notify.show({
         title: 'Estorno registrado',
         message: 'Lançamento estornado com sucesso.',
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha no estorno',
         message: String(error?.message ?? 'Não foi possível estornar o lançamento.'),
         color: 'red',
@@ -740,14 +740,14 @@ export default function UserManagement() {
     try {
       const next = updateBillingCatalogConfig(billingCatalogDraft, currentAdminId);
       setBillingCatalogDraft(cloneCatalog(next));
-      notifications.show({
+      notify.show({
         title: 'Catalogo atualizado',
         message: 'Landing e planos foram atualizados com as novas configurações.',
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao salvar catalogo',
         message: String(error?.message ?? 'Não foi possível salvar configurações.'),
         color: 'red',
@@ -759,14 +759,14 @@ export default function UserManagement() {
     try {
       const next = resetBillingCatalogConfig(currentAdminId);
       setBillingCatalogDraft(cloneCatalog(next));
-      notifications.show({
+      notify.show({
         title: 'Catalogo restaurado',
         message: 'Valores padrao de monetizacao foram restaurados.',
         color: 'blue',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao restaurar catalogo',
         message: String(error?.message ?? 'Não foi possível restaurar configurações.'),
         color: 'red',

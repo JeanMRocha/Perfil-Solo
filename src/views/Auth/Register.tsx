@@ -8,7 +8,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useNavigate } from 'react-router-dom';
 import { LoaderInline } from '@components/loaders';
 import { setLoading } from '@global/loadingStore';
@@ -39,7 +39,7 @@ export default function Register() {
       setLoading(true);
       const normalizedEmail = String(email ?? '').trim().toLowerCase();
       if (!isValidEmail(normalizedEmail)) {
-        notifications.show({
+        notify.show({
           title: 'Email inválido',
           message: 'Informe um email valido para cadastrar.',
           color: 'red',
@@ -60,7 +60,7 @@ export default function Register() {
           email: normalizedEmail,
           contact,
         });
-        notifications.show({
+        notify.show({
           title: 'Conta local criada',
           message: 'Cadastro concluido com sucesso.',
           color: 'green',
@@ -94,14 +94,14 @@ export default function Register() {
           });
         }
         clearTwoFactorVerificationSession(normalizedEmail);
-        notifications.show({
+        notify.show({
           title: 'Conta criada',
           message: 'Cadastro concluido com sucesso.',
           color: 'green',
         });
         navigate('/auth');
       } else {
-        notifications.show({
+        notify.show({
           title: 'Confirme seu email',
           message: 'Cadastro criado. Verifique sua caixa de entrada.',
           color: 'blue',
@@ -112,7 +112,7 @@ export default function Register() {
       const message = String(err?.message ?? 'Não foi possível cadastrar.');
       const isNetwork = message.toLowerCase().includes('failed to fetch');
 
-      notifications.show({
+      notify.show({
         title: isNetwork ? 'Falha de rede com Supabase' : 'Falha no cadastro',
         message: isNetwork
           ? 'Não foi possível conectar ao Supabase. Verifique URL do projeto e DNS.'

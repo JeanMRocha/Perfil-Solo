@@ -1,5 +1,5 @@
 import { Button, Container, Tabs, Text } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import { isLocalDataMode } from '../../services/dataProvider';
@@ -23,14 +23,14 @@ export default function Settings() {
     try {
       setIsResetting(true);
       await clearLocalDb();
-      notifications.show({
+      notify.show({
         title: 'Banco local resetado',
         message: 'Os dados locais, culturas e laboratorios foram removidos com sucesso.',
         color: 'green',
       });
       window.location.reload();
     } catch (error) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao resetar',
         message: 'Não foi possível limpar o banco local. Tente novamente.',
         color: 'red',

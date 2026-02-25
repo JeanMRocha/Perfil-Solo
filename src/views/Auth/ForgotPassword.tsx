@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Card, Stack, TextInput, Button, Title, Text } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useNavigate } from 'react-router-dom';
 import { LoaderInline } from '@components/loaders';
 import { setLoading } from '@global/loadingStore';
@@ -25,7 +25,7 @@ export default function ForgotPassword() {
       setLoading(true);
       const normalizedEmail = String(email ?? '').trim().toLowerCase();
       if (!isValidEmail(normalizedEmail)) {
-        notifications.show({
+        notify.show({
           title: 'Email inválido',
           message: 'Informe um email valido para recuperar a conta.',
           color: 'red',
@@ -38,14 +38,14 @@ export default function ForgotPassword() {
         reason: 'recovery',
       });
 
-      notifications.show({
+      notify.show({
         title: 'Código enviado',
         message: `Verificacao enviada para ${normalizedEmail}. Codigo de teste: ${challenge.debug_code}`,
         color: 'blue',
       });
       setStep('verify');
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha no envio',
         message: String(error?.message ?? 'Não foi possível enviar o código.'),
         color: 'red',
@@ -72,7 +72,7 @@ export default function ForgotPassword() {
         if (error) throw error;
       }
 
-      notifications.show({
+      notify.show({
         title: 'Identidade confirmada',
         message: isLocalDataMode
           ? 'Verificacao concluida no modo local. Contate o super usuário para redefinir senha.'
@@ -81,7 +81,7 @@ export default function ForgotPassword() {
       });
       setStep('done');
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha na verificacao',
         message: String(error?.message ?? 'Não foi possível validar o código.'),
         color: 'red',

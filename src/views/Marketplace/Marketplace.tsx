@@ -13,7 +13,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
 import {
   IconCopy,
@@ -194,10 +194,10 @@ export default function Marketplace() {
       setCart({});
       setCouponCode('');
       setCouponInput('');
-      notifications.show({ title: 'Carrinho finalizado', message: 'Pedido processado.', color: 'teal' });
+      notify.show({ title: 'Carrinho finalizado', message: 'Pedido processado.', color: 'teal' });
       await refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha no checkout',
         message: String(error?.message ?? 'Não foi possível finalizar.'),
         color: 'red',
@@ -309,7 +309,7 @@ export default function Marketplace() {
                       recurring_subtotal_cents: recurringCartCents,
                     });
                     if (!result.valid) {
-                      notifications.show({ title: 'Cupom inválido', message: result.message, color: 'red' });
+                      notify.show({ title: 'Cupom inválido', message: result.message, color: 'red' });
                       setCouponCode('');
                       return;
                     }
@@ -378,10 +378,10 @@ export default function Marketplace() {
                 if (!userId) return;
                 try {
                   attachUserToReferralCode({ user_id: userId, referral_code: referralCodeInput });
-                  notifications.show({ title: 'Código vinculado', message: 'Indicacao aplicada.', color: 'teal' });
+                  notify.show({ title: 'Código vinculado', message: 'Indicacao aplicada.', color: 'teal' });
                   setReferralCodeInput('');
                 } catch (error: any) {
-                  notifications.show({ title: 'Falha', message: String(error?.message ?? 'Erro ao vincular.'), color: 'red' });
+                  notify.show({ title: 'Falha', message: String(error?.message ?? 'Erro ao vincular.'), color: 'red' });
                 }
               }}>Vincular</Button>
             </Group>

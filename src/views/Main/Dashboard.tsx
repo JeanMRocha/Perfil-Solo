@@ -11,7 +11,7 @@ import {
 } from '../../components/ui/dialog';
 import { ScrollArea as ShadScrollArea } from '../../components/ui/scroll-area';
 import { Input as ShadInput } from '../../components/ui/input';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
 import {
   IconEdit,
@@ -368,7 +368,7 @@ export default function Dashboard() {
     if (selectedPropertyId) return;
     if (talhaoDrawerOpened) {
       setTalhaoDrawerOpened(false);
-      notifications.show({
+      notify.show({
         title: 'Sem propriedade ativa',
         message: 'Selecione ou cadastre uma propriedade antes de abrir os talhões.',
         color: 'yellow',
@@ -592,7 +592,7 @@ export default function Dashboard() {
 
   const openPropertyCreate = () => {
     if (!canCreateProperty) {
-      notifications.show({
+      notify.show({
         title: 'Limite de propriedades atingido',
         message: `Você já atingiu o limite do plano atual (${propertyPlanSummary.used}/${propertyPlanSummary.included}).`,
         color: 'yellow',
@@ -622,7 +622,7 @@ export default function Dashboard() {
   const openPropertyOnboardingWithHelp = () => {
     setPropertyOnboardingOpened(false);
     setDrawerOpened(true);
-    notifications.show({
+    notify.show({
       title: 'Onboarding de propriedade',
       message: 'Use o botão Cadastrar no menu de propriedades. Se quiser, podemos guiar campo a campo.',
       color: 'blue',
@@ -637,7 +637,7 @@ export default function Dashboard() {
   const openTalhaoMenu = () => {
     if (!selectedPropertyId) {
       setPropertyOnboardingOpened(true);
-      notifications.show({
+      notify.show({
         title: 'Sem propriedade ativa',
         message: 'Antes de acessar talhões, selecione ou cadastre uma propriedade.',
         color: 'yellow',
@@ -663,13 +663,13 @@ export default function Dashboard() {
       setSelectedTalhaoId(created.id);
       setTalhaoDrawerOpened(false);
       setTalhaoDetailOpened(true);
-      notifications.show({
+      notify.show({
         title: 'Talhão criado',
         message: `${created.nome} criado. Complete os dados no detalhamento.`,
         color: 'green',
       });
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao criar talhão',
         message: err?.message ?? 'Não foi possível iniciar o cadastro do talhão.',
         color: 'red',
@@ -689,7 +689,7 @@ export default function Dashboard() {
     if (!currentUserId) return;
     const nome = payload.nome.trim();
     if (!nome) {
-      notifications.show({
+      notify.show({
         title: 'Nome obrigatorio',
         message: 'Informe o nome da propriedade para salvar.',
         color: 'yellow',
@@ -708,7 +708,7 @@ export default function Dashboard() {
         );
         await loadProperties();
         setSelectedPropertyId(created.id);
-        notifications.show({
+        notify.show({
           title: 'Propriedade criada',
           message: `${created.nome} cadastrada com sucesso.`,
           color: 'green',
@@ -722,7 +722,7 @@ export default function Dashboard() {
         );
         await loadProperties();
         setSelectedPropertyId(updated.id);
-        notifications.show({
+        notify.show({
           title: 'Propriedade atualizada',
           message: `${updated.nome} atualizada com sucesso.`,
           color: 'green',
@@ -732,7 +732,7 @@ export default function Dashboard() {
         setPropertyModalMode(null);
       }
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao salvar propriedade',
         message: err?.message ?? 'Não foi possível salvar a propriedade.',
         color: 'red',
@@ -750,14 +750,14 @@ export default function Dashboard() {
         try {
           await deleteTalhaoForProperty(row.id);
           await Promise.all([loadTalhoesForSelectedProperty(), loadProperties()]);
-          notifications.show({
+          notify.show({
             title: 'Talhão excluido',
             message: `${row.nome} removido com sucesso.`,
             color: 'green',
           });
           return true;
         } catch (err: any) {
-          notifications.show({
+          notify.show({
             title: 'Falha ao excluir talhão',
             message: err?.message ?? 'Não foi possível excluir o talhão.',
             color: 'red',
@@ -784,14 +784,14 @@ export default function Dashboard() {
 
             await deletePropertyForUser(row.id);
             await loadProperties();
-            notifications.show({
+            notify.show({
               title: 'Propriedade excluida',
               message: `${row.nome} removida com sucesso.`,
               color: 'green',
             });
             return true;
           } catch (err: any) {
-            notifications.show({
+            notify.show({
               title: 'Falha ao excluir propriedade',
               message: err?.message ?? 'Não foi possível excluir a propriedade.',
               color: 'red',
@@ -801,7 +801,7 @@ export default function Dashboard() {
         },
       });
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao preparar exclusão',
         message: err?.message ?? 'Não foi possível carregar os dados da propriedade.',
         color: 'red',
@@ -811,7 +811,7 @@ export default function Dashboard() {
 
   const openExportModal = async () => {
     if (propertyRows.length === 0) {
-      notifications.show({
+      notify.show({
         title: 'Sem dados para exportar',
         message: 'Cadastre ao menos uma propriedade antes de exportar.',
         color: 'yellow',
@@ -842,7 +842,7 @@ export default function Dashboard() {
       setExportTalhoes([]);
       setExportAnalyses([]);
       setExportSelectedItemIds(propertyRows.map((row) => toPropertyNodeId(row.id)));
-      notifications.show({
+      notify.show({
         title: 'Falha ao carregar árvore de exportação',
         message: err?.message ?? 'Não foi possível carregar talhões e análises.',
         color: 'red',
@@ -859,7 +859,7 @@ export default function Dashboard() {
 
     const selectedSet = new Set(exportSelectedItemIds);
     if (selectedSet.size === 0) {
-      notifications.show({
+      notify.show({
         title: 'Selecione itens',
         message: 'Marque ao menos um item da árvore para exportação.',
         color: 'yellow',
@@ -893,7 +893,7 @@ export default function Dashboard() {
       selectedAnalyses.forEach((analysis) => selectedPropertyIds.add(analysis.property_id));
 
       if (selectedPropertyIds.size === 0) {
-        notifications.show({
+        notify.show({
           title: 'Selecione propriedades',
           message: 'Marque ao menos uma propriedade, talhão ou análise para exportar.',
           color: 'yellow',
@@ -922,13 +922,13 @@ export default function Dashboard() {
       });
 
       setExportModalOpened(false);
-      notifications.show({
+      notify.show({
         title: 'Exportacao iniciada',
         message: 'Na janela aberta, escolha "Salvar como PDF".',
         color: 'green',
       });
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao exportar',
         message: err?.message ?? 'Não foi possível gerar o PDF.',
         color: 'red',

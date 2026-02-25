@@ -13,7 +13,7 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import {
   deleteLaboratory,
@@ -187,7 +187,7 @@ export default function LaboratoriosSettings({
 
   const handleSave = async () => {
     if (!currentUserId) {
-      notifications.show({
+      notify.show({
         title: 'Usuário não identificado',
         message: 'Não foi possível identificar o usuário para salvar laboratorio.',
         color: 'red',
@@ -197,7 +197,7 @@ export default function LaboratoriosSettings({
 
     const nome = draft.nome.trim();
     if (nome.length < 3) {
-      notifications.show({
+      notify.show({
         title: 'Nome inválido',
         message: 'Informe pelo menos 3 caracteres para o laboratorio.',
         color: 'yellow',
@@ -219,13 +219,13 @@ export default function LaboratoriosSettings({
       });
       await reloadRows();
       setModalOpened(false);
-      notifications.show({
+      notify.show({
         title: 'Laboratorio salvo',
         message: 'Cadastro do laboratorio atualizado com sucesso.',
         color: 'green',
       });
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao salvar',
         message: err?.message ?? 'Não foi possível salvar laboratorio.',
         color: 'red',
@@ -242,7 +242,7 @@ export default function LaboratoriosSettings({
     if (!confirmed) return;
     await deleteLaboratory(labId);
     await reloadRows();
-    notifications.show({
+    notify.show({
       title: 'Laboratorio removido',
       message: 'Cadastro excluido com sucesso.',
       color: 'green',

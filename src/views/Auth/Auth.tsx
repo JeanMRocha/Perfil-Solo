@@ -12,7 +12,7 @@ import {
   Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
 import { IconCircleKey } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
@@ -72,7 +72,7 @@ export default function Authentication() {
   const requestLoginCode = async (email: string) => {
     const normalized = String(email ?? '').trim().toLowerCase();
     if (!isValidEmail(normalized)) {
-      notifications.show({
+      notify.show({
         title: 'Email inválido',
         message: 'Informe um email valido para verificacao.',
         color: 'red',
@@ -87,13 +87,13 @@ export default function Authentication() {
         reason: 'login',
       });
       setVerificationEmail(challenge.email);
-      notifications.show({
+      notify.show({
         title: 'Verificacao em 2 fatores',
         message: `Codigo enviado para ${challenge.email}. Codigo de teste: ${challenge.debug_code}`,
         color: 'blue',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao enviar código',
         message: String(error?.message ?? 'Não foi possível enviar o código.'),
         color: 'red',
@@ -106,7 +106,7 @@ export default function Authentication() {
   const handleSubmit = form.onSubmit(async (values) => {
     const loginEmail = String(values.email ?? '').trim().toLowerCase();
     if (!isValidEmail(loginEmail)) {
-      notifications.show({
+      notify.show({
         title: 'Email inválido',
         message: 'Informe um email valido para continuar.',
         color: 'red',
@@ -152,7 +152,7 @@ export default function Authentication() {
       const message = String(err?.message ?? 'Falha ao autenticar.');
       const isNetwork = message.toLowerCase().includes('failed to fetch');
 
-      notifications.show({
+      notify.show({
         title: isNetwork ? 'Falha de rede com Supabase' : 'Falha no login',
         message: isNetwork
           ? 'Não foi possível conectar ao Supabase. Verifique URL do projeto e DNS.'
@@ -165,7 +165,7 @@ export default function Authentication() {
   const confirmTwoFactor = async () => {
     const email = verificationEmail || userEmail;
     if (!isValidEmail(email)) {
-      notifications.show({
+      notify.show({
         title: 'Email inválido',
         message: 'Não foi possível identificar email para verificar.',
         color: 'red',
@@ -190,14 +190,14 @@ export default function Authentication() {
           reference_id: email,
         });
       }
-      notifications.show({
+      notify.show({
         title: 'Identidade confirmada',
         message: 'Autenticacao em 2 fatores concluida com sucesso.',
         color: 'green',
       });
       navigate('/dashboard', { replace: true });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Código inválido',
         message: String(error?.message ?? 'Não foi possível validar o código.'),
         color: 'red',

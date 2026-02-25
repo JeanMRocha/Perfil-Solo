@@ -13,7 +13,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
 import { $currUser } from '../../global-state/user';
 import {
@@ -162,7 +162,7 @@ export default function BillingSettings() {
 
   const handleSaveCpf = async () => {
     if (useSameAsAccount) {
-      notifications.show({
+      notify.show({
         title: 'Usando CPF da conta',
         message: 'Para alterar, atualize o CPF no perfil da conta.',
         color: 'blue',
@@ -185,13 +185,13 @@ export default function BillingSettings() {
       });
       setCpf(normalized);
       setAccountCpf(normalized);
-      notifications.show({
+      notify.show({
         title: 'CPF salvo',
         message: 'CPF de verificacao de identidade atualizado com sucesso.',
         color: 'teal',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao salvar CPF',
         message: String(error?.message ?? 'Não foi possível salvar o CPF.'),
         color: 'red',
@@ -245,14 +245,14 @@ export default function BillingSettings() {
         plan_id: nextPlan,
         updated_by: userId,
       });
-      notifications.show({
+      notify.show({
         title: 'Plano atualizado',
         message: `Plano ${nextPlan.toUpperCase()} aplicado para sua conta.`,
         color: 'teal',
       });
       void refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao atualizar plano',
         message: String(error?.message ?? 'Não foi possível alterar o plano.'),
         color: 'red',
@@ -265,7 +265,7 @@ export default function BillingSettings() {
     const reais = Number(topupReais) || 0;
     const amountCents = Math.max(0, Math.round(reais * 100));
     if (amountCents <= 0) {
-      notifications.show({
+      notify.show({
         title: 'Valor inválido',
         message: 'Informe um valor maior que zero para converter em créditos.',
         color: 'yellow',
@@ -280,14 +280,14 @@ export default function BillingSettings() {
         amount_cents: amountCents,
         created_by: userId,
       });
-      notifications.show({
+      notify.show({
         title: 'Conversão concluida',
         message: `${formatBillingMoney(entry.amount_cents)} -> ${entry.credits_delta} creditos.`,
         color: 'teal',
       });
       void refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha na conversão',
         message: String(error?.message ?? 'Não foi possível converter o valor em créditos.'),
         color: 'red',

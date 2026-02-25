@@ -14,7 +14,7 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import {
   IconEdit,
   IconMapPin,
@@ -127,7 +127,7 @@ export default function Propriedades() {
       setPropertiesLoadError(
         err?.message ?? 'Não foi possível carregar as propriedades.',
       );
-      notifications.show({
+      notify.show({
         title: 'Falha ao carregar propriedades',
         message: err?.message ?? 'Não foi possível carregar as propriedades.',
         color: 'red',
@@ -159,7 +159,7 @@ export default function Propriedades() {
       setTalhoesLoadError(
         err?.message ?? 'Não foi possível carregar os talhões da propriedade.',
       );
-      notifications.show({
+      notify.show({
         title: 'Falha ao carregar talhões',
         message: err?.message ?? 'Não foi possível carregar os talhões da propriedade.',
         color: 'red',
@@ -333,7 +333,7 @@ export default function Propriedades() {
     if (!currentUserId) return;
     const nome = payload.nome.trim();
     if (!nome) {
-      notifications.show({
+      notify.show({
         title: 'Nome obrigatorio',
         message: 'Informe o nome da propriedade para salvar.',
         color: 'yellow',
@@ -353,7 +353,7 @@ export default function Propriedades() {
         await loadProperties();
         setSelectedPropertyId(created.id);
 
-        notifications.show({
+        notify.show({
           title: 'Propriedade criada',
           message: `${created.nome} cadastrada com sucesso.`,
           color: 'green',
@@ -367,7 +367,7 @@ export default function Propriedades() {
         );
         await loadProperties();
         setSelectedPropertyId(updated.id);
-        notifications.show({
+        notify.show({
           title: 'Propriedade atualizada',
           message: `${updated.nome} atualizada com sucesso.`,
           color: 'green',
@@ -377,7 +377,7 @@ export default function Propriedades() {
         setPropertyModalMode(null);
       }
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao salvar propriedade',
         message: err?.message ?? 'Não foi possível salvar a propriedade.',
         color: 'red',
@@ -406,14 +406,14 @@ export default function Propriedades() {
 
             await deletePropertyForUser(propertyId);
             await loadProperties();
-            notifications.show({
+            notify.show({
               title: 'Propriedade excluida',
               message: 'Propriedade removida com sucesso.',
               color: 'green',
             });
             return true;
           } catch (err: any) {
-            notifications.show({
+            notify.show({
               title: 'Falha ao excluir propriedade',
               message: err?.message ?? 'Não foi possível excluir a propriedade.',
               color: 'red',
@@ -423,7 +423,7 @@ export default function Propriedades() {
         },
       });
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao preparar exclusao',
         message: err?.message ?? 'Não foi possível carregar os dados da propriedade.',
         color: 'red',
@@ -443,13 +443,13 @@ export default function Propriedades() {
       await loadProperties();
       setSelectedTalhaoId(created.id);
       setTalhaoDetailOpened(true);
-      notifications.show({
+      notify.show({
         title: 'Talhão criado',
         message: `${created.nome} criado. Complete os dados no detalhamento.`,
         color: 'green',
       });
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao criar talhão',
         message: err?.message ?? 'Não foi possível iniciar o cadastro do talhão.',
         color: 'red',
@@ -471,14 +471,14 @@ export default function Propriedades() {
           await deleteTalhaoForProperty(selectedTalhaoId);
           await loadTalhoes();
           await loadProperties();
-          notifications.show({
+          notify.show({
             title: 'Talhão excluido',
             message: 'Talhão removido com sucesso.',
             color: 'green',
           });
           return true;
         } catch (err: any) {
-          notifications.show({
+          notify.show({
             title: 'Falha ao excluir talhão',
             message: err?.message ?? 'Não foi possível excluir o talhão.',
             color: 'red',

@@ -16,7 +16,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { IconExternalLink, IconSearch } from '@tabler/icons-react';
 import {
   RNC_CULTIVAR_SELECTED_EVENT,
@@ -142,7 +142,7 @@ export default function RncCultivarSelector({
           return stillExists ? current : null;
         });
       } catch (error: any) {
-        notifications.show({
+        notify.show({
           title: 'Falha na consulta do RNC',
           message:
             error?.message ??
@@ -183,7 +183,7 @@ export default function RncCultivarSelector({
     if (!popupMode && !pickerMode) return;
 
     if (!selected) {
-      notifications.show({
+      notify.show({
         title: 'Selecione uma cultivar',
         message: 'Escolha uma linha da tabela antes de confirmar.',
         color: 'yellow',
@@ -194,7 +194,7 @@ export default function RncCultivarSelector({
     const start = normalizeMonth(periodStart);
     const end = normalizeMonth(periodEnd);
     if (!start || !end) {
-      notifications.show({
+      notify.show({
         title: 'Período obrigatório',
         message: 'Informe mês/ano inicial e final.',
         color: 'yellow',
@@ -202,7 +202,7 @@ export default function RncCultivarSelector({
       return;
     }
     if (monthOrder(start) > monthOrder(end)) {
-      notifications.show({
+      notify.show({
         title: 'Período inválido',
         message: 'O mês/ano final deve ser maior ou igual ao mês/ano inicial.',
         color: 'yellow',
@@ -212,7 +212,7 @@ export default function RncCultivarSelector({
 
     const selectedCultivar = String(selected.cultivar ?? '').trim();
     if (linkScope === 'cultivar' && !selectedCultivar) {
-      notifications.show({
+      notify.show({
         title: 'Cultivar indisponível',
         message: 'A entrada selecionada não possui cultivar para refino.',
         color: 'yellow',
@@ -248,7 +248,7 @@ export default function RncCultivarSelector({
       return;
     }
 
-    notifications.show({
+    notify.show({
       title: 'Janela principal não encontrada',
       message: 'Abra este seletor a partir do cadastro do talhão.',
       color: 'yellow',

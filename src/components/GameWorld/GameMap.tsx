@@ -21,7 +21,7 @@ import {
   IconMap2,
   IconPlus,
 } from '@tabler/icons-react';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
 import { $currUser } from '../../global-state/user';
 import {
@@ -119,7 +119,7 @@ export default function GameMap() {
         setProperties(list);
         setSelectedPropertyId((prev) => prev ?? list[0]?.id ?? null);
       } catch (err: any) {
-        notifications.show({
+        notify.show({
           title: 'Falha ao carregar propriedades',
           message: err?.message ?? 'Não foi possível buscar propriedades.',
           color: 'red',
@@ -169,7 +169,7 @@ export default function GameMap() {
 
         setTalhoes(mapped);
       } catch (err: any) {
-        notifications.show({
+        notify.show({
           title: 'Falha ao carregar talhões',
           message: err?.message ?? 'Não foi possível buscar os talhões.',
           color: 'red',
@@ -204,7 +204,7 @@ export default function GameMap() {
 
   const handleCreateProperty = async () => {
     if (!currentUserId) {
-      notifications.show({
+      notify.show({
         title: 'Sessao ausente',
         message: 'Faca login para criar propriedades.',
         color: 'red',
@@ -218,13 +218,13 @@ export default function GameMap() {
       const created = await createPropertyForUser(currentUserId, propertyName);
       setProperties((prev) => [...prev, created]);
       setSelectedPropertyId(created.id);
-      notifications.show({
+      notify.show({
         title: 'Propriedade criada',
         message: `${created.nome} foi adicionada com sucesso.`,
         color: 'green',
       });
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao criar propriedade',
         message: err?.message ?? 'Não foi possível criar a propriedade.',
         color: 'red',
@@ -236,7 +236,7 @@ export default function GameMap() {
 
   const finishDrawing = async () => {
     if (currentPoints.length < 3) {
-      notifications.show({
+      notify.show({
         title: 'Desenho incompleto',
         message: 'Desenhe pelo menos 3 pontos para formar um talhão.',
         color: 'yellow',
@@ -245,7 +245,7 @@ export default function GameMap() {
     }
 
     if (!selectedPropertyId) {
-      notifications.show({
+      notify.show({
         title: 'Propriedade não selecionada',
         message: 'Selecione uma propriedade antes de salvar o talhão.',
         color: 'red',
@@ -273,13 +273,13 @@ export default function GameMap() {
       setMousePos(null);
       setMode('view');
 
-      notifications.show({
+      notify.show({
         title: 'Talhão salvo',
         message: `${created.nome} persistido no banco com sucesso.`,
         color: 'green',
       });
     } catch (err: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao salvar talhão',
         message: err?.message ?? 'Não foi possível persistir o desenho.',
         color: 'red',

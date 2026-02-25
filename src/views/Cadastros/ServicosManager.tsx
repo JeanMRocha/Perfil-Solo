@@ -13,7 +13,7 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import {
   listLaboratories,
   type LaboratoryRecord,
@@ -178,7 +178,7 @@ export default function ServicosManager({
 
   const openCreate = () => {
     if (labs.length === 0) {
-      notifications.show({
+      notify.show({
         title: 'Sem laboratorios',
         message: 'Cadastre um laboratorio antes de adicionar servicos.',
         color: 'yellow',
@@ -207,7 +207,7 @@ export default function ServicosManager({
 
   const handleDelete = async (row: FlatServiceRow) => {
     if (!currentUserId) {
-      notifications.show({
+      notify.show({
         title: 'Usuário não identificado',
         message: 'Não foi possível identificar o usuário para excluir servico.',
         color: 'red',
@@ -226,7 +226,7 @@ export default function ServicosManager({
     );
     await persistLabServices(currentUserId, lab, nextServices);
     await reloadLabs();
-    notifications.show({
+    notify.show({
       title: 'Servico removido',
       message: 'Cadastro excluido com sucesso.',
       color: 'green',
@@ -235,7 +235,7 @@ export default function ServicosManager({
 
   const handleSave = async () => {
     if (!currentUserId) {
-      notifications.show({
+      notify.show({
         title: 'Usuário não identificado',
         message: 'Não foi possível identificar o usuário para salvar servico.',
         color: 'red',
@@ -245,7 +245,7 @@ export default function ServicosManager({
 
     const selectedLab = labs.find((item) => item.id === draft.lab_id);
     if (!selectedLab) {
-      notifications.show({
+      notify.show({
         title: 'Laboratorio obrigatorio',
         message: 'Selecione o laboratorio para vincular o servico.',
         color: 'yellow',
@@ -256,7 +256,7 @@ export default function ServicosManager({
     const serviceName = draft.nome.trim();
     const servicePrice = Number(draft.preco);
     if (serviceName.length < 2) {
-      notifications.show({
+      notify.show({
         title: 'Nome inválido',
         message: 'Informe pelo menos 2 caracteres no nome do servico.',
         color: 'yellow',
@@ -264,7 +264,7 @@ export default function ServicosManager({
       return;
     }
     if (!Number.isFinite(servicePrice) || servicePrice < 0) {
-      notifications.show({
+      notify.show({
         title: 'Preco inválido',
         message: 'Informe um preco valido para o servico.',
         color: 'yellow',
@@ -303,7 +303,7 @@ export default function ServicosManager({
 
       await reloadLabs();
       setModalOpened(false);
-      notifications.show({
+      notify.show({
         title: 'Servico salvo',
         message: 'Cadastro atualizado com sucesso.',
         color: 'green',

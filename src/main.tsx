@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { MantineProvider } from '@mantine/core';
 import { ModalsProvider } from '@mantine/modals';
 import { Notifications } from '@mantine/notifications';
+import { Toaster } from 'sonner';
 import { RouterProvider } from 'react-router-dom';
 
 import { useStore } from '@nanostores/react';
@@ -42,6 +43,15 @@ function AppRoot() {
         forceColorScheme={tema}
       >
         <Notifications position="top-right" />
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          toastOptions={{
+            duration: 4000,
+            className: 'font-sans',
+          }}
+        />
         <CustomSpotlight />
         <ModalsProvider modals={mantineModals}>
           <Suspense

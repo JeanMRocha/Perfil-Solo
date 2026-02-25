@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import {
   resolveGeoPointFromInput,
   parseCoordinatesInput,
@@ -78,7 +78,7 @@ export function useTalhaoMapBackground(): UseTalhaoMapBackgroundReturn {
   const applyRealMapBackground = async () => {
     const query = mapSearchValue.trim();
     if (!query) {
-      notifications.show({
+      notify.show({
         title: 'Informe uma busca',
         message: 'Digite um CEP (8 digitos) ou coordenadas (lat, lon).',
         color: 'yellow',
@@ -90,7 +90,7 @@ export function useTalhaoMapBackground(): UseTalhaoMapBackgroundReturn {
       setMapSearchLoading(true);
       const point = await resolveGeoPointFromInput(query);
       if (!point) {
-        notifications.show({
+        notify.show({
           title: 'Localização não encontrada',
           message: 'Não foi possível localizar este CEP/coordenada.',
           color: 'yellow',
@@ -102,13 +102,13 @@ export function useTalhaoMapBackground(): UseTalhaoMapBackgroundReturn {
       setMapZoom(16);
       setMapLayerId('satellite');
       setMapInteractive(false);
-      notifications.show({
+      notify.show({
         title: 'Fundo real aplicado',
         message: `Centro aproximado em ${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}.`,
         color: 'green',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha na busca',
         message:
           error?.message ?? 'Não foi possível obter o mapa de referencia real.',
@@ -153,7 +153,7 @@ export function useTalhaoMapBackground(): UseTalhaoMapBackgroundReturn {
   }) => {
     const rawValue = pointSearchValue.trim();
     if (!rawValue) {
-      notifications.show({
+      notify.show({
         title: 'Informe coordenadas',
         message:
           'Digite latitude e longitude no formato: -23.55052, -46.63331.',
@@ -163,7 +163,7 @@ export function useTalhaoMapBackground(): UseTalhaoMapBackgroundReturn {
     }
 
     if (drawMode === 'none') {
-      notifications.show({
+      notify.show({
         title: 'Inicie o desenho',
         message:
           'Ative o desenho do limite ou da zona para inserir pontos por coordenada.',
@@ -173,7 +173,7 @@ export function useTalhaoMapBackground(): UseTalhaoMapBackgroundReturn {
     }
 
     if (mapInteractive) {
-      notifications.show({
+      notify.show({
         title: 'Desative navegacao',
         message: 'Desative a navegacao do mapa para continuar desenhando.',
         color: 'yellow',
@@ -182,7 +182,7 @@ export function useTalhaoMapBackground(): UseTalhaoMapBackgroundReturn {
     }
 
     if (!mapCenter) {
-      notifications.show({
+      notify.show({
         title: 'Fundo real obrigatorio',
         message:
           'Aplique um mapa real para converter coordenadas em pontos do croqui.',
@@ -193,7 +193,7 @@ export function useTalhaoMapBackground(): UseTalhaoMapBackgroundReturn {
 
     const geoPoint = parseCoordinatesInput(rawValue);
     if (!geoPoint) {
-      notifications.show({
+      notify.show({
         title: 'Formato inválido',
         message:
           'Use o formato latitude, longitude. Ex.: -23.55052, -46.63331.',
@@ -216,7 +216,7 @@ export function useTalhaoMapBackground(): UseTalhaoMapBackgroundReturn {
       mappedPoint.y < 0 ||
       mappedPoint.y > 440
     ) {
-      notifications.show({
+      notify.show({
         title: 'Ponto fora da visao atual',
         message:
           'Ajuste zoom/posicao do mapa para enquadrar o ponto e tente novamente.',

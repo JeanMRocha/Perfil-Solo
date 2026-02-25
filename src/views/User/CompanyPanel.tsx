@@ -10,7 +10,7 @@ import {
   TextInput,
   Textarea,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
 import { $currUser } from '../../global-state/user';
 import { canonicalAddressFromCepLookup } from '../../modules/address';
@@ -169,7 +169,7 @@ export default function CompanyPanel() {
     if (!userId) return;
     const razaoSocial = draft.razao_social.trim();
     if (!razaoSocial) {
-      notifications.show({
+      notify.show({
         title: 'Razão social obrigatoria',
         message: 'Informe a razão social da empresa para salvar.',
         color: 'yellow',
@@ -204,14 +204,14 @@ export default function CompanyPanel() {
       });
       setSelectedId(saved.id);
       setActiveCompanyByUser(userId, saved.id);
-      notifications.show({
+      notify.show({
         title: 'Empresa salva',
         message: 'Dados da empresa atualizados com sucesso.',
         color: 'teal',
       });
       await loadRows();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao salvar empresa',
         message: String(error?.message ?? 'Não foi possível salvar a empresa.'),
         color: 'red',

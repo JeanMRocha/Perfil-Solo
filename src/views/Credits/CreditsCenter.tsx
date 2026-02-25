@@ -12,7 +12,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
 import { useLocation } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
@@ -164,7 +164,7 @@ export default function CreditsCenter({
 
   const applyCoupon = () => {
     if (!selectedPackage) {
-      notifications.show({
+      notify.show({
         title: 'Pacote não selecionado',
         message: 'Escolha um pacote antes de aplicar cupom.',
         color: 'yellow',
@@ -179,7 +179,7 @@ export default function CreditsCenter({
 
     if (!validation.valid) {
       setCouponValidation(null);
-      notifications.show({
+      notify.show({
         title: 'Cupom inválido',
         message: validation.message,
         color: 'red',
@@ -188,7 +188,7 @@ export default function CreditsCenter({
     }
 
     setCouponValidation(validation);
-    notifications.show({
+    notify.show({
       title: 'Cupom aplicado',
       message: `${validation.coupon?.code} aplicado com sucesso.`,
       color: 'teal',
@@ -203,7 +203,7 @@ export default function CreditsCenter({
   const requestPurchase = async () => {
     if (!userId || !userEmail) return;
     if (!selectedPackage) {
-      notifications.show({
+      notify.show({
         title: 'Pacote não selecionado',
         message: 'Selecione um pacote de créditos para continuar.',
         color: 'yellow',
@@ -212,7 +212,7 @@ export default function CreditsCenter({
     }
 
     if (authEmail.trim().toLowerCase() !== userEmail.trim().toLowerCase()) {
-      notifications.show({
+      notify.show({
         title: 'Autenticacao inválida',
         message: 'Confirme o email da conta logada para solicitar a compra.',
         color: 'red',
@@ -224,7 +224,7 @@ export default function CreditsCenter({
       setRequesting(true);
       if (!isLocalDataMode) {
         if (!authPassword) {
-          notifications.show({
+          notify.show({
             title: 'Senha obrigatoria',
             message: 'Informe a senha para confirmar a solicitação.',
             color: 'yellow',
@@ -247,7 +247,7 @@ export default function CreditsCenter({
       });
 
       setAuthPassword('');
-      notifications.show({
+      notify.show({
         title: 'Solicitação enviada',
         message:
           'Pedido autenticado e pendente para aprovacao do super usuário.',
@@ -255,7 +255,7 @@ export default function CreditsCenter({
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha na solicitação',
         message: String(error?.message ?? 'Não foi possível autenticar a compra.'),
         color: 'red',
@@ -270,14 +270,14 @@ export default function CreditsCenter({
     try {
       setRewarding(true);
       claimAdRewardCredits(userId, userId);
-      notifications.show({
+      notify.show({
         title: 'Crédito liberado',
         message: 'Voce recebeu 1 crédito por assistir propaganda.',
         color: 'teal',
       });
       refresh();
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Recompensa indisponivel',
         message: String(error?.message ?? 'Não foi possível liberar a recompensa.'),
         color: 'yellow',
