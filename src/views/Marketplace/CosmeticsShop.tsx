@@ -21,7 +21,7 @@ import {
     ThemeIcon,
     Tooltip,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import {
     IconCheck,
     IconCoin,
@@ -93,13 +93,13 @@ export default function CosmeticsShop() {
         try {
             equipCosmetic(userId, item.id);
             refreshInventory();
-            notifications.show({
+            notify.show({
                 title: '✓ Equipado!',
                 message: `"${item.label}" está ativo agora.`,
                 color: 'teal',
             });
         } catch (err: any) {
-            notifications.show({
+            notify.show({
                 title: 'Erro',
                 message: err?.message ?? 'Não foi possível equipar.',
                 color: 'red',
@@ -117,7 +117,7 @@ export default function CosmeticsShop() {
                     : requestCosmeticPurchaseWithMoney(userId, confirmItem.id);
 
             if (result.success) {
-                notifications.show({
+                notify.show({
                     title: '✓ Compra realizada!',
                     message: result.message,
                     color: 'green',
@@ -125,14 +125,14 @@ export default function CosmeticsShop() {
                 refreshInventory();
                 setConfirmItem(null);
             } else {
-                notifications.show({
+                notify.show({
                     title: '⚠ Compra não concluída',
                     message: result.message,
                     color: 'orange',
                 });
             }
         } catch (err: any) {
-            notifications.show({
+            notify.show({
                 title: 'Erro na compra',
                 message: err?.message ?? 'Falha inesperada.',
                 color: 'red',

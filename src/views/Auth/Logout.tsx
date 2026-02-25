@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { signOut } from '@global/user';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,13 +10,13 @@ export default function Logout() {
     (async () => {
       try {
         await signOut();
-        notifications.show({
+        notify.show({
           title: 'Sessao encerrada',
           message: 'Acesso finalizado com sucesso.',
           color: 'green',
         });
       } catch (e: any) {
-        notifications.show({
+        notify.show({
           title: 'Erro ao sair',
           message: e?.message || 'Tente novamente.',
           color: 'red',

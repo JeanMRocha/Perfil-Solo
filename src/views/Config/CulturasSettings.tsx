@@ -14,7 +14,7 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { modals } from '@mantine/modals';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import {
@@ -294,7 +294,7 @@ export default function CulturasSettings({
       onConfirm: () => {
         deleteLocalCultureProfile(row.id);
         setRows(listLocalCultureProfiles());
-        notifications.show({
+        notify.show({
           title: 'Regra removida',
           message: 'Cadastro de cultura removido com sucesso.',
           color: 'green',
@@ -306,7 +306,7 @@ export default function CulturasSettings({
   const handleSave = () => {
     const cultura = draft.cultura.trim();
     if (!cultura) {
-      notifications.show({
+      notify.show({
         title: 'Cultura obrigatoria',
         message: 'Informe a cultura para salvar os parametros.',
         color: 'yellow',
@@ -319,7 +319,7 @@ export default function CulturasSettings({
       draft.idade_max !== '' &&
       Number(draft.idade_min) > Number(draft.idade_max)
     ) {
-      notifications.show({
+      notify.show({
         title: 'Faixa de idade inválida',
         message: 'Idade minima não pode ser maior que idade maxima.',
         color: 'yellow',
@@ -329,7 +329,7 @@ export default function CulturasSettings({
 
     const ideal = buildRangeMap(draft.ranges);
     if (Object.keys(ideal).length === 0) {
-      notifications.show({
+      notify.show({
         title: 'Sem parametros',
         message: 'Preencha pelo menos um parametro com min e max.',
         color: 'yellow',
@@ -356,7 +356,7 @@ export default function CulturasSettings({
       });
       setRows(listLocalCultureProfiles());
       setModalOpened(false);
-      notifications.show({
+      notify.show({
         title: 'Parametros salvos',
         message: 'Cadastro de cultura atualizado com sucesso.',
         color: 'green',

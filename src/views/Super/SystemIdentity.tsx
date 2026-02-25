@@ -14,7 +14,7 @@ import {
   TextInput,
 } from '@mantine/core';
 import { IconUpload } from '@tabler/icons-react';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import PageHeader from '../../components/PageHeader';
 import {
   getSystemBrand,
@@ -108,7 +108,7 @@ export default function SystemIdentity() {
     }
 
     if (file.size > MAX_LOGO_FILE_BYTES) {
-      notifications.show({
+      notify.show({
         title: 'Arquivo muito grande',
         message: 'Use uma imagem de ate 1.5 MB para a logo do sistema.',
         color: 'yellow',
@@ -117,7 +117,7 @@ export default function SystemIdentity() {
     }
 
     if (!isAcceptedLogoFile(file)) {
-      notifications.show({
+      notify.show({
         title: 'Formato não suportado',
         message: 'Use PNG, JPG, WEBP ou SVG para a logo do sistema.',
         color: 'yellow',
@@ -131,7 +131,7 @@ export default function SystemIdentity() {
       setDraft((prev) => ({ ...prev, logo_url: result }));
     };
     reader.onerror = () => {
-      notifications.show({
+      notify.show({
         title: 'Falha no upload',
         message: 'Não foi possível ler o arquivo da logo selecionada.',
         color: 'red',
@@ -149,13 +149,13 @@ export default function SystemIdentity() {
       });
       setBrand(next.brand);
       setDraft(toDraft(next.brand));
-      notifications.show({
+      notify.show({
         title: 'Identidade atualizada',
         message: 'Nome e logo foram atualizados para todo o sistema.',
         color: 'green',
       });
     } catch {
-      notifications.show({
+      notify.show({
         title: 'Falha ao salvar',
         message: 'Não foi possível atualizar a identidade do sistema.',
         color: 'red',
@@ -169,7 +169,7 @@ export default function SystemIdentity() {
     const next = resetSystemBrand();
     setBrand(next.brand);
     setDraft(toDraft(next.brand));
-    notifications.show({
+    notify.show({
       title: 'Padrao restaurado',
       message: 'O sistema voltou para o nome e logo padrao.',
       color: 'blue',
@@ -180,13 +180,13 @@ export default function SystemIdentity() {
     try {
       addPropertyAreaCategory(newAreaCategoryName);
       setNewAreaCategoryName('');
-      notifications.show({
+      notify.show({
         title: 'Categoria criada',
         message: 'A categoria de area foi adicionada.',
         color: 'green',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao criar categoria',
         message: String(error?.message ?? 'Não foi possível criar a categoria.'),
         color: 'red',
@@ -204,13 +204,13 @@ export default function SystemIdentity() {
         delete next[category.id];
         return next;
       });
-      notifications.show({
+      notify.show({
         title: 'Categoria renomeada',
         message: 'Nome da categoria atualizado com sucesso.',
         color: 'green',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao renomear',
         message: String(error?.message ?? 'Não foi possível renomear a categoria.'),
         color: 'red',
@@ -221,13 +221,13 @@ export default function SystemIdentity() {
   const toggleCategoryActive = (category: PropertyAreaCategory) => {
     try {
       setPropertyAreaCategoryActive(category.id, !category.active);
-      notifications.show({
+      notify.show({
         title: category.active ? 'Categoria desativada' : 'Categoria ativada',
         message: `Categoria ${category.name} atualizada.`,
         color: category.active ? 'yellow' : 'green',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao atualizar categoria',
         message: String(error?.message ?? 'Não foi possível atualizar a categoria.'),
         color: 'red',
@@ -242,13 +242,13 @@ export default function SystemIdentity() {
     if (!confirmed) return;
     try {
       removePropertyAreaCategory(category.id);
-      notifications.show({
+      notify.show({
         title: 'Categoria removida',
         message: 'Categoria de area removida com sucesso.',
         color: 'green',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao remover categoria',
         message: String(error?.message ?? 'Não foi possível remover a categoria.'),
         color: 'red',

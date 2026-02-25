@@ -19,7 +19,7 @@ import {
 } from '@mantine/core';
 import { useStore } from '@nanostores/react';
 import { IconMapPin, IconUpload, IconUser } from '@tabler/icons-react';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import PageHeader from '../../components/PageHeader';
 import { $currUser } from '../../global-state/user';
 import {
@@ -350,7 +350,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     }
 
     if (file.size > MAX_LOGO_FILE_BYTES) {
-      notifications.show({
+      notify.show({
         title: 'Arquivo muito grande',
         message: 'Use uma imagem de ate 1.5 MB para o logotipo.',
         color: 'yellow',
@@ -359,7 +359,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     }
 
     if (!isAcceptedImageFile(file)) {
-      notifications.show({
+      notify.show({
         title: 'Formato não suportado',
         message: 'Use PNG, JPG, WEBP, SVG ou GIF para o logotipo.',
         color: 'yellow',
@@ -373,7 +373,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       setProfile((prev) => (prev ? { ...prev, logo_url: result } : prev));
     };
     reader.onerror = () => {
-      notifications.show({
+      notify.show({
         title: 'Falha no upload',
         message: 'Não foi possível ler o arquivo do logotipo.',
         color: 'red',
@@ -386,7 +386,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     if (!userId) return;
     if (!file) {
       clearUploadedAvatarForUser(userId);
-      notifications.show({
+      notify.show({
         title: 'Avatar removido',
         message: 'Avatar personalizado removido. O ícone rural sera usado.',
         color: 'blue',
@@ -395,7 +395,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     }
 
     if (file.size > MAX_AVATAR_FILE_BYTES) {
-      notifications.show({
+      notify.show({
         title: 'Arquivo muito grande',
         message: 'Use uma imagem de ate 1.5 MB para o avatar.',
         color: 'yellow',
@@ -404,7 +404,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     }
 
     if (!isAcceptedImageFile(file)) {
-      notifications.show({
+      notify.show({
         title: 'Formato não suportado',
         message: 'Use PNG, JPG, WEBP, SVG ou GIF para o avatar.',
         color: 'yellow',
@@ -416,14 +416,14 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     reader.onload = () => {
       const result = String(reader.result ?? '');
       setUploadedAvatarForUser(userId, result);
-      notifications.show({
+      notify.show({
         title: 'Avatar atualizado',
         message: 'Novo avatar enviado com sucesso.',
         color: 'teal',
       });
     };
     reader.onerror = () => {
-      notifications.show({
+      notify.show({
         title: 'Falha no upload',
         message: 'Não foi possível ler o arquivo do avatar.',
         color: 'red',
@@ -438,7 +438,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       const unlocked = avatarInventory?.unlocked_icon_ids.includes(icon.id) ?? false;
       if (!unlocked) {
         unlockRuralAvatarIcon(userId, icon.id, userId);
-        notifications.show({
+        notify.show({
           title: 'Ícone desbloqueado',
           message: `${icon.label} liberado com custo de ${icon.price_credits} credito.`,
           color: 'teal',
@@ -446,13 +446,13 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
         return;
       }
       selectRuralAvatarIcon(userId, icon.id);
-      notifications.show({
+      notify.show({
         title: 'Ícone selecionado',
         message: `${icon.label} agora e seu avatar ativo.`,
         color: 'blue',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao atualizar avatar',
         message: String(error?.message ?? 'Não foi possível atualizar avatar.'),
         color: 'red',
@@ -462,7 +462,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
 
   const handleLocate = () => {
     if (!navigator.geolocation) {
-      notifications.show({
+      notify.show({
         title: 'Geolocalizacao indisponivel',
         message: 'Seu navegador não suporta geolocalizacao.',
         color: 'yellow',
@@ -475,7 +475,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       (position) => {
         setProducerField('latitude', position.coords.latitude.toFixed(6));
         setProducerField('longitude', position.coords.longitude.toFixed(6));
-        notifications.show({
+        notify.show({
           title: 'Localização capturada',
           message: 'Latitude e longitude preenchidas com sucesso.',
           color: 'green',
@@ -483,7 +483,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
         setLocating(false);
       },
       () => {
-        notifications.show({
+        notify.show({
           title: 'Falha ao capturar localização',
           message: 'Permita acesso ao GPS e tente novamente.',
           color: 'red',
@@ -502,7 +502,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       setLoadingCep(true);
       const lookup = await lookupAddressByCep(cep);
       if (!lookup) {
-        notifications.show({
+        notify.show({
           title: 'CEP não encontrado',
           message: 'Revise o CEP informado.',
           color: 'yellow',
@@ -527,7 +527,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
         };
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao buscar CEP',
         message:
           error?.message ?? 'Não foi possível preencher endereço automaticamente.',
@@ -542,7 +542,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
     if (!profile || !profile.producer) return;
     const normalizedCpf = normalizeCpf(profile.producer.cpf);
     if (!isValidCpf(normalizedCpf)) {
-      notifications.show({
+      notify.show({
         title: 'CPF inválido',
         message: 'Informe um CPF valido na aba Perfil antes de salvar.',
         color: 'red',
@@ -605,7 +605,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
               '',
           });
         } catch (err: any) {
-          notifications.show({
+          notify.show({
             title: 'Perfil salvo com alerta',
             message:
               err?.message ??
@@ -625,7 +625,7 @@ export default function ProfilePage({ embedded = false }: ProfilePageProps) {
       if (userId) {
         void trackGamificationEvent(userId, 'profile_saved').catch(() => null);
       }
-      notifications.show({
+      notify.show({
         title: 'Cadastro salvo',
         message: 'Dados do produtor atualizados com sucesso.',
         color: 'green',

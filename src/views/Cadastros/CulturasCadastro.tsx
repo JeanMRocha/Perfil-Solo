@@ -26,7 +26,7 @@ import {
   IconEdit,
   IconRefresh,
 } from '@tabler/icons-react';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import PageHeader from '../../components/PageHeader';
 import RncCultivarSelector from '../Rnc/RncCultivarSelector';
 import {
@@ -75,7 +75,7 @@ export default function CulturasCadastro() {
       setCultivars(cultivarData);
     } catch (error) {
       console.error('Erro ao carregar culturas:', error);
-      notifications.show({
+      notify.show({
         title: 'Erro',
         message: 'Falha ao carregar culturas importadas',
         color: 'red',
@@ -126,7 +126,7 @@ export default function CulturasCadastro() {
 
       if (result.success) {
         setImportedCount((prev) => prev + 1);
-        notifications.show({
+        notify.show({
           title: '✓ Importação bem-sucedida',
           message: result.message,
           color: 'green',
@@ -134,7 +134,7 @@ export default function CulturasCadastro() {
         });
         await loadCultures();
       } else {
-        notifications.show({
+        notify.show({
           title: '⚠ Erro na importação',
           message: result.error || 'Falha desconhecida',
           color: 'red',
@@ -144,7 +144,7 @@ export default function CulturasCadastro() {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Erro desconhecido';
-      notifications.show({
+      notify.show({
         title: 'Erro',
         message: errorMessage,
         color: 'red',
@@ -173,7 +173,7 @@ export default function CulturasCadastro() {
           editingProfile.technicalData,
         );
         if (result) {
-          notifications.show({
+          notify.show({
             title: '✓ Dados técnicos atualizados',
             message: `Espécie "${editingProfile.name}" salva com sucesso`,
             color: 'green',
@@ -185,7 +185,7 @@ export default function CulturasCadastro() {
           editingProfile.technicalData,
         );
         if (result) {
-          notifications.show({
+          notify.show({
             title: '✓ Dados técnicos atualizados',
             message: `Cultivar "${editingProfile.name}" salvo com sucesso`,
             color: 'green',
@@ -198,7 +198,7 @@ export default function CulturasCadastro() {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Erro desconhecido';
-      notifications.show({
+      notify.show({
         title: 'Erro',
         message: errorMessage,
         color: 'red',

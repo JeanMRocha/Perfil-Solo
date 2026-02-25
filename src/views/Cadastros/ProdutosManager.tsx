@@ -12,7 +12,7 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import {
   listLocalCultureProfiles,
   type LocalCultureProduct,
@@ -177,7 +177,7 @@ export default function ProdutosManager({
 
   const openCreate = () => {
     if (profiles.length === 0) {
-      notifications.show({
+      notify.show({
         title: 'Sem culturas cadastradas',
         message: 'Cadastre uma cultura antes de adicionar produtos.',
         color: 'yellow',
@@ -220,7 +220,7 @@ export default function ProdutosManager({
     );
     persistProfileProducts(profile, nextProducts);
     reload();
-    notifications.show({
+    notify.show({
       title: 'Produto removido',
       message: 'Cadastro excluido com sucesso.',
       color: 'green',
@@ -230,7 +230,7 @@ export default function ProdutosManager({
   const handleSave = () => {
     const selectedProfile = profiles.find((item) => item.id === draft.profile_id);
     if (!selectedProfile) {
-      notifications.show({
+      notify.show({
         title: 'Cultura obrigatoria',
         message: 'Selecione a cultura para vincular o produto.',
         color: 'yellow',
@@ -240,7 +240,7 @@ export default function ProdutosManager({
 
     const productName = draft.nome.trim();
     if (productName.length < 2) {
-      notifications.show({
+      notify.show({
         title: 'Nome inválido',
         message: 'Informe pelo menos 2 caracteres no nome do produto.',
         color: 'yellow',
@@ -290,7 +290,7 @@ export default function ProdutosManager({
 
       reload();
       setModalOpened(false);
-      notifications.show({
+      notify.show({
         title: 'Produto salvo',
         message: 'Cadastro atualizado com sucesso.',
         color: 'green',

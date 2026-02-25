@@ -10,7 +10,7 @@
  */
 
 import { useState, useMemo, useRef, useCallback } from 'react';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import type {
   MapPoint,
   ExclusionZone,
@@ -109,7 +109,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
     const now = Date.now();
     if (now - lastDrawWarningAt.current < 700) return;
     lastDrawWarningAt.current = now;
-    notifications.show({ title, message, color: 'yellow' });
+    notify.show({ title, message, color: 'yellow' });
   }, []);
 
   // ── Draw flow (start → click → finish/cancel) ───────────────────────────
@@ -145,7 +145,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
 
   const startMainDrawing = () => {
     if (mainPoints.length >= 3) {
-      notifications.show({
+      notify.show({
         title: 'Area util ja definida',
         message:
           'Cada talhão aceita apenas uma area util. Edite os vertices existentes para ajustar.',
@@ -162,7 +162,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
 
   const startZoneDrawing = () => {
     if (mainPoints.length < 3) {
-      notifications.show({
+      notify.show({
         title: 'Desenhe o limite primeiro',
         message: 'Defina o limite do talhão antes de criar zonas de exclusao.',
         color: 'yellow',
@@ -187,7 +187,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
 
   const finishDrawing = () => {
     if (currentPoints.length < 3) {
-      notifications.show({
+      notify.show({
         title: 'Desenho incompleto',
         message: 'Desenhe pelo menos 3 pontos.',
         color: 'yellow',
@@ -197,7 +197,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
 
     if (drawMode === 'main') {
       setMainPoints(currentPoints);
-      notifications.show({
+      notify.show({
         title: 'Limite atualizado',
         message: 'Desenho principal do talhão definido.',
         color: 'green',
@@ -209,7 +209,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
         points: currentPoints,
       };
       setZones((prev) => [...prev, newZone]);
-      notifications.show({
+      notify.show({
         title: 'Zona adicionada',
         message: 'Zona de exclusão adicionada ao talhão.',
         color: 'green',
@@ -233,7 +233,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
     event?.evt?.preventDefault?.();
     if (drawMode === 'none') return;
     if (currentPoints.length < 3) {
-      notifications.show({
+      notify.show({
         title: 'Desenho incompleto',
         message: 'Desenhe pelo menos 3 pontos.',
         color: 'yellow',
@@ -245,7 +245,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
       drawMode === 'zone' &&
       !isPolygonInsidePolygon(currentPoints, mainPoints)
     ) {
-      notifications.show({
+      notify.show({
         title: 'Zona fora da area util',
         message:
           'Todos os pontos da zona de exclusao precisam ficar dentro da area util do talhão.',
@@ -291,7 +291,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
           : null;
 
     if (targetIndex == null) {
-      notifications.show({
+      notify.show({
         title: 'Selecione a zona',
         message: 'Escolha a zona de exclusao para remover.',
         color: 'yellow',
@@ -326,7 +326,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
     setDrawMode('none');
     setCurrentPoints([]);
     setMousePos(null);
-    notifications.show({
+    notify.show({
       title: hadMain ? 'Limite removido' : 'Zonas removidas',
       message:
         hadMain && hadZones
@@ -380,7 +380,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
 
   const removeSelectedVertex = () => {
     if (!selectedVertex) {
-      notifications.show({
+      notify.show({
         title: 'Selecione um ponto',
         message: 'Clique em uma bolinha para excluir o vertice.',
         color: 'yellow',
@@ -390,7 +390,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
 
     if (selectedVertex.kind === 'main') {
       if (mainPoints.length <= 3) {
-        notifications.show({
+        notify.show({
           title: 'Minimo de 3 pontos',
           message: 'O limite principal precisa ter ao menos 3 vertices.',
           color: 'yellow',
@@ -406,7 +406,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
           !isPolygonInsidePolygon(zone.points, nextMainPoints),
       );
       if (hasZoneOutside) {
-        notifications.show({
+        notify.show({
           title: 'Ajuste inválido',
           message:
             'Remover esse ponto deixaria zona de exclusao fora da area util.',
@@ -416,7 +416,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
       }
       setMainPoints(nextMainPoints);
       setSelectedVertex(null);
-      notifications.show({
+      notify.show({
         title: 'Ponto removido',
         message: 'Vertice removido do limite principal.',
         color: 'green',
@@ -431,7 +431,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
     }
     const zonePoints = zoneObj.points;
     if (zonePoints.length <= 3) {
-      notifications.show({
+      notify.show({
         title: 'Minimo de 3 pontos',
         message:
           'A zona precisa ter ao menos 3 vertices. Use remover zona para excluir totalmente.',
@@ -444,7 +444,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
       (_, idx) => idx !== selectedVertex.pointIndex,
     );
     if (!isPolygonInsidePolygon(nextZonePoints, mainPoints)) {
-      notifications.show({
+      notify.show({
         title: 'Ajuste inválido',
         message: 'A zona precisa continuar dentro da area util.',
         color: 'yellow',
@@ -461,7 +461,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
     );
     setSelectedZoneIndex(selectedVertex.zoneIndex);
     setSelectedVertex(null);
-    notifications.show({
+    notify.show({
       title: 'Ponto removido',
       message: 'Vertice removido da zona de exclusao.',
       color: 'green',
@@ -484,7 +484,7 @@ export function useTalhaoDrawing(): UseTalhaoDrawingReturn {
       return;
     }
 
-    notifications.show({
+    notify.show({
       title: 'Selecione antes de excluir',
       message: 'Clique em um ponto, zona ou limite para remover.',
       color: 'yellow',

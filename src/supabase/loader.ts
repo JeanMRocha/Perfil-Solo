@@ -1,4 +1,4 @@
-import { notifications } from "@mantine/notifications";
+import { notify } from 'lib/notify';
 import { supabaseClient } from "./supabaseClient";
 import { redirect } from "react-router-dom";
 import { User } from "@supabase/supabase-js";
@@ -7,7 +7,7 @@ import { useState, useEffect } from "react";
 export async function protectedPathLoader() {
   const user = await supabaseClient.auth.getUser();
   if (user.error) {
-    notifications.show({
+    notify.show({
       title: user.error.name,
       message: user.error.message,
       color: "red",

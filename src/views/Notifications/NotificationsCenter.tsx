@@ -14,7 +14,7 @@ import {
   ThemeIcon,
   Title,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { IconAlertTriangle, IconBell, IconSparkles } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { $currUser } from '../../global-state/user';
@@ -330,7 +330,7 @@ export default function NotificationsCenter() {
   const handleMarkAllRead = async () => {
     if (!currentUserId) return;
     await markAllNotificationsRead(currentUserId);
-    notifications.show({
+    notify.show({
       title: 'Notificações atualizadas',
       message: 'Todas as notificações ativas foram marcadas como lidas.',
       color: 'green',

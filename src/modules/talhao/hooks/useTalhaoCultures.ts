@@ -8,7 +8,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import type { RncCultivarSelectionPayload } from '../../../services/rncCultivarService';
 import { duplicateCultivarTechnicalProfile } from '../../../services/cultivarTechnicalProfilesService';
 import type { CultureEntry, CultureModalMode } from '../types';
@@ -105,7 +105,7 @@ export function useTalhaoCultures(): UseTalhaoCulturesReturn {
     const dataInicio = normalizeMonthYear(payload.dataInicio);
     const dataFim = normalizeMonthYear(payload.dataFim);
     if (!cultura || !dataInicio || !dataFim) {
-      notifications.show({
+      notify.show({
         title: 'Seleção incompleta',
         message: 'A espécie e o período são obrigatórios para o vínculo.',
         color: 'yellow',
@@ -113,7 +113,7 @@ export function useTalhaoCultures(): UseTalhaoCulturesReturn {
       return;
     }
     if (monthYearOrder(dataInicio) > monthYearOrder(dataFim)) {
-      notifications.show({
+      notify.show({
         title: 'Período inválido',
         message: 'O período selecionado é inválido.',
         color: 'yellow',
@@ -153,7 +153,7 @@ export function useTalhaoCultures(): UseTalhaoCulturesReturn {
       setCurrentCulture(cultura);
     }
 
-    notifications.show({
+    notify.show({
       title: 'Cultura vinculada',
       message: cultivar
         ? `${cultura} vinculada com refino da cultivar ${cultivar}.`
@@ -184,7 +184,7 @@ export function useTalhaoCultures(): UseTalhaoCulturesReturn {
 
   const saveCultureDraft = () => {
     if (cultureModalMode !== 'edit' || editingCultureIndex == null) {
-      notifications.show({
+      notify.show({
         title: 'Cadastro manual bloqueado',
         message: 'Use o seletor do RNC para incluir novas culturas no talhão.',
         color: 'yellow',
@@ -199,7 +199,7 @@ export function useTalhaoCultures(): UseTalhaoCulturesReturn {
     const dataFim = normalizeMonthYear(cultureDraft.data_fim);
 
     if (!cultura || !dataInicio || !dataFim) {
-      notifications.show({
+      notify.show({
         title: 'Dados incompletos',
         message: 'Informe espécie, mês/ano inicial e mês/ano final.',
         color: 'yellow',
@@ -208,7 +208,7 @@ export function useTalhaoCultures(): UseTalhaoCulturesReturn {
     }
 
     if (monthYearOrder(dataInicio) > monthYearOrder(dataFim)) {
-      notifications.show({
+      notify.show({
         title: 'Periodo inválido',
         message: 'O mês/ano final deve ser maior ou igual ao mês/ano inicial.',
         color: 'yellow',
@@ -271,7 +271,7 @@ export function useTalhaoCultures(): UseTalhaoCulturesReturn {
     const cultivarNome = String(row.cultivar || '').trim();
 
     if (!especieNomeComum) {
-      notifications.show({
+      notify.show({
         title: 'Espécie inválida',
         message:
           'Não foi possível identificar a espécie para preparar os dados técnicos.',
@@ -281,7 +281,7 @@ export function useTalhaoCultures(): UseTalhaoCulturesReturn {
     }
 
     if (!cultivarNome) {
-      notifications.show({
+      notify.show({
         title: 'Cultivar ausente',
         message:
           'Selecione uma cultivar para duplicar dados técnicos específicos.',
@@ -311,7 +311,7 @@ export function useTalhaoCultures(): UseTalhaoCulturesReturn {
       ),
     );
 
-    notifications.show({
+    notify.show({
       title: 'Cultivar duplicada para edição técnica',
       message: `${technicalProfile.cultivar_nome} preparada para receber seus dados de produção.`,
       color: 'green',

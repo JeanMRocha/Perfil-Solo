@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Card, Group, Stack, Switch, Text, TextInput, Title } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
 import { $currUser } from '../../global-state/user';
 import { claimCreditEngagementReward } from '../../services/creditsService';
@@ -78,7 +78,7 @@ export default function TwoFactorSecurityCard() {
       }
       setEnabled(status.enabled);
       setConfirmedAt(status.confirmed_at);
-      notifications.show({
+      notify.show({
         title: 'Segurança atualizada',
         message: status.enabled
           ? 'Fator de 2 etapas ativado.'
@@ -86,7 +86,7 @@ export default function TwoFactorSecurityCard() {
         color: status.enabled ? 'teal' : 'blue',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Não foi possível alterar',
         message: String(error?.message ?? 'Falha ao atualizar 2 etapas.'),
         color: 'red',
@@ -101,13 +101,13 @@ export default function TwoFactorSecurityCard() {
         email,
         reason: 'login',
       });
-      notifications.show({
+      notify.show({
         title: 'Código enviado',
         message: `Use o codigo de teste: ${challenge.debug_code}`,
         color: 'blue',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Falha ao enviar código',
         message: String(error?.message ?? 'Não foi possível enviar código.'),
         color: 'red',
@@ -136,13 +136,13 @@ export default function TwoFactorSecurityCard() {
           reference_id: email,
         });
       }
-      notifications.show({
+      notify.show({
         title: 'Identidade confirmada',
         message: 'Agora voce pode ativar o fator de 2 etapas.',
         color: 'teal',
       });
     } catch (error: any) {
-      notifications.show({
+      notify.show({
         title: 'Código inválido',
         message: String(error?.message ?? 'Não foi possível confirmar identidade.'),
         color: 'red',

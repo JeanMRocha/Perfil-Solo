@@ -29,7 +29,7 @@ import {
   IconDownload,
   IconSettings,
 } from '@tabler/icons-react';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import PageHeader from '../../components/PageHeader';
 import {
   bulkSyncRncRecords,
@@ -97,7 +97,7 @@ export default function CultureSyncAdmin({
       const super_user = user ? isOwnerSuperUser(user) : false;
       setIsAdmin(super_user);
       if (!super_user) {
-        notifications.show({
+        notify.show({
           title: 'Acesso Negado',
           message: 'Apenas super usuários podem acessar este painel.',
           color: 'red',
@@ -118,7 +118,7 @@ export default function CultureSyncAdmin({
       setSyncState(stateData);
     } catch (error) {
       console.error('Erro ao carregar dados de sync:', error);
-      notifications.show({
+      notify.show({
         title: 'Erro',
         message: 'Falha ao carregar dados de sincronização',
         color: 'red',
@@ -143,7 +143,7 @@ export default function CultureSyncAdmin({
       setCleanupStats(stats);
     } catch (error) {
       console.error('Erro ao carregar estatísticas de limpeza:', error);
-      notifications.show({
+      notify.show({
         title: 'Erro',
         message: 'Falha ao carregar estatísticas de retenção',
         color: 'red',
@@ -157,7 +157,7 @@ export default function CultureSyncAdmin({
   const handleRunAllCleanup = async () => {
     try {
       setCleaning(true);
-      notifications.show({
+      notify.show({
         title: 'Limpeza Iniciada',
         message: 'Executando rotinas de limpeza...',
         color: 'blue',
@@ -166,7 +166,7 @@ export default function CultureSyncAdmin({
 
       const result = await runAllCleanupJobs();
 
-      notifications.show({
+      notify.show({
         title: '✓ Limpeza Concluída',
         message: `Total de ${result.total_deleted} registro${result.total_deleted !== 1 ? 's' : ''} apagado${result.total_deleted !== 1 ? 's' : ''}`,
         color: 'green',
@@ -176,7 +176,7 @@ export default function CultureSyncAdmin({
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Erro desconhecido';
-      notifications.show({
+      notify.show({
         title: '✗ Erro na Limpeza',
         message: errorMessage,
         color: 'red',
@@ -191,7 +191,7 @@ export default function CultureSyncAdmin({
     try {
       setCleaning(true);
       const result = await cleanupExpiredLogs();
-      notifications.show({
+      notify.show({
         title: '✓ Limpeza de Logs Concluída',
         message: `${result.deleted_count} registros de log apagados`,
         color: 'green',
@@ -200,7 +200,7 @@ export default function CultureSyncAdmin({
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Erro desconhecido';
-      notifications.show({
+      notify.show({
         title: '✗ Erro ao limpar logs',
         message: errorMessage,
         color: 'red',
@@ -215,7 +215,7 @@ export default function CultureSyncAdmin({
     try {
       setCleaning(true);
       const result = await cleanupStaleHashes();
-      notifications.show({
+      notify.show({
         title: '✓ Limpeza de Hashes Concluída',
         message: `${result.deleted_count} registros de hash removidos`,
         color: 'green',
@@ -224,7 +224,7 @@ export default function CultureSyncAdmin({
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Erro desconhecido';
-      notifications.show({
+      notify.show({
         title: '✗ Erro ao limpar hashes',
         message: errorMessage,
         color: 'red',
@@ -242,7 +242,7 @@ export default function CultureSyncAdmin({
       setFullImportMessage('Iniciando importação...');
       setFullImportModalOpen(true);
 
-      notifications.show({
+      notify.show({
         title: 'Importação Iniciada',
         message:
           'Buscando todas as culturas do RNC. Isto pode levar alguns minutos...',
@@ -292,13 +292,13 @@ export default function CultureSyncAdmin({
       console.log('═══════════════════════════════════════════');
 
       if (result.success) {
-        notifications.show({
+        notify.show({
           title: '✓ Importação Completa Concluída',
           message: `Importados: ${result.total_imported} | Ignorados: ${result.total_skipped} | Erros: ${result.total_errors} | Tempo: ${result.duration_seconds}s`,
           color: 'green',
         });
       } else {
-        notifications.show({
+        notify.show({
           title: '⚠ Importação Concluída com Problemas',
           message: `Importados: ${result.total_imported} | Erros: ${result.total_errors}`,
           color: 'yellow',
@@ -316,7 +316,7 @@ export default function CultureSyncAdmin({
       const errorMessage =
         error instanceof Error ? error.message : 'Erro desconhecido';
       console.error('❌ Erro na importação completa:', errorMessage);
-      notifications.show({
+      notify.show({
         title: '✗ Erro na Importação',
         message: errorMessage,
         color: 'red',
@@ -332,7 +332,7 @@ export default function CultureSyncAdmin({
   const handleManualSync = async () => {
     try {
       setSyncing(true);
-      notifications.show({
+      notify.show({
         title: 'Sincronização Iniciada',
         message: 'Buscando dados do RNC...',
         color: 'blue',
@@ -351,7 +351,7 @@ export default function CultureSyncAdmin({
       // Sincroniza em lote
       const result = await bulkSyncRncRecords(rncResponse.items, 'manual');
 
-      notifications.show({
+      notify.show({
         title: '✓ Sincronização Concluída',
         message: `Importados: ${result.imported} | Atualizados: ${result.updated} | Ignorados: ${result.skipped} | Erros: ${result.errors}`,
         color: result.errors === 0 ? 'green' : 'yellow',
@@ -361,7 +361,7 @@ export default function CultureSyncAdmin({
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Erro desconhecido';
-      notifications.show({
+      notify.show({
         title: '✗ Erro na Sincronização',
         message: errorMessage,
         color: 'red',
@@ -376,7 +376,7 @@ export default function CultureSyncAdmin({
     try {
       setLoading(true);
       await scheduleNextSync(syncInterval);
-      notifications.show({
+      notify.show({
         title: '✓ Configurações Salvas',
         message: `Próxima sincronização em ${syncInterval} horas`,
         color: 'green',
@@ -384,7 +384,7 @@ export default function CultureSyncAdmin({
       setSettingsOpen(false);
       await loadSyncData();
     } catch (error) {
-      notifications.show({
+      notify.show({
         title: 'Erro',
         message: 'Falha ao salvar configurações',
         color: 'red',

@@ -8,7 +8,7 @@ import {
   Table,
   Text,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { notify } from 'lib/notify';
 import { useEffect, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import { type AppThemeMode, getBrandPalette, type BrandPalette } from '../../mantine/brand';
@@ -77,7 +77,7 @@ export default function ThemePersonalization() {
 
   const handleResetMode = (mode: AppThemeMode) => {
     resetBrandThemeMode(mode);
-    notifications.show({
+    notify.show({
       title: 'Tema resetado',
       message: `As cores de ${mode === 'dark' ? 'dark' : 'light'} voltaram ao padrao.`,
       color: 'green',
@@ -86,7 +86,7 @@ export default function ThemePersonalization() {
 
   const handleResetAll = () => {
     resetBrandThemeAll();
-    notifications.show({
+    notify.show({
       title: 'Personalizacao removida',
       message: 'Todos os ajustes de cores foram resetados.',
       color: 'green',
