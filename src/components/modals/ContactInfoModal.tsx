@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@components/ui/dialog';
+import { Input } from '@components/ui/input';
+import { Label } from '@components/ui/label';
+import { Button } from '@components/ui/button';
 import {
   mapCanonicalPointsToContactInfo,
   mapContactInfoToCanonicalPoints,
@@ -100,79 +109,105 @@ export default function ContactInfoModal({
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} centered title={title}>
-      <Stack gap="sm">
-        <Text size="sm" c="dimmed">
-          {subtitle}
-        </Text>
+    <Dialog open={opened} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
 
-        <TextInput
-          label="Email"
-          placeholder="contato@empresa.com"
-          value={draft.email ?? ''}
-          onChange={(event) =>
-            setDraft((prev) => ({ ...prev, email: event.currentTarget.value }))
-          }
-          error={emailError}
-        />
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            {subtitle}
+          </p>
 
-        <TextInput
-          label="Telefone"
-          placeholder="(00) 00000-0000"
-          value={draft.phone}
-          onChange={(event) =>
-            setDraft((prev) => ({ ...prev, phone: event.currentTarget.value }))
-          }
-        />
+          <div className="space-y-1.5">
+            <Label htmlFor="contact-email">Email</Label>
+            <Input
+              id="contact-email"
+              placeholder="contato@empresa.com"
+              value={draft.email ?? ''}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, email: e.target.value }))
+              }
+            />
+            {emailError && (
+              <p className="text-xs text-destructive">{emailError}</p>
+            )}
+          </div>
 
-        <TextInput
-          label="Website"
-          placeholder="https://empresa.com.br"
-          value={draft.website}
-          onChange={(event) =>
-            setDraft((prev) => ({ ...prev, website: event.currentTarget.value }))
-          }
-        />
+          <div className="space-y-1.5">
+            <Label htmlFor="contact-phone">Telefone</Label>
+            <Input
+              id="contact-phone"
+              placeholder="(00) 00000-0000"
+              value={draft.phone}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, phone: e.target.value }))
+              }
+            />
+          </div>
 
-        <TextInput
-          label="Rede social"
-          placeholder="Instagram, LinkedIn, Facebook..."
-          value={draft.socialNetwork}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              socialNetwork: event.currentTarget.value,
-            }))
-          }
-        />
+          <div className="space-y-1.5">
+            <Label htmlFor="contact-website">Website</Label>
+            <Input
+              id="contact-website"
+              placeholder="https://empresa.com.br"
+              value={draft.website}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, website: e.target.value }))
+              }
+            />
+          </div>
 
-        <TextInput
-          label="URL/usuário da rede"
-          placeholder="https://instagram.com/empresa ou @empresa"
-          value={draft.socialUrl}
-          onChange={(event) =>
-            setDraft((prev) => ({ ...prev, socialUrl: event.currentTarget.value }))
-          }
-        />
+          <div className="space-y-1.5">
+            <Label htmlFor="contact-social-network">Rede social</Label>
+            <Input
+              id="contact-social-network"
+              placeholder="Instagram, LinkedIn, Facebook..."
+              value={draft.socialNetwork}
+              onChange={(e) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  socialNetwork: e.target.value,
+                }))
+              }
+            />
+          </div>
 
-        <TextInput
-          label="Endereço"
-          placeholder="Rua, número, bairro, cidade"
-          value={draft.address}
-          onChange={(event) =>
-            setDraft((prev) => ({ ...prev, address: event.currentTarget.value }))
-          }
-        />
+          <div className="space-y-1.5">
+            <Label htmlFor="contact-social-url">URL/usuário da rede</Label>
+            <Input
+              id="contact-social-url"
+              placeholder="https://instagram.com/empresa ou @empresa"
+              value={draft.socialUrl}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, socialUrl: e.target.value }))
+              }
+            />
+          </div>
 
-        <Group justify="flex-end" mt="xs">
-          <Button variant="light" color="gray" onClick={onClose} disabled={saving}>
+          <div className="space-y-1.5">
+            <Label htmlFor="contact-address">Endereço</Label>
+            <Input
+              id="contact-address"
+              placeholder="Rua, número, bairro, cidade"
+              value={draft.address}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, address: e.target.value }))
+              }
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="mt-2">
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} loading={saving} disabled={saveDisabled}>
-            Salvar contato
+          <Button onClick={() => void handleSave()} disabled={saveDisabled}>
+            {saving ? 'Salvando...' : 'Salvar contato'}
           </Button>
-        </Group>
-      </Stack>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

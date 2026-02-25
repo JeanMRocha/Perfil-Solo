@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, Stack, Text, Title } from '@mantine/core';
+import { Card, CardContent } from '@components/ui/card';
 import {
   getSystemBrand,
   subscribeSystemConfig,
@@ -16,19 +16,19 @@ export default function CookiesNotice() {
   }, []);
 
   return (
-    <Card withBorder radius="md" p="lg">
-      <Stack gap="sm">
-        <Title order={3}>Aviso de Cookies</Title>
-        <Text c="dimmed">
+    <Card>
+      <CardContent className="flex flex-col gap-3 p-6">
+        <h3 className="text-lg font-semibold">Aviso de Cookies</h3>
+        <p className="text-muted-foreground">
           O {systemName} utiliza cookies e armazenamento local para manter sessao,
           preferencias de interface e recursos de produtividade, como filtros e
           historico de notificacoes.
-        </Text>
-        <Text c="dimmed">
+        </p>
+        <p className="text-muted-foreground">
           Ao continuar utilizando a plataforma, o usuario concorda com esse uso para
           fins estritamente operacionais e de experiencia.
-        </Text>
-      </Stack>
+        </p>
+      </CardContent>
     </Card>
   );
 }

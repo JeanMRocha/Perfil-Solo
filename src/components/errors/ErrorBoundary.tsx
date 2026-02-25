@@ -1,19 +1,7 @@
 import React, { Component, ReactNode } from 'react';
-import {
-  Button,
-  Card,
-  Stack,
-  Text,
-  Title,
-  Group,
-  Code,
-  Divider,
-} from '@mantine/core';
-import {
-  IconAlertTriangle,
-  IconRotateClockwise,
-  IconHome,
-} from '@tabler/icons-react';
+import { Card, CardContent } from '@components/ui/card';
+import { Button } from '@components/ui/button';
+import { AlertTriangle, RotateCw, Home } from 'lucide-react';
 import { registrarLogLocal } from '@services/loggerLocal';
 import { shouldCaptureObservability } from '@services/observabilityConfig';
 import {
@@ -26,7 +14,7 @@ import {
  * - Aguenta erros que não são instâncias de Error (ex.: objetos crus)
  * - Serialização segura (evita "Cannot convert object to primitive value")
  * - Log remoto (services/loggerService) com fallback local (services/loggerLocal)
- * - Mantine UI amigável com opções de recarregar e voltar ao painel
+ * - UI amigável com opções de recarregar e voltar ao painel
  */
 
 interface Props {
@@ -195,64 +183,55 @@ export class ErrorBoundary extends Component<Props, State> {
       const { message, stack, timestamp, origin } = this.state.errorInfo;
 
       return (
-        <Stack align="center" justify="center" h="100vh" p="lg">
-          <Card shadow="lg" radius="md" withBorder maw={540}>
-            <Group align="center" justify="center" mb="md">
-              <IconAlertTriangle size={48} color="#f59e0b" />
-            </Group>
+        <div className="flex h-screen items-center justify-center p-6">
+          <Card className="max-w-[540px] shadow-lg">
+            <CardContent className="p-6">
+              <div className="mb-4 flex items-center justify-center">
+                <AlertTriangle className="h-12 w-12 text-amber-500" />
+              </div>
 
-            <Title order={3} ta="center" c="orange.8">
-              Oops! Algo deu errado 🌱
-            </Title>
+              <h3 className="text-center text-lg font-semibold text-orange-700 dark:text-orange-400">
+                Oops! Algo deu errado 🌱
+              </h3>
 
-            <Text ta="center" c="dimmed" mt="xs">
-              Houve um erro inesperado na aplicação. Você pode tentar recarregar
-              ou voltar ao painel principal.
-            </Text>
+              <p className="mt-2 text-center text-sm text-muted-foreground">
+                Houve um erro inesperado na aplicação. Você pode tentar recarregar
+                ou voltar ao painel principal.
+              </p>
 
-            <Group justify="center" mt="lg">
-              <Button
-                leftSection={<IconRotateClockwise size={16} />}
-                onClick={this.handleReload}
-                color="green"
-              >
-                Recarregar
-              </Button>
-              <Button
-                leftSection={<IconHome size={16} />}
-                onClick={this.handleGoHome}
-                variant="light"
-                color="gray"
-              >
-                Abrir painel
-              </Button>
-              <Button
-                onClick={this.handleCopyLog}
-                variant="subtle"
-                color="orange"
-              >
-                Copiar log
-              </Button>
-            </Group>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <Button onClick={this.handleReload}>
+                  <RotateCw className="mr-1.5 h-4 w-4" />
+                  Recarregar
+                </Button>
+                <Button variant="secondary" onClick={this.handleGoHome}>
+                  <Home className="mr-1.5 h-4 w-4" />
+                  Abrir painel
+                </Button>
+                <Button variant="ghost" onClick={this.handleCopyLog}>
+                  Copiar log
+                </Button>
+              </div>
 
-            <Divider my="md" />
+              <hr className="my-4 border-border" />
 
-            <Stack gap="xs">
-              <Text size="sm" fw={500}>
-                <strong>Mensagem:</strong> {message}
-              </Text>
-              <Text size="sm" c="dimmed">
-                <strong>Rota:</strong> {origin}
-              </Text>
-              <Text size="sm" c="dimmed">
-                <strong>Horário:</strong> {new Date(timestamp).toLocaleString()}
-              </Text>
-              <Code block fz="xs" mt="sm" c="red.7">
-                {stack?.split('\n').slice(0, 6).join('\n')}
-              </Code>
-            </Stack>
+              <div className="flex flex-col gap-1">
+                <p className="text-sm">
+                  <strong>Mensagem:</strong> {message}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  <strong>Rota:</strong> {origin}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  <strong>Horário:</strong> {new Date(timestamp).toLocaleString()}
+                </p>
+                <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs text-red-600 dark:text-red-400">
+                  {stack?.split('\n').slice(0, 6).join('\n')}
+                </pre>
+              </div>
+            </CardContent>
           </Card>
-        </Stack>
+        </div>
       );
     }
 

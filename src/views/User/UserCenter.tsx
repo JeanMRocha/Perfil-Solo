@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Container, Tabs, Text } from '@mantine/core';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@components/ui/tabs';
 import PageHeader from '../../components/PageHeader';
 import {
   buildUserCenterPath,
@@ -63,61 +63,61 @@ export default function UserCenter() {
     navigate(buildUserCenterPath('perfil'), { replace: true });
   }, [isPessoaJuridica, navigate, requestedTab]);
 
-  const handleTabChange = (value: string | null) => {
+  const handleTabChange = (value: string) => {
     const nextTab = resolveUserCenterTab(`?tab=${value ?? ''}`);
     if (nextTab === activeTab) return;
     navigate(buildUserCenterPath(nextTab as UserCenterTab), { replace: true });
   };
 
   return (
-    <Container size="xl" mt="md">
+    <div className="container mx-auto mt-4 max-w-7xl">
       <PageHeader title="Central do Usuário" />
-      <Text c="dimmed" size="sm" mb="xs">
+      <p className="mb-2 text-sm text-muted-foreground">
         Interface consolidada do usuario logado: usuario, seguranca, jornada, plano, creditos e cupons.
-      </Text>
+      </p>
 
-      <Tabs value={activeTab} onChange={handleTabChange} variant="outline" keepMounted={false}>
-        <Tabs.List>
-          <Tabs.Tab value="perfil">Usuario</Tabs.Tab>
-          <Tabs.Tab value="seguranca">Seguranca</Tabs.Tab>
-          {isPessoaJuridica ? <Tabs.Tab value="empresa">Empresa</Tabs.Tab> : null}
-          <Tabs.Tab value="jornada">Jornada</Tabs.Tab>
-          <Tabs.Tab value="plano">Plano e Faturamento</Tabs.Tab>
-          <Tabs.Tab value="creditos">Creditos</Tabs.Tab>
-          <Tabs.Tab value="cupons">Cupons</Tabs.Tab>
-        </Tabs.List>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList>
+          <TabsTrigger value="perfil">Usuario</TabsTrigger>
+          <TabsTrigger value="seguranca">Seguranca</TabsTrigger>
+          {isPessoaJuridica ? <TabsTrigger value="empresa">Empresa</TabsTrigger> : null}
+          <TabsTrigger value="jornada">Jornada</TabsTrigger>
+          <TabsTrigger value="plano">Plano e Faturamento</TabsTrigger>
+          <TabsTrigger value="creditos">Creditos</TabsTrigger>
+          <TabsTrigger value="cupons">Cupons</TabsTrigger>
+        </TabsList>
 
-        <Tabs.Panel value="perfil" pt="xs">
+        <TabsContent value="perfil" className="pt-2">
           <ProfilePage embedded />
-        </Tabs.Panel>
+        </TabsContent>
 
-        <Tabs.Panel value="seguranca" pt="xs">
+        <TabsContent value="seguranca" className="pt-2">
           <TwoFactorSecurityCard />
           <LoginHistoryCard />
-        </Tabs.Panel>
+        </TabsContent>
 
         {isPessoaJuridica ? (
-          <Tabs.Panel value="empresa" pt="xs">
+          <TabsContent value="empresa" className="pt-2">
             <CompanyPanel />
-          </Tabs.Panel>
+          </TabsContent>
         ) : null}
 
-        <Tabs.Panel value="jornada" pt="xs">
+        <TabsContent value="jornada" className="pt-2">
           <GamificationPanel />
-        </Tabs.Panel>
+        </TabsContent>
 
-        <Tabs.Panel value="plano" pt="xs">
+        <TabsContent value="plano" className="pt-2">
           <BillingSettings />
-        </Tabs.Panel>
+        </TabsContent>
 
-        <Tabs.Panel value="creditos" pt="xs">
+        <TabsContent value="creditos" className="pt-2">
           <CreditsCenter embedded view="creditos" />
-        </Tabs.Panel>
+        </TabsContent>
 
-        <Tabs.Panel value="cupons" pt="xs">
+        <TabsContent value="cupons" className="pt-2">
           <CreditsCenter embedded view="cupons" />
-        </Tabs.Panel>
+        </TabsContent>
       </Tabs>
-    </Container>
+    </div>
   );
 }

@@ -1,12 +1,11 @@
-import { Container } from '@mantine/core';
 import PageHeader from '../../components/PageHeader';
 import ServicosManager from './ServicosManager';
 
 export default function ServicosBusca() {
   return (
-    <Container size="xl" mt="xl">
+    <div className="container mx-auto mt-6 max-w-7xl">
       <PageHeader title="Busca de Servicos" />
       <ServicosManager />
-    </Container>
+    </div>
   );
 }

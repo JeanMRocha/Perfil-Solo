@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, Stack, Text, Title } from '@mantine/core';
+import { Card, CardContent } from '@components/ui/card';
 import {
   getSystemBrand,
   subscribeSystemConfig,
@@ -16,19 +16,19 @@ export default function PrivacyPolicy() {
   }, []);
 
   return (
-    <Card withBorder radius="md" p="lg">
-      <Stack gap="sm">
-        <Title order={3}>Politica de Privacidade</Title>
-        <Text c="dimmed">
+    <Card>
+      <CardContent className="flex flex-col gap-3 p-6">
+        <h3 className="text-lg font-semibold">Politica de Privacidade</h3>
+        <p className="text-muted-foreground">
           O {systemName} utiliza dados para operacao da plataforma, suporte e melhoria
           continua do produto. Dados tecnicos e cadastrais sao tratados com controle
           de acesso por usuario.
-        </Text>
-        <Text c="dimmed">
+        </p>
+        <p className="text-muted-foreground">
           O usuario pode solicitar revisao, atualizacao ou remocao de dados pessoais
           conforme as diretrizes legais aplicaveis.
-        </Text>
-      </Stack>
+        </p>
+      </CardContent>
     </Card>
   );
 }

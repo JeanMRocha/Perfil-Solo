@@ -1,33 +1,17 @@
-import {
-  Center,
-  Stack,
-  Loader,
-  Text,
-  useMantineColorScheme,
-  Card,
-} from '@mantine/core';
+import { Loader2 } from 'lucide-react';
+import { Card, CardContent } from '@components/ui/card';
 
 type Props = { message?: string };
 
 export default function LoaderGlobal({ message = 'Carregando...' }: Props) {
-  const { colorScheme } = useMantineColorScheme();
-
   return (
-    <Center
-      h="100vh"
-      w="100vw"
-      style={{
-        background: colorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa',
-      }}
-    >
-      <Card withBorder radius="md" p="lg" shadow="sm">
-        <Stack align="center" gap="xs">
-          <Loader size="lg" />
-          <Text fw={600} c="dimmed">
-            {message}
-          </Text>
-        </Stack>
+    <div className="flex h-screen w-screen items-center justify-center bg-background">
+      <Card className="shadow-sm">
+        <CardContent className="flex flex-col items-center gap-2 p-6">
+          <Loader2 className="h-8 w-8 animate-spin text-brand" />
+          <span className="font-semibold text-muted-foreground">{message}</span>
+        </CardContent>
       </Card>
-    </Center>
+    </div>
   );
 }

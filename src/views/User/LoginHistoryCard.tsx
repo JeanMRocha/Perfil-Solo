@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { Badge, Box, Card, Group, ScrollArea, Stack, Text } from '@mantine/core';
+import { Card, CardContent } from '@components/ui/card';
+import { Badge } from '@components/ui/badge';
+import { ScrollArea } from '@components/ui/scroll-area';
 import { $currUser } from '../../global-state/user';
 import {
   LOGIN_HISTORY_UPDATED_EVENT,
@@ -64,54 +66,47 @@ export default function LoginHistoryCard() {
   }, [loadRows, userId]);
 
   return (
-    <Card withBorder radius="md" p="sm">
-      <Stack gap="xs">
-        <Group justify="space-between" align="center">
-          <Text fw={700}>Ultimos acessos</Text>
-          <Badge variant="light" color="blue">
-            10 mais recentes
-          </Badge>
-        </Group>
+    <Card>
+      <CardContent className="flex flex-col gap-2 p-3">
+        <div className="flex items-center justify-between">
+          <span className="font-bold">Ultimos acessos</span>
+          <Badge variant="secondary">10 mais recentes</Badge>
+        </div>
 
         {rows.length === 0 ? (
-          <Text size="sm" c="dimmed">
+          <p className="text-sm text-muted-foreground">
             Nenhum login registrado ainda.
-          </Text>
+          </p>
         ) : (
-          <ScrollArea.Autosize mah={260} type="always">
-            <Stack gap={6}>
+          <ScrollArea className="max-h-[260px]">
+            <div className="flex flex-col gap-1.5">
               {rows.map((row) => (
-                <Box
+                <div
                   key={row.id}
-                  style={{
-                    border: '1px solid rgba(100, 116, 139, 0.35)',
-                    borderRadius: 8,
-                    padding: '6px 8px',
-                  }}
+                  className="rounded-lg border border-border p-1.5 px-2"
                 >
-                  <Group justify="space-between" wrap="nowrap" gap="xs">
-                    <Stack gap={0} style={{ minWidth: 0 }}>
-                      <Text size="sm" fw={600} lineClamp={1}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
                         {formatDateTime(row.created_at)}
-                      </Text>
-                      <Text size="xs" c="dimmed" lineClamp={1}>
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
                         {resolveSourceLabel(row.source)} | {row.browser} | {row.platform}
-                      </Text>
-                    </Stack>
+                      </p>
+                    </div>
                     <Badge
-                      size="sm"
-                      variant="light"
-                      color={row.provider === 'local' ? 'grape' : 'teal'}
+                      variant={row.provider === 'local' ? 'outline' : 'default'}
+                      className="shrink-0 text-xs"
                     >
                       {row.provider}
                     </Badge>
-                  </Group>
-                </Box>
+                  </div>
+                </div>
               ))}
-            </Stack>
-          </ScrollArea.Autosize>
+            </div>
+          </ScrollArea>
         )}
-      </Stack>
+      </CardContent>
     </Card>
   );
 }

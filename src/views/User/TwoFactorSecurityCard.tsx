@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Group, Stack, Switch, Text, TextInput, Title } from '@mantine/core';
 import { notify } from 'lib/notify';
 import { useStore } from '@nanostores/react';
+import { Card, CardContent } from '@components/ui/card';
+import { Input } from '@components/ui/input';
+import { Label } from '@components/ui/label';
+import { Button } from '@components/ui/button';
+import { Switch } from '@components/ui/switch';
 import { $currUser } from '../../global-state/user';
 import { claimCreditEngagementReward } from '../../services/creditsService';
 import {
@@ -153,50 +157,67 @@ export default function TwoFactorSecurityCard() {
   };
 
   return (
-    <Card withBorder radius="md" p="sm" mb="xs">
-      <Stack gap="xs">
-        <Group justify="space-between" align="start" wrap="wrap">
+    <Card className="mb-2">
+      <CardContent className="flex flex-col gap-2 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <Title order={6}>Seguranca: fator de 2 etapas</Title>
-            <Text size="xs" c="dimmed">
+            <h6 className="text-sm font-semibold">Seguranca: fator de 2 etapas</h6>
+            <p className="text-xs text-muted-foreground">
               Por padrao fica desativado e so pode ser ativado apos confirmacao de identidade.
-            </Text>
+            </p>
           </div>
-          <Switch
-            checked={enabled}
-            onChange={(event) => handleToggle(event.currentTarget.checked)}
-            disabled={!confirmedAt && !enabled}
-            label={enabled ? 'Ativado' : 'Desativado'}
-          />
-        </Group>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="two-factor-switch"
+              checked={enabled}
+              onCheckedChange={handleToggle}
+              disabled={!confirmedAt && !enabled}
+            />
+            <Label htmlFor="two-factor-switch" className="text-sm">
+              {enabled ? 'Ativado' : 'Desativado'}
+            </Label>
+          </div>
+        </div>
 
         {confirmedAt ? (
-          <Text size="xs" c="dimmed">
+          <p className="text-xs text-muted-foreground">
             Identidade confirmada em: {confirmedLabel}
-          </Text>
+          </p>
         ) : (
-          <Stack gap="xs">
-            <Text size="sm" c="yellow.7">
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-yellow-600 dark:text-yellow-400">
               Confirme identidade para habilitar o 2 etapas.
-            </Text>
-            <Group align="end" wrap="wrap" gap="xs">
-              <Button size="xs" variant="light" loading={sendingCode} onClick={() => void handleSendCode()}>
-                Enviar codigo
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={sendingCode}
+                onClick={() => void handleSendCode()}
+              >
+                {sendingCode ? 'Enviando...' : 'Enviar codigo'}
               </Button>
-              <TextInput
-                label="Codigo"
-                placeholder="000000"
-                value={code}
-                onChange={(event) => setCode(event.currentTarget.value)}
-                w={140}
-              />
-              <Button size="xs" loading={verifyingCode} onClick={() => void handleConfirmIdentity()}>
-                Confirmar
+              <div className="space-y-1">
+                <Label htmlFor="2fa-code" className="text-xs">Codigo</Label>
+                <Input
+                  id="2fa-code"
+                  placeholder="000000"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="w-[140px]"
+                />
+              </div>
+              <Button
+                size="sm"
+                disabled={verifyingCode}
+                onClick={() => void handleConfirmIdentity()}
+              >
+                {verifyingCode ? 'Verificando...' : 'Confirmar'}
               </Button>
-            </Group>
-          </Stack>
+            </div>
+          </div>
         )}
-      </Stack>
+      </CardContent>
     </Card>
   );
 }

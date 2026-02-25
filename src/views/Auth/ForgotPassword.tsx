@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Card, Stack, TextInput, Button, Title, Text } from '@mantine/core';
 import { notify } from 'lib/notify';
 import { useNavigate } from 'react-router-dom';
 import { LoaderInline } from '@components/loaders';
 import { setLoading } from '@global/loadingStore';
 import { isLocalDataMode } from '@services/dataProvider';
+import { Card, CardContent } from '@components/ui/card';
+import { Input } from '@components/ui/input';
+import { Label } from '@components/ui/label';
+import { Button } from '@components/ui/button';
 import {
   isValidEmail,
   requestIdentityChallengeCode,
@@ -93,58 +96,61 @@ export default function ForgotPassword() {
   }
 
   return (
-    <Card shadow="sm" radius="md" p="xl" maw={420} mx="auto" mt="10%">
-      <Stack>
-        <Title order={3} c="green.8" ta="center">
-          Recuperar Conta
-        </Title>
+    <div className="mt-[10%] mx-auto max-w-[420px]">
+      <Card className="shadow-sm">
+        <CardContent className="flex flex-col gap-4 p-6">
+          <h3 className="text-center text-lg font-semibold text-brand">
+            Recuperar Conta
+          </h3>
 
-        <TextInput
-          label="E-mail cadastrado"
-          placeholder="usuário@email.com"
-          value={email}
-          onChange={(e) => setEmail(e.currentTarget.value)}
-          disabled={step === 'done'}
-        />
+          <div className="space-y-1.5">
+            <Label htmlFor="forgot-email">E-mail cadastrado</Label>
+            <Input
+              id="forgot-email"
+              placeholder="usuário@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={step === 'done'}
+            />
+          </div>
 
-        {step === 'verify' ? (
-          <TextInput
-            label="Código de verificacao"
-            placeholder="Digite o código enviado"
-            value={code}
-            onChange={(e) => setCode(e.currentTarget.value)}
-          />
-        ) : null}
+          {step === 'verify' ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="forgot-code">Código de verificacao</Label>
+              <Input
+                id="forgot-code"
+                placeholder="Digite o código enviado"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+            </div>
+          ) : null}
 
-        {step === 'request' ? (
-          <Button color="green" radius="md" onClick={() => void handleSendCode()} disabled={submitting}>
-            Enviar codigo de identidade
-          </Button>
-        ) : null}
+          {step === 'request' ? (
+            <Button onClick={() => void handleSendCode()} disabled={submitting}>
+              Enviar codigo de identidade
+            </Button>
+          ) : null}
 
-        {step === 'verify' ? (
-          <Button
-            color="green"
-            radius="md"
-            onClick={() => void handleVerifyAndRecover()}
-            disabled={submitting}
-          >
-            Validar identidade e recuperar
-          </Button>
-        ) : null}
+          {step === 'verify' ? (
+            <Button onClick={() => void handleVerifyAndRecover()} disabled={submitting}>
+              Validar identidade e recuperar
+            </Button>
+          ) : null}
 
-        {step === 'done' ? (
-          <Button color="blue" radius="md" onClick={() => navigate('/auth')}>
-            Ir para login
-          </Button>
-        ) : null}
+          {step === 'done' ? (
+            <Button variant="secondary" onClick={() => navigate('/auth')}>
+              Ir para login
+            </Button>
+          ) : null}
 
-        {submitting && <LoaderInline message="Processando..." />}
+          {submitting && <LoaderInline message="Processando..." />}
 
-        <Text fz="sm" ta="center" mt="sm">
-          <a href="/auth">Ir para login</a>
-        </Text>
-      </Stack>
-    </Card>
+          <p className="mt-1 text-center text-sm text-muted-foreground">
+            <a href="/auth" className="underline hover:text-foreground">Ir para login</a>
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

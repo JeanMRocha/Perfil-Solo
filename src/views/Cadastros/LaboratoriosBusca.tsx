@@ -1,12 +1,11 @@
-import { Container } from '@mantine/core';
 import PageHeader from '../../components/PageHeader';
 import LaboratoriosSettings from '../Config/LaboratoriosSettings';
 
 export default function LaboratoriosBusca() {
   return (
-    <Container size="xl" mt="xl">
+    <div className="container mx-auto mt-6 max-w-7xl">
       <PageHeader title="Busca de Laboratorios" />
       <LaboratoriosSettings />
-    </Container>
+    </div>
   );
 }

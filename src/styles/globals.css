@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    /* ── Paleta PerfilSolo (verde marca + azul accent) ── */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
 
@@ -13,26 +14,36 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
+    /* Verde marca (#26a460 → HSL ~149 62% 39%) */
+    --primary: 149 62% 39%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 150 20% 96%;
+    --secondary-foreground: 150 40% 15%;
 
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Azul accent (#3b82f6 → HSL ~217 91% 60%) */
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --ring: 149 62% 39%;
 
     --radius: 0.5rem;
+
+    /* ── Tokens extras da marca ── */
+    --brand: 149 62% 39%;
+    --brand-foreground: 0 0% 100%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -45,7 +56,8 @@
     --popover: 222 47% 2.8%;
     --popover-foreground: 213 31% 91%;
 
-    --primary: 217.2 91.2% 59.8%;
+    /* Verde marca dark (#22c55e → HSL ~142 71% 45%) */
+    --primary: 142 71% 45%;
     --primary-foreground: 222.2 47.4% 11.2%;
 
     --secondary: 222 47% 8.5%;
@@ -54,15 +66,24 @@
     --muted: 222 47% 8.5%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 222 47% 8.5%;
-    --accent-foreground: 210 40% 98%;
+    /* Azul accent dark (#60a5fa → HSL ~217 92% 68%) */
+    --accent: 217 92% 68%;
+    --accent-foreground: 222.2 47.4% 11.2%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 222 47% 12%;
     --input: 222 47% 12%;
-    --ring: 224.3 76.3% 48%;
+    --ring: 142 71% 45%;
+
+    /* ── Tokens extras da marca (dark) ── */
+    --brand: 142 71% 45%;
+    --brand-foreground: 0 0% 100%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
   }
 }
 

@@ -1,6 +1,7 @@
-import { Button, Container, Tabs, Text } from '@mantine/core';
-import { notify } from 'lib/notify';
 import { useState } from 'react';
+import { notify } from 'lib/notify';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@components/ui/tabs';
+import { Button } from '@components/ui/button';
 import PageHeader from '../../components/PageHeader';
 import { isLocalDataMode } from '../../services/dataProvider';
 import { clearLocalDb } from '../../services/localDb';
@@ -41,49 +42,49 @@ export default function Settings() {
   }
 
   return (
-    <Container size="md" mt="xl">
+    <div className="container mx-auto mt-6 max-w-3xl">
       <PageHeader title="Configurações" />
 
-      <Tabs defaultValue="billing" variant="outline" mt="md">
-        <Tabs.List>
-          <Tabs.Tab value="billing">Faturamento</Tabs.Tab>
-          <Tabs.Tab value="culturas">Culturas</Tabs.Tab>
-          <Tabs.Tab value="laboratorios">Laboratorios</Tabs.Tab>
-          <Tabs.Tab value="general">Geral</Tabs.Tab>
-        </Tabs.List>
+      <Tabs defaultValue="billing" className="mt-4">
+        <TabsList>
+          <TabsTrigger value="billing">Faturamento</TabsTrigger>
+          <TabsTrigger value="culturas">Culturas</TabsTrigger>
+          <TabsTrigger value="laboratorios">Laboratorios</TabsTrigger>
+          <TabsTrigger value="general">Geral</TabsTrigger>
+        </TabsList>
 
-        <Tabs.Panel value="billing" pt="md">
+        <TabsContent value="billing" className="pt-4">
           <BillingSettings />
-        </Tabs.Panel>
+        </TabsContent>
 
-        <Tabs.Panel value="culturas" pt="md">
+        <TabsContent value="culturas" className="pt-4">
           <CulturasSettings />
-        </Tabs.Panel>
+        </TabsContent>
 
-        <Tabs.Panel value="laboratorios" pt="md">
+        <TabsContent value="laboratorios" className="pt-4">
           <LaboratoriosSettings />
-        </Tabs.Panel>
+        </TabsContent>
 
-        <Tabs.Panel value="general" pt="md">
-          <Text c="dimmed" mb="sm">
+        <TabsContent value="general" className="pt-4">
+          <p className="mb-3 text-muted-foreground">
             Ferramentas gerais em desenvolvimento.
-          </Text>
+          </p>
 
           {isLocalDataMode ? (
             <Button
-              color="red"
-              loading={isResetting}
+              variant="destructive"
+              disabled={isResetting}
               onClick={handleResetLocalDb}
             >
-              Resetar banco local
+              {isResetting ? 'Resetando...' : 'Resetar banco local'}
             </Button>
           ) : (
-            <Text c="dimmed" size="sm">
+            <p className="text-sm text-muted-foreground">
               O reset local esta disponivel apenas no modo local.
-            </Text>
+            </p>
           )}
-        </Tabs.Panel>
+        </TabsContent>
       </Tabs>
-    </Container>
+    </div>
   );
 }

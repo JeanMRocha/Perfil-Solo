@@ -1,18 +1,17 @@
-import { Stack, Text, Title } from '@mantine/core';
 import CadastroAnaliseSolo from './CadastroAnaliseSolo';
 
 export default function DashboardAnaliseSolo() {
   return (
-    <Stack gap="md">
+    <div className="flex flex-col gap-4">
       <div>
-        <Title order={3} c="green.8">
+        <h3 className="text-lg font-semibold text-brand">
           Analises de Solo
-        </Title>
-        <Text size="sm" c="dimmed">
+        </h3>
+        <p className="text-sm text-muted-foreground">
           Cadastro, interpretacao e historico da area.
-        </Text>
+        </p>
       </div>
       <CadastroAnaliseSolo />
-    </Stack>
+    </div>
   );
 }

@@ -1,16 +1,11 @@
 import { useState } from 'react';
-import {
-  Button,
-  Card,
-  PasswordInput,
-  Stack,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core';
 import { notify } from 'lib/notify';
 import { useNavigate } from 'react-router-dom';
 import { LoaderInline } from '@components/loaders';
+import { Card, CardContent } from '@components/ui/card';
+import { Input } from '@components/ui/input';
+import { Label } from '@components/ui/label';
+import { Button } from '@components/ui/button';
 import { setLoading } from '@global/loadingStore';
 import { signInLocal } from '@global/user';
 import { registerAndEnsureUserCredits } from '@services/creditsService';
@@ -126,68 +121,80 @@ export default function Register() {
   }
 
   return (
-    <Card shadow="sm" radius="md" p="xl" maw={400} mx="auto" mt="10%">
-      <Stack>
-        <ContactInfoModal
-          opened={contactModalOpened}
-          onClose={() => setContactModalOpened(false)}
-          onSave={async (draft) => {
-            setContact(draft);
-            setContactModalOpened(false);
-          }}
-          value={contact}
-          title="Contato para compartilhamento"
-          subtitle="Esses dados serao usados nos relatorios e modulos."
-        />
+    <div className="mt-[10%] mx-auto max-w-[400px]">
+      <Card className="shadow-sm">
+        <CardContent className="flex flex-col gap-4 p-6">
+          <ContactInfoModal
+            opened={contactModalOpened}
+            onClose={() => setContactModalOpened(false)}
+            onSave={async (draft) => {
+              setContact(draft);
+              setContactModalOpened(false);
+            }}
+            value={contact}
+            title="Contato para compartilhamento"
+            subtitle="Esses dados serao usados nos relatorios e modulos."
+          />
 
-        <Title order={3} c="green.8" ta="center">
-          Criar Conta
-        </Title>
+          <h3 className="text-center text-lg font-semibold text-brand">
+            Criar Conta
+          </h3>
 
-        <TextInput
-          label="Nome"
-          placeholder="Seu nome completo"
-          value={name}
-          onChange={(e) => setName(e.currentTarget.value)}
-        />
+          <div className="space-y-1.5">
+            <Label htmlFor="reg-name">Nome</Label>
+            <Input
+              id="reg-name"
+              placeholder="Seu nome completo"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
 
-        <TextInput
-          label="E-mail"
-          placeholder="usuário@email.com"
-          value={email}
-          onChange={(e) => setEmail(e.currentTarget.value)}
-          required
-        />
+          <div className="space-y-1.5">
+            <Label htmlFor="reg-email">E-mail</Label>
+            <Input
+              id="reg-email"
+              placeholder="usuário@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
 
-        <PasswordInput
-          label="Senha"
-          placeholder={isLocalDataMode ? 'Não utilizada no modo local' : 'Minimo 6 caracteres'}
-          value={password}
-          onChange={(e) => setPassword(e.currentTarget.value)}
-          required={!isLocalDataMode}
-          disabled={isLocalDataMode}
-        />
+          <div className="space-y-1.5">
+            <Label htmlFor="reg-password">Senha</Label>
+            <Input
+              id="reg-password"
+              type="password"
+              placeholder={isLocalDataMode ? 'Não utilizada no modo local' : 'Minimo 6 caracteres'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required={!isLocalDataMode}
+              disabled={isLocalDataMode}
+            />
+          </div>
 
-        <Button variant="light" color="blue" onClick={() => setContactModalOpened(true)}>
-          Definir contato e compartilhamento
-        </Button>
+          <Button variant="secondary" onClick={() => setContactModalOpened(true)}>
+            Definir contato e compartilhamento
+          </Button>
 
-        {(contact.email || contact.phone || contact.address) && (
-          <Text size="sm" c="dimmed">
-            Contato: {contact.email || '-'} | {contact.phone || '-'}
-          </Text>
-        )}
+          {(contact.email || contact.phone || contact.address) && (
+            <p className="text-sm text-muted-foreground">
+              Contato: {contact.email || '-'} | {contact.phone || '-'}
+            </p>
+          )}
 
-        <Button color="green" radius="md" onClick={handleRegister} disabled={submitting}>
-          {isLocalDataMode ? 'Criar conta local' : 'Registrar'}
-        </Button>
+          <Button onClick={handleRegister} disabled={submitting}>
+            {isLocalDataMode ? 'Criar conta local' : 'Registrar'}
+          </Button>
 
-        {submitting && <LoaderInline message="Criando conta..." />}
+          {submitting && <LoaderInline message="Criando conta..." />}
 
-        <Text fz="sm" ta="center" mt="sm">
-          <a href="/auth">Ja tenho uma conta</a>
-        </Text>
-      </Stack>
-    </Card>
+          <p className="mt-1 text-center text-sm text-muted-foreground">
+            <a href="/auth" className="underline hover:text-foreground">Ja tenho uma conta</a>
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
